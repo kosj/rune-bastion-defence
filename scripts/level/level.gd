@@ -41,9 +41,14 @@ var _info_card: Control
 var _sun: DirectionalLight3D
 var max_lives := 20
 var spell_defs := {}
+var run_kills := 0
+var run_gold := 0
+var run_time := 0.0
+var _enemy_info_t := 0.0
 
 func _ready() -> void:
 	I = self
+	get_viewport().disable_3d = false
 	level_idx = Game.current_level
 	def = DB.LEVELS[level_idx]
 	gold = def["gold"]
@@ -479,6 +484,10 @@ func _spawn_hero() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	if state == "playing":
+		run_time += delta
+	if selection.get("kind", "") == "enemy":
+		_track_enemy_selection(delta)
 	if state == "playing" or state == "ready":
 		_update_spawns(delta)
 		_update_waves(delta)
@@ -648,6 +657,8 @@ func add_gold(n: int, at := Vector3.ZERO, popup := true) -> void:
 
 func on_enemy_killed(e: Enemy) -> void:
 	enemies.erase(e)
+	run_kills += 1
+	run_gold += int(e.d["gold"])
 	add_gold(int(e.d["gold"]), e.global_position)
 	Game.stat("kills")
 	Game.stat("gold", int(e.d["gold"]))
@@ -696,6 +707,22 @@ func _on_tap(sp: Vector2) -> void:
 		if hs.distance_to(sp) < 52.0:
 			_select_hero()
 			return
+	# enemy pick (screen space): tap a monster to read its live stats
+	var pick: Enemy = null
+	var pd := 34.0
+	for e: Enemy in enemies:
+		if not e.alive:
+			continue
+		var p3 := e.global_position + Vector3(0, e.height * 0.5, 0)
+		if cam_rig.cam.is_position_behind(p3):
+			continue
+		var dd := cam_rig.cam.unproject_position(p3).distance_to(sp)
+		if dd < pd:
+			pd = dd
+			pick = e
+	if pick != null:
+		_select_enemy(pick)
+		return
 	# plot / tower pick
 	var best := -1
 	var bd := 2.4
@@ -740,7 +767,8 @@ func _select_hero() -> void:
 	selection = {"kind": "hero"}
 	hero.set_selected(true)
 	Audio.voice(hero.hid + "_select", 0.0, 6.0)
-	hud.show_info(DB.hero_def()["name"] + "  Lv.%d" % hero.level, "체력 %d/%d · 공격력 %d-%d\n땅을 탭해 이동 · 스킬: %s (자동/수동)" % [hero.hp, hero.max_hp, hero.dmg[0], hero.dmg[1], DB.hero_def()["skill_name"]])
+	hud.show_info(DB.hero_def()["name"] + "  Lv.%d" % hero.level, "땅을 탭하면 이동 · 스킬: %s (자동/수동)" % DB.hero_def()["skill_name"],
+		[["heart", "%d/%d" % [hero.hp, hero.max_hp]], ["st_dmg", "%d-%d" % [hero.dmg[0], hero.dmg[1]]], ["st_armor", "%d%%" % int(hero.armor * 100)]])
 	Audio.play("hero_select", -4.0, 0.05)
 
 func _select_plot(i: int) -> void:
@@ -762,18 +790,18 @@ func _select_tower(i: int) -> void:
 	var opts := []
 	if t.level < 3:
 		var c := t.next_cost()
-		opts.append({"id": "upgrade", "icon": Assets.tex("upgrade"), "label": str(c), "coin": true, "cost": c, "enabled": gold >= c})
+		opts.append({"id": "upgrade", "icon": Assets.tex("upgrade"), "label": str(c), "coin": true, "cost": c, "enabled": gold >= c, "kind": "green"})
 	elif t.level == 3:
 		for m in t.data()["masteries"]:
-			opts.append({"id": "mastery_" + m["id"], "icon": Assets.tex("m_" + m["id"]), "label": str(m["cost"]), "coin": true, "cost": m["cost"], "enabled": gold >= int(m["cost"])})
+			opts.append({"id": "mastery_" + m["id"], "icon": Assets.tex("m_" + m["id"]), "label": str(m["cost"]), "coin": true, "cost": m["cost"], "enabled": gold >= int(m["cost"]), "kind": "purple"})
 	if t.type == "barracks":
 		opts.append({"id": "rally", "icon": Assets.tex("rally"), "instant": true})
 	else:
 		opts.append({"id": "priority", "icon": Assets.tex("target_" + t.priority), "label": PRIORITY_NAMES[t.priority], "instant": true})
-	opts.append({"id": "sell", "icon": Assets.tex("sell"), "label": "+%d" % t.sell_value(), "coin": true})
+	opts.append({"id": "sell", "icon": Assets.tex("sell"), "label": "+%d" % t.sell_value(), "coin": true, "kind": "red"})
 	hud.radial.open(t.global_position + Vector3(0, 1.5, 0), opts)
 	_show_range(t.global_position, t.range_r())
-	hud.show_info(_tower_title(t), _tower_stats_text(t.type, t.stats))
+	hud.show_info(_tower_title(t), _tower_special_text(t.stats), _tower_stats(t.type, t.stats))
 
 const PRIORITY_NAMES := {"first": "선두", "strong": "강적", "close": "근접"}
 
@@ -782,21 +810,77 @@ func _tower_title(t: Tower) -> String:
 		return DB.mastery_def(t.type, t.mastery)["name"]
 	return "%s  Lv.%d" % [t.data()["name"], t.level]
 
-func _tower_stats_text(type: String, s: Dictionary) -> String:
+func _tower_stats_text(type: String, st: Dictionary) -> String:
+	var parts: Array = []
+	for row in _tower_stats(type, st):
+		parts.append(row[1])
+	var sp := _tower_special_text(st)
+	return " · ".join(parts) + ("\n" + sp if sp != "" else "")
+
+## [icon, text, improved?] rows for the selection card; `prev` marks what an upgrade changes.
+func _tower_stats(type: String, st: Dictionary, prev := {}) -> Array:
+	var up := func(k: String) -> bool:
+		return not prev.is_empty() and prev.has(k) and str(prev[k]) != str(st[k])
 	if type == "barracks":
-		return "병사 %d명 · 체력 %d · 공격력 %d-%d\n방어력 %d%% · 집결 범위 %.1f" % [s["count"], s["soldier_hp"], s["soldier_dmg"][0], s["soldier_dmg"][1], int(s["soldier_armor"] * 100), s["range"]]
-	var extra := ""
-	if s.has("splash"):
-		extra += " · 폭발 범위 %.1f" % s["splash"]
-	if s.has("multishot"):
-		extra += " · %d연발" % s["multishot"]
-	if s.has("chain"):
-		extra += " · 연쇄 %d" % s["chain"]
-	if s.has("slow"):
-		extra += " · 둔화 %d%%" % int(s["slow"] * 100)
-	if s.has("crit"):
-		extra += " · 치명 %d%%" % int(s["crit"] * 100)
-	return "공격력 %d-%d · 공격 간격 %.1f초\n사거리 %.1f%s" % [s["dmg"][0], s["dmg"][1], s["rate"], s["range"], extra]
+		return [["st_unit", "병사 %d" % st["count"], up.call("count")],
+			["heart", "%d" % st["soldier_hp"], up.call("soldier_hp")],
+			["st_dmg", "%d-%d" % [st["soldier_dmg"][0], st["soldier_dmg"][1]], up.call("soldier_dmg")],
+			["st_armor", "%d%%" % int(st["soldier_armor"] * 100), up.call("soldier_armor")],
+			["st_range", "집결 %.1f" % st["range"], up.call("range")]]
+	return [["st_dmg", "%d-%d" % [st["dmg"][0], st["dmg"][1]], up.call("dmg")],
+		["st_rate", "%.1f초" % st["rate"], up.call("rate")],
+		["st_range", "%.1f" % st["range"], up.call("range")]]
+
+func _tower_special_text(st: Dictionary) -> String:
+	var extra: Array = []
+	if st.has("splash"):
+		extra.append("폭발 범위 %.1f" % st["splash"])
+	if st.has("multishot"):
+		extra.append("%d연발" % st["multishot"])
+	if st.has("chain"):
+		extra.append("연쇄 %d" % st["chain"])
+	if st.has("slow"):
+		extra.append("둔화 %d%%" % int(st["slow"] * 100))
+	if st.has("crit"):
+		extra.append("치명 %d%%" % int(st["crit"] * 100))
+	return " · ".join(extra)
+
+# ------------------------------------------------------------------ enemy inspection
+
+func _select_enemy(e: Enemy) -> void:
+	_deselect()
+	selection = {"kind": "enemy", "enemy": e}
+	_enemy_info_t = 0.0
+	_refresh_enemy_info()
+	Audio.play("click", -6.0, 0.05)
+
+func _track_enemy_selection(delta: float) -> void:
+	var e: Enemy = selection.get("enemy")
+	if e == null or not is_instance_valid(e) or not e.alive:
+		_deselect()
+		return
+	_show_range(e.global_position, 0.75 if not e.boss else 1.4, Color(1.0, 0.35, 0.3))
+	range_ring.global_position.y = e.global_position.y + 0.12  # follow bridges / ramps, not the river bed
+	_enemy_info_t += delta
+	if _enemy_info_t > 0.2:
+		_enemy_info_t = 0.0
+		_refresh_enemy_info()
+
+func _refresh_enemy_info() -> void:
+	var e: Enemy = selection.get("enemy")
+	if e == null or not is_instance_valid(e):
+		return
+	var d: Dictionary = e.d
+	var spd := float(d["speed"])
+	var spd_t := "빠름" if spd >= 3.0 else ("느림" if spd < 1.5 else "보통")
+	var title: String = d["name"] + ("  · 보스" if e.boss else "")
+	hud.show_info(title, str(d.get("desc", "")), [
+		["heart", "%d/%d" % [int(ceil(e.hp)), int(ceil(e.max_hp))]],
+		["st_armor", "방어 %d%%" % int(float(d["armor"]) * 100)],
+		["st_magic", "마저 %d%%" % int(float(d["mr"]) * 100)],
+		["st_speed", spd_t],
+		["coin", "%d" % int(d["gold"])],
+		["skull", "생명 -%d" % int(d["lives"])]])
 
 func _on_radial_preview(id: String) -> void:
 	var kind: String = selection.get("kind", "")
@@ -805,21 +889,21 @@ func _on_radial_preview(id: String) -> void:
 		var t := id.trim_prefix("build_")
 		var s: Dictionary = DB.TOWERS[t]["levels"][0]
 		_show_range(Vector3(p.x, 0, p.y), s["range"], Color(0.5, 1.0, 0.6))
-		hud.show_info(DB.TOWERS[t]["name"], DB.TOWERS[t]["desc"] + "\n" + _tower_stats_text(t, s))
+		hud.show_info(DB.TOWERS[t]["name"], DB.TOWERS[t]["desc"], _tower_stats(t, s))
 	elif kind == "tower":
 		var tw: Tower = towers[selection["idx"]]
 		if id == "upgrade":
 			var s2 := DB.tower_stats(tw.type, tw.level + 1, "")
 			_show_range(tw.global_position, s2["range"], Color(0.5, 1.0, 0.6))
-			hud.show_info("업그레이드 → Lv.%d" % (tw.level + 1), _tower_stats_text(tw.type, s2))
+			hud.show_info("업그레이드 → Lv.%d" % (tw.level + 1), _tower_special_text(s2), _tower_stats(tw.type, s2, tw.stats))
 		elif id.begins_with("mastery_"):
 			var mid := id.trim_prefix("mastery_")
 			var s3 := DB.tower_stats(tw.type, 3, mid)
 			var md := DB.mastery_def(tw.type, mid)
 			_show_range(tw.global_position, s3["range"], md["tint"])
-			hud.show_info(md["name"], md["desc"] + "\n" + _tower_stats_text(tw.type, s3))
+			hud.show_info(md["name"], md["desc"], _tower_stats(tw.type, s3, tw.stats))
 		elif id == "sell":
-			hud.show_info("타워 판매", "%d 골드를 돌려받습니다. 한 번 더 탭하면 판매합니다." % tw.sell_value())
+			hud.show_info("타워 판매", "한 번 더 탭하면 판매합니다.", [["coin", "+%d 골드" % tw.sell_value()]])
 		elif id == "priority":
 			hud.show_info("공격 우선순위: " + PRIORITY_NAMES[tw.priority], "탭할 때마다 변경: 선두(가장 앞선 적) → 강적(체력 최대) → 근접(가장 가까운 적)")
 
@@ -958,32 +1042,81 @@ func _show_enemy_card(type: String) -> void:
 	var e: Dictionary = DB.ENEMIES[type]
 	if _info_card:
 		_info_card.queue_free()
-	var p := UI.panel(Color(0.08, 0.07, 0.1, 0.94), Color(0.75, 0.3, 0.25), 16)
-	p.add_theme_stylebox_override("panel", UI.box(Color(0.08, 0.07, 0.1, 0.94), Color(0.75, 0.3, 0.25), 16, 3, 8, 10))
+	var p := UI.framed("parch", 4)
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
-	hb.add_child(UI.icon(Assets.tex("portrait_" + type), 84))
+	hb.add_child(UI.icon(Assets.tex("portrait_" + type), 80))
 	var vb := VBoxContainer.new()
-	vb.add_child(UI.label("새로운 적!", 18, Color(1.0, 0.55, 0.45), 4))
-	vb.add_child(UI.label(e["name"], 26, UI.TEXT, 6))
-	var desc := UI.label(e["desc"], 18, UI.MUTED, 4)
+	vb.add_theme_constant_override("separation", 0)
+	vb.add_child(UI.ink("새로운 적!", 16, Color(0.7, 0.16, 0.08), "ui_black"))
+	vb.add_child(UI.ink(e["name"], 24, UI.INK, "title_kr"))
+	var desc := UI.ink(e["desc"], 16, UI.INK_SOFT)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.custom_minimum_size.x = 230
 	vb.add_child(desc)
 	hb.add_child(vb)
 	p.add_child(hb)
 	p.anchor_left = 1.0
 	p.anchor_right = 1.0
-	p.offset_left = -360
-	p.offset_right = -14
-	p.offset_top = 96
+	p.offset_left = -372
+	p.offset_right = -16
+	p.offset_top = 90
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.root.add_child(p)
 	_info_card = p
 	p.modulate.a = 0.0
+	p.position.x += 40
 	var tw := p.create_tween()
+	tw.set_ignore_time_scale(true)
+	tw.set_parallel(true)
 	tw.tween_property(p, "modulate:a", 1.0, 0.3)
-	tw.tween_interval(5.0)
-	tw.tween_property(p, "modulate:a", 0.0, 0.5)
-	tw.tween_callback(p.queue_free)
+	tw.tween_property(p, "position:x", p.position.x - 40, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_interval(5.0)
+	tw.chain().tween_property(p, "modulate:a", 0.0, 0.5)
+	tw.chain().tween_callback(p.queue_free)
+
+func _clear_cards() -> void:
+	if _info_card and is_instance_valid(_info_card):
+		_info_card.queue_free()
+	_info_card = null
+	_deselect()
+
+## Keyboard shortcuts: Esc/P pause, Space next wave, F speed, 1/2 spells, H hero, Q hero skill.
+func hotkey(k: int) -> bool:
+	if k == KEY_ESCAPE or k == KEY_P:
+		if get_tree().paused and _modal != null:
+			_resume()
+		elif targeting != "" and k == KEY_ESCAPE:
+			targeting = ""
+			hud.target_hint.text = ""
+		elif _modal == null:
+			_pause()
+		return true
+	if _modal != null or state == "won" or state == "lost":
+		return false
+	match k:
+		KEY_SPACE:
+			_call_wave()
+		KEY_F:
+			_toggle_speed()
+		KEY_1:
+			_spell_pressed("meteor")
+		KEY_2:
+			_spell_pressed("reinforce")
+		KEY_H:
+			_select_hero()
+		KEY_Q:
+			if hero:
+				hero.cast_skill()
+		_:
+			return false
+	return true
+
+## Mobile app switch / browser tab hidden: pause so nobody loses lives in the background.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		if Game.autopause and state == "playing" and _modal == null and is_inside_tree():
+			_pause()
 
 func _toggle_speed() -> void:
 	fast = not fast
@@ -994,31 +1127,47 @@ func _pause() -> void:
 	if _modal != null or state == "won" or state == "lost":
 		return
 	get_tree().paused = true
+	_clear_cards()
+	var compact := hud.root.get_viewport_rect().size.y < 600.0
 	_modal = hud.modal("일시 정지", func(vb: VBoxContainer):
-		var b1 := UI.button("계속하기", 28, true, Vector2(320, 70))
+		vb.add_theme_constant_override("separation", 8 if compact else 12)
+		var b1 := UI.button("계속하기", 28, true, Vector2(360, 66 if compact else 70), "green")
+		b1.icon = Assets.tex("ic_play")
 		b1.pressed.connect(_resume)
 		vb.add_child(b1)
-		var b2 := UI.button("다시 시작", 26, false, Vector2(320, 64))
-		b2.pressed.connect(func(): Game.start_level(level_idx))
-		vb.add_child(b2)
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 10)
+		var b2 := UI.button("다시 시작", 21, false, Vector2(175, 56), "blue")
+		b2.icon = Assets.tex("ic_retry")
+		b2.add_theme_constant_override("icon_max_width", 26)
+		b2.pressed.connect(func(): Game.start_level(level_idx) if not Game.endless else Game.start_endless(level_idx))
+		row.add_child(b2)
+		var b3 := UI.button("지도로", 21, false, Vector2(175, 56), "blue")
+		b3.icon = Assets.tex("ic_map")
+		b3.add_theme_constant_override("icon_max_width", 26)
+		b3.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
+		row.add_child(b3)
+		vb.add_child(row)
+		vb.add_child(UI.divider(360))
+		vb.add_child(_volume_row("음악", Game.music_volume, func(v): Game.music_volume = v; Audio.update_music_volume(); Game.save()))
+		vb.add_child(_volume_row("효과음", Game.sfx_volume, func(v): Game.sfx_volume = v; Game.save()))
 		var hq := CheckButton.new()
 		hq.text = "고품질 그래픽"
 		hq.button_pressed = Game.high_quality
-		hq.add_theme_font_override("font", Assets.font("ui"))
-		hq.add_theme_font_size_override("font_size", 22)
+		hq.add_theme_font_override("font", Assets.font("ui_black"))
 		hq.toggled.connect(func(v): Game.high_quality = v; Game.apply_quality(); Game.save())
 		vb.add_child(hq)
-		vb.add_child(_volume_row("음악", Game.music_volume, func(v): Game.music_volume = v; Audio.update_music_volume(); Game.save()))
-		vb.add_child(_volume_row("효과음", Game.sfx_volume, func(v): Game.sfx_volume = v; Game.save()))
-		var b3 := UI.button("지도로 나가기", 24, false, Vector2(320, 60))
-		b3.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
-		vb.add_child(b3))
+		if not Game.is_mobile and not compact:
+			var keys := UI.label("단축키  Esc 일시정지 · Space 다음 웨이브 · F 배속\n1 · 2 주문 · H 영웅 선택 · Q 영웅 스킬", 15, UI.MUTED, 3)
+			keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			vb.add_child(keys), 440, "blue")
 
 func _volume_row(label: String, v: float, cb: Callable) -> HBoxContainer:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 12)
-	var l := UI.label(label, 22, UI.TEXT, 4)
-	l.custom_minimum_size.x = 80
+	var l := UI.label(label, 21, UI.TEXT, 4, "ui_black")
+	l.custom_minimum_size.x = 84
 	hb.add_child(l)
 	var s := HSlider.new()
 	s.min_value = 0.0
@@ -1042,6 +1191,7 @@ func _victory() -> void:
 	state = "won"
 	var max_l: int = max_lives
 	var stars := 3 if lives >= max_l - 2 else (2 if lives >= max_l / 2 else 1)
+	var prev_stars := int(Game.stars[level_idx])
 	Game.set_stars(level_idx, stars)
 	Game.stat("wins")
 	if lives >= max_l:
@@ -1062,27 +1212,100 @@ func _victory() -> void:
 		cam_rig.focus(hero.global_position, 20.0)
 	Audio.play("victory", 0.0, 0.0)
 	Audio.play_music("menu", 3.0)
-	get_tree().create_timer(1.6).timeout.connect(func():
-		_modal = hud.modal("승리!", func(vb: VBoxContainer):
-			var st := UI.stars_row(stars, 72)
-			vb.add_child(st)
-			var l := UI.label("남은 생명 %d / %d" % [lives, max_l], 24, UI.TEXT, 5)
-			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			vb.add_child(l)
-			if level_idx < DB.LEVELS.size() - 1:
-				var nb := UI.button("다음 지역  ▶", 28, true, Vector2(340, 72))
-				nb.pressed.connect(func(): Game.start_level(level_idx + 1))
-				vb.add_child(nb)
-			else:
-				var fl := UI.label("왕국을 지켜냈습니다! 모든 지역 정복", 22, UI.GOLD, 5)
-				fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-				vb.add_child(fl)
-			var rb := UI.button("다시 도전", 24, false, Vector2(340, 62))
-			rb.pressed.connect(func(): Game.start_level(level_idx))
-			vb.add_child(rb)
-			var mb := UI.button("지도로", 24, false, Vector2(340, 62))
-			mb.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
-			vb.add_child(mb)))
+	_clear_cards()
+	get_tree().create_timer(1.6).timeout.connect(func(): _victory_modal(stars, prev_stars))
+
+func _victory_modal(stars: int, prev_stars: int) -> void:
+	var max_l: int = max_lives
+	_modal = hud.modal("승리!", func(vb: VBoxContainer):
+		# three stars over slowly turning rays; each lands with a pop and a chime
+		var holder := Control.new()
+		holder.custom_minimum_size = Vector2(420, 132)
+		vb.add_child(holder)
+		var rays := UI.icon(UI.kit("rays"), 300)
+		rays.position = Vector2(60, -84)
+		rays.size = Vector2(300, 300)
+		rays.pivot_offset = Vector2(150, 150)
+		rays.modulate = Color(1, 0.9, 0.6, 0.0)
+		holder.add_child(rays)
+		var rt := rays.create_tween().set_loops()
+		rt.set_ignore_time_scale(true)
+		rt.tween_property(rays, "rotation", TAU, 14.0).from(0.0)
+		var ft := rays.create_tween()
+		ft.set_ignore_time_scale(true)
+		ft.tween_property(rays, "modulate:a", 0.8, 0.6)
+		var spots := [[Vector2(76, 30), 84.0], [Vector2(168, 6), 104.0], [Vector2(272, 30), 84.0]]
+		for i in 3:
+			var sz: float = spots[i][1]
+			var base := UI.icon(Assets.tex("star_empty"), int(sz))
+			base.position = spots[i][0]
+			base.size = Vector2(sz, sz)
+			holder.add_child(base)
+			if i < stars:
+				var st := UI.icon(Assets.tex("star"), int(sz))
+				st.position = spots[i][0]
+				st.size = Vector2(sz, sz)
+				st.pivot_offset = Vector2(sz, sz) * 0.5
+				st.scale = Vector2(2.4, 2.4)
+				st.modulate.a = 0.0
+				holder.add_child(st)
+				var tw := st.create_tween()
+				tw.set_ignore_time_scale(true)
+				tw.tween_interval(0.35 + i * 0.38)
+				tw.tween_callback(func(): Audio.play("coin", -2.0 + i * 1.5, 0.0))
+				tw.set_parallel(true)
+				tw.tween_property(st, "modulate:a", 1.0, 0.12)
+				tw.tween_property(st, "scale", Vector2.ONE, 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		var grid := GridContainer.new()
+		grid.columns = 2
+		grid.add_theme_constant_override("h_separation", 34)
+		grid.add_theme_constant_override("v_separation", 6)
+		var cg := CenterContainer.new()
+		cg.add_child(grid)
+		vb.add_child(cg)
+		grid.add_child(UI.stat("heart", "남은 생명 %d / %d" % [lives, max_l], 19, UI.TEXT))
+		grid.add_child(UI.stat("skull", "처치 %d" % run_kills, 19, UI.TEXT))
+		grid.add_child(UI.stat("coin", "획득 골드 %d" % run_gold, 19, UI.TEXT))
+		grid.add_child(UI.stat("st_rate", "전투 %d:%02d" % [int(run_time) / 60, int(run_time) % 60], 19, UI.TEXT))
+		var gained := maxi(stars - prev_stars, 0)
+		if gained > 0 or (Game.difficulty == 1):
+			var rw := UI.label(("새로 얻은 ★ %d  — 왕국 강화에 사용하세요" % gained) if gained > 0 else "영웅 난이도 클리어!", 19, UI.GOLD, 5, "ui_black")
+			rw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			vb.add_child(rw)
+		if level_idx >= DB.LEVELS.size() - 1:
+			var fl := UI.label("왕국을 지켜냈습니다! 모든 지역 정복", 21, UI.GOLD, 5, "ui_black")
+			fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			vb.add_child(fl)
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 10)
+		var rb := UI.button("다시", 21, false, Vector2(120, 58), "blue")
+		rb.icon = Assets.tex("ic_retry")
+		rb.add_theme_constant_override("icon_max_width", 26)
+		rb.pressed.connect(func(): Game.start_level(level_idx))
+		row.add_child(rb)
+		var mb := UI.button("지도", 21, false, Vector2(120, 58), "blue")
+		mb.icon = Assets.tex("ic_map")
+		mb.add_theme_constant_override("icon_max_width", 26)
+		mb.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
+		row.add_child(mb)
+		if level_idx < DB.LEVELS.size() - 1:
+			var nb := UI.button("다음 지역", 24, true, Vector2(200, 58), "red")
+			nb.icon = Assets.tex("ic_play")
+			nb.pressed.connect(func(): Game.start_level(level_idx + 1))
+			row.add_child(nb)
+		vb.add_child(row), 560, "red")
+
+const DEFEAT_TIPS := [
+	"오크 돌격병은 방어력이 높아요. 마법 탑으로 녹이세요.",
+	"가고일은 하늘을 날아요. 궁수 탑과 마법 탑만 공격할 수 있어요.",
+	"병영 병사로 길목을 막으면 궁수와 포병이 안전하게 공격해요.",
+	"웨이브 버튼을 일찍 누르면 보너스 골드를 받아요. 여유가 있을 때 활용하세요.",
+	"주술사는 주변 적을 치료해요. 먼저 처치하도록 우선순위를 '강적'으로 바꿔 보세요.",
+	"유성 낙하는 적이 뭉쳤을 때 쓰면 효과가 커요.",
+	"폭탄병은 병사를 무시하고 달려요. 길 초입에 화력을 모으세요.",
+	"레벨 3 타워의 전문화가 전세를 뒤집어요. 상황에 맞는 쪽을 고르세요.",
+]
 
 func _defeat() -> void:
 	if state == "lost":
@@ -1095,19 +1318,38 @@ func _defeat() -> void:
 		_endless_over()
 		return
 	Audio.voice("ann_defeat", 0.0, 1.0)
+	_clear_cards()
 	_modal = hud.modal("패배...", func(vb: VBoxContainer):
-		var l := UI.label("성문이 뚫렸습니다. 전략을 바꿔 다시 도전하세요!", 22, UI.TEXT, 5)
+		var l := UI.label("성문이 뚫렸습니다. 전략을 바꿔 다시 도전하세요!", 21, UI.TEXT, 5, "ui_black")
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vb.add_child(l)
-		var tip := UI.label("팁: 오크는 마법 탑, 비행 적은 궁수/마법 탑으로 대응하세요.", 19, UI.MUTED, 4)
+		var tipp := UI.framed("parch", 2)
+		var tip := UI.ink("팁 · " + str(DEFEAT_TIPS[randi() % DEFEAT_TIPS.size()]), 17, UI.INK)
+		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tip.custom_minimum_size.x = 452
 		tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vb.add_child(tip)
-		var rb := UI.button("다시 도전", 28, true, Vector2(340, 72))
-		rb.pressed.connect(func(): Game.start_level(level_idx))
-		vb.add_child(rb)
-		var mb := UI.button("지도로", 24, false, Vector2(340, 62))
+		tipp.add_child(tip)
+		vb.add_child(tipp)
+		var grid := HBoxContainer.new()
+		grid.alignment = BoxContainer.ALIGNMENT_CENTER
+		grid.add_theme_constant_override("separation", 28)
+		grid.add_child(UI.stat("skull", "처치 %d" % run_kills, 18, UI.TEXT))
+		grid.add_child(UI.stat("st_rate", "웨이브 %d / %d" % [maxi(wave_idx + 1, 0), waves.size()], 18, UI.TEXT))
+		vb.add_child(grid)
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 12)
+		var mb := UI.button("지도로", 22, false, Vector2(150, 60), "blue")
+		mb.icon = Assets.tex("ic_map")
+		mb.add_theme_constant_override("icon_max_width", 26)
 		mb.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
-		vb.add_child(mb))
+		row.add_child(mb)
+		var rb := UI.button("다시 도전", 26, true, Vector2(230, 60), "red")
+		rb.icon = Assets.tex("ic_retry")
+		rb.add_theme_constant_override("icon_max_width", 28)
+		rb.pressed.connect(func(): Game.start_level(level_idx))
+		row.add_child(rb)
+		vb.add_child(row), 520, "dark")
 
 func _on_achievement(id: String) -> void:
 	for a in DB.ACHIEVEMENTS:
@@ -1126,19 +1368,34 @@ func _endless_over() -> void:
 		Game.endless_best[key] = reached
 	Game.stat("endless_wave", reached, "max")
 	Game.save()
+	_clear_cards()
 	_modal = hud.modal("전투 종료", func(vb: VBoxContainer):
-		var l := UI.label("도달 웨이브  %d" % reached, 40, UI.GOLD, 8, "title_kr")
+		var l := UI.title("웨이브 %d" % reached, 54, "title_kr", 12)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vb.add_child(l)
-		var r := UI.label("신기록 달성!" if record else "최고 기록  %d" % maxi(best, reached), 24, Color(1.0, 0.75, 0.4) if record else UI.TEXT, 5)
+		var r := UI.label("신기록 달성!" if record else "최고 기록  웨이브 %d" % maxi(best, reached), 23, Color(1.0, 0.75, 0.4) if record else UI.TEXT, 5, "ui_black")
 		r.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vb.add_child(r)
-		var rb := UI.button("다시 도전", 28, true, Vector2(340, 72))
-		rb.pressed.connect(func(): Game.start_endless(level_idx))
-		vb.add_child(rb)
-		var mb := UI.button("지도로", 24, false, Vector2(340, 62))
+		var grid := HBoxContainer.new()
+		grid.alignment = BoxContainer.ALIGNMENT_CENTER
+		grid.add_theme_constant_override("separation", 28)
+		grid.add_child(UI.stat("skull", "처치 %d" % run_kills, 18, UI.TEXT))
+		grid.add_child(UI.stat("coin", "획득 골드 %d" % run_gold, 18, UI.TEXT))
+		vb.add_child(grid)
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 12)
+		var mb := UI.button("지도로", 22, false, Vector2(150, 60), "blue")
+		mb.icon = Assets.tex("ic_map")
+		mb.add_theme_constant_override("icon_max_width", 26)
 		mb.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
-		vb.add_child(mb))
+		row.add_child(mb)
+		var rb := UI.button("다시 도전", 26, true, Vector2(230, 60), "purple")
+		rb.icon = Assets.tex("ic_retry")
+		rb.add_theme_constant_override("icon_max_width", 28)
+		rb.pressed.connect(func(): Game.start_endless(level_idx))
+		row.add_child(rb)
+		vb.add_child(row), 520, "blue")
 
 func _exit_tree() -> void:
 	if Game.achievement_unlocked.is_connected(_on_achievement):

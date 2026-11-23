@@ -111,6 +111,9 @@ static func font(kind := "ui") -> Font:
 		if kind == "title" and f is FontFile:
 			var fb: Array[Font] = [font("title_kr"), font("ui")]
 			(f as FontFile).fallbacks = fb
+		elif kind == "ui_black" and f is FontFile:
+			var fb3: Array[Font] = [font("ui")]
+			(f as FontFile).fallbacks = fb3
 		elif kind == "title_kr" and f is FontFile:
 			var fb2: Array[Font] = [font("ui")]
 			(f as FontFile).fallbacks = fb2

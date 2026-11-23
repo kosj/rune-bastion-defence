@@ -10,6 +10,8 @@ var _next_report := 0.0
 var _shots_at := []
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS  # keep shooting while the game is paused (pause menu shots)
+	Game.autopause = false
 	for a in OS.get_cmdline_user_args():
 		var kv := a.split("=")
 		if kv.size() == 2:
@@ -65,6 +67,40 @@ func _process(delta: float) -> void:
 				L._on_radial_preview("build_mage")
 				L.hud.radial._on_press("build_mage")
 				break
+	if args.has("ui_at") and t >= float(args["ui_at"]) and not has_meta("ui_done") and LevelMain.I:
+		# put the level UI into a given state for review screenshots
+		set_meta("ui_done", true)
+		var L2 := LevelMain.I
+		match args.get("ui", ""):
+			"tower":
+				var ks: Array = L2.towers.keys()
+				if not ks.is_empty():
+					var tw: Tower = L2.towers[ks[0]]
+					L2.cam_rig.focus(tw.global_position, float(args.get("zoom", "18")))
+					L2._select_tower(ks[0])
+			"plot":
+				for i in L2.plots.size():
+					if not L2.towers.has(i):
+						L2.cam_rig.focus(Vector3(L2.plots[i].x, 0, L2.plots[i].y), float(args.get("zoom", "18")))
+						L2._select_plot(i)
+						break
+			"hero":
+				L2._select_hero()
+			"pause":
+				L2._pause()
+			"victory":
+				L2._victory()
+			"defeat":
+				L2._defeat()
+			"enemy":
+				L2._show_enemy_card(args.get("enemy", "orc"))
+			"inspect":
+				if not L2.enemies.is_empty():
+					var e: Enemy = L2.enemies[L2.enemies.size() / 2]
+					L2.cam_rig.focus(e.global_position, float(args.get("zoom", "16")))
+					L2._select_enemy(e)
+			"endless":
+				L2._endless_over()
 	if LevelMain.I and not has_meta("env_over") and (args.has("tm") or args.has("white") or args.has("exp") or args.has("sun") or args.has("amb")):
 		set_meta("env_over", true)
 		for we in LevelMain.I.find_children("*", "WorldEnvironment", true, false):

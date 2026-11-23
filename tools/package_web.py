@@ -30,6 +30,11 @@ for name in os.listdir(src):
         continue
     else:
         shutil.copy(p, os.path.join(dst, name))
+# static extras shipped next to the page (loading-screen art)
+web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web")
+for extra in ("loading_bg.jpg",):
+    if os.path.exists(os.path.join(web_dir, extra)):
+        shutil.copy(os.path.join(web_dir, extra), os.path.join(dst, extra))
 html = open(os.path.join(src, "index.html"), encoding="utf-8").read()
 html = html.replace("$RB_GZ_MAP", json.dumps(gzmap))
 open(os.path.join(dst, "index.html"), "w", encoding="utf-8").write(html)

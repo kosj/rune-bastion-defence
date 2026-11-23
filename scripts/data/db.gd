@@ -362,6 +362,10 @@ static func total_stars() -> int:
 			s += 1
 	return s + Game.achievement_count()
 
+## Most stars a player can ever collect (3 per region + heroic bonus per region + one per achievement).
+static func max_stars() -> int:
+	return LEVELS.size() * 4 + ACHIEVEMENTS.size()
+
 static func spent_stars() -> int:
 	var s := 0
 	for u in UPGRADES:

@@ -56,6 +56,7 @@ func _fit_ui() -> void:
 	win.content_scale_size = Vector2i(960, 540) if small else Vector2i(1280, 720)
 
 var compact := false
+var autopause := true  # off in automated test runs
 
 func apply_quality() -> void:
 	var vp := get_tree().root

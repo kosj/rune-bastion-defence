@@ -14,7 +14,8 @@ body { background: #0b0d18; color: #f4ead2; overflow: hidden; touch-action: none
 #canvas { display: block; position: absolute; inset: 0; width: 100vw; height: 100vh; }
 #canvas:focus { outline: none; }
 #status { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: radial-gradient(ellipse at 50% 30%, #2a2140 0%, #121427 55%, #07080f 100%); z-index: 5; transition: opacity .6s; }
+  background: radial-gradient(ellipse at 50% 40%, rgba(20,18,40,.35) 0%, rgba(10,11,24,.72) 60%, rgba(7,8,15,.94) 100%),
+    url(loading_bg.jpg) center / cover no-repeat, #0b0d18; z-index: 5; transition: opacity .6s; }
 #status.hide { opacity: 0; pointer-events: none; }
 .crest { width: 88px; height: 88px; margin-bottom: 14px; filter: drop-shadow(0 6px 14px rgba(0,0,0,.6)); }
 h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 700; letter-spacing: .12em; margin: 0; font-size: clamp(30px, 7vw, 64px);

@@ -53,6 +53,7 @@ func build(cam: Camera3D) -> void:
 	root = Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UI.theme()
 	add_child(root)
 	radial = RadialMenu.new()
 	radial.cam = cam
@@ -74,43 +75,50 @@ func _make_circle(sz: int) -> Texture2D:
 			img.set_pixel(x, y, Color(0, 0, 0, 0.62 * a))
 	return ImageTexture.create_from_image(img)
 
-func _res_item(icon: String, txt: String, col: Color) -> Array:
+func _res_item(icon: String, txt: String, col: Color, min_w := 58) -> Array:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 6)
-	hb.add_child(UI.icon(Assets.tex(icon), 34))
-	var l := UI.label(txt, 28, col, 7)
-	l.custom_minimum_size.x = 54
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hb.add_child(UI.icon(Assets.tex(icon), 36))
+	var l := UI.label(txt, 28, col, 7, "ui_black")
+	l.custom_minimum_size.x = min_w
 	hb.add_child(l)
 	return [hb, l]
 
+func _vsep() -> Control:
+	var c := ColorRect.new()
+	c.color = Color(0.85, 0.65, 0.3, 0.45)
+	c.custom_minimum_size = Vector2(2, 30)
+	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return c
+
 func _build_top() -> void:
-	var p := UI.panel(Color(0.06, 0.07, 0.12, 0.85), UI.GOLD_DARK, 18)
-	p.add_theme_stylebox_override("panel", UI.box(Color(0.06, 0.07, 0.12, 0.85), UI.GOLD_DARK, 18, 3, 6, 10))
+	var p := UI.framed("slim", 2)
 	p.position = Vector2(14, 12)
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
 	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 18)
-	var a := _res_item("heart", "20", Color(1.0, 0.55, 0.5))
+	hb.add_theme_constant_override("separation", 14)
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var a := _res_item("heart", "20", Color(1.0, 0.62, 0.56), 40)
 	lives_l = a[1]
 	hb.add_child(a[0])
-	var b := _res_item("coin", "0", UI.GOLD)
+	hb.add_child(_vsep())
+	var b := _res_item("coin", "0", UI.GOLD, 70)
 	gold_l = b[1]
 	hb.add_child(b[0])
-	var c := _res_item("skull", "웨이브 0/0", UI.TEXT)
+	hb.add_child(_vsep())
+	var c := _res_item("skull", "1/10", UI.TEXT, 74)
 	wave_l = c[1]
-	wave_l.custom_minimum_size.x = 120
 	hb.add_child(c[0])
 	p.add_child(hb)
 	root.add_child(p)
 
 	var tr := HBoxContainer.new()
 	tr.add_theme_constant_override("separation", 10)
-	tr.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	tr.position = Vector2(-160, 12)
-	tr.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	speed_b = UI.icon_button(Assets.tex("speed1"), 66)
+	speed_b = UI.icon_button(Assets.tex("speed1"), 64, UI.NAVY, 32, "navy")
 	speed_b.pressed.connect(func(): speed_toggled.emit())
-	pause_b = UI.icon_button(Assets.tex("pause"), 66)
+	pause_b = UI.icon_button(Assets.tex("pause"), 64, UI.NAVY, 32, "navy")
 	pause_b.pressed.connect(func(): pause_pressed.emit())
 	tr.add_child(speed_b)
 	tr.add_child(pause_b)
@@ -119,13 +127,15 @@ func _build_top() -> void:
 	tr.anchor_right = 1.0
 	tr.offset_left = -152
 	tr.offset_right = -14
+	tr.offset_top = 12
 
 func _cooldown_overlay(parent: Control, sz: int) -> TextureProgressBar:
 	var t := TextureProgressBar.new()
 	t.texture_progress = _circle_tex
 	t.fill_mode = TextureProgressBar.FILL_COUNTER_CLOCKWISE
 	t.nine_patch_stretch = true
-	t.size = Vector2(sz, sz)
+	t.position = Vector2(sz, sz) * 0.09
+	t.size = Vector2(sz, sz) * 0.82
 	t.max_value = 1.0
 	t.step = 0.001
 	t.value = 0.0
@@ -137,60 +147,57 @@ func _build_bottom() -> void:
 	var bl := Control.new()
 	bl.anchor_top = 1.0
 	bl.anchor_bottom = 1.0
-	bl.offset_top = -120
+	bl.offset_top = -128
 	bl.offset_left = 14
 	bl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(bl)
-	# hero portrait
-	hero_b = UI.icon_button(Assets.tex(DB.hero_def()["portrait"]), 96, Color(0.3, 0.12, 0.1, 0.95), 48)
-	hero_b.add_theme_constant_override("icon_max_width", 88)
-	hero_b.position = Vector2(0, 8)
+	# hero portrait medallion
+	hero_b = UI.icon_button(Assets.tex(DB.hero_def()["portrait"]), 98, UI.NAVY, 49, "brown")
+	hero_b.add_theme_constant_override("icon_max_width", 80)
+	hero_b.position = Vector2(0, 2)
 	hero_b.pressed.connect(func(): hero_pressed.emit())
 	bl.add_child(hero_b)
-	hero_hp = _mini_bar(Color(0.35, 0.9, 0.35))
-	hero_hp.position = Vector2(6, 104)
-	hero_hp.size = Vector2(84, 9)
+	hero_hp = UI.bar("green", 90, 13)
+	hero_hp.position = Vector2(4, 98)
+	hero_hp.size = Vector2(90, 13)
 	bl.add_child(hero_hp)
-	hero_xp = _mini_bar(Color(0.95, 0.78, 0.3))
-	hero_xp.position = Vector2(6, 112)
-	hero_xp.size = Vector2(84, 5)
+	hero_xp = UI.bar("gold", 90, 9)
+	hero_xp.position = Vector2(4, 111)
+	hero_xp.size = Vector2(90, 9)
 	bl.add_child(hero_xp)
-	hero_lv = UI.label("1", 22, UI.GOLD, 6)
-	var lvp := UI.panel(Color(0.12, 0.08, 0.05, 0.95), UI.GOLD, 16)
-	lvp.add_theme_stylebox_override("panel", UI.box(Color(0.12, 0.08, 0.05, 0.95), UI.GOLD, 16, 2, 3, 2))
-	lvp.add_child(hero_lv)
-	hero_lv.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lvp.custom_minimum_size = Vector2(32, 32)
-	lvp.position = Vector2(70, 0)
-	lvp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bl.add_child(lvp)
-	hero_dead = UI.label("", 30, Color(1, 0.6, 0.5), 7)
-	hero_dead.position = Vector2(30, 36)
+	var badge := UI.badge("1", 36, 20)
+	badge.position = Vector2(68, -4)
+	bl.add_child(badge)
+	hero_lv = badge.get_node("Text") as Label
+	hero_dead = UI.label("", 34, Color(1, 0.7, 0.6), 8, "ui_black")
+	hero_dead.position = Vector2(0, 26)
+	hero_dead.size = Vector2(98, 48)
+	hero_dead.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hero_dead.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bl.add_child(hero_dead)
-	# skill
-	skill_b = UI.icon_button(Assets.tex(DB.hero_def()["skill_icon"]), 66, Color(0.35, 0.15, 0.08, 0.95), 33)
-	skill_b.position = Vector2(108, 38)
+	# hero skill
+	skill_b = UI.icon_button(Assets.tex(DB.hero_def()["skill_icon"]), 68, UI.NAVY, 34, "red")
+	skill_b.position = Vector2(110, 40)
 	skill_b.pressed.connect(func(): skill_pressed.emit())
 	bl.add_child(skill_b)
-	skill_cd = _cooldown_overlay(skill_b, 66)
+	skill_cd = _cooldown_overlay(skill_b, 68)
 	# spells
-	var x := 196
+	var x := 192
 	for id in ["meteor", "reinforce"]:
-		var sb := UI.icon_button(Assets.tex("spell_" + id), 84, Color(0.16, 0.12, 0.3, 0.95), 42)
+		var sb := UI.icon_button(Assets.tex("spell_" + id), 86, UI.NAVY, 43, "purple")
 		sb.position = Vector2(x, 22)
 		sb.pressed.connect(func(): spell_pressed.emit(id))
 		bl.add_child(sb)
-		var ov := _cooldown_overlay(sb, 84)
-		var cl := UI.label("", 24, UI.TEXT, 6)
+		var ov := _cooldown_overlay(sb, 86)
+		var cl := UI.label("", 28, UI.TEXT, 7, "ui_black")
 		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		cl.size = Vector2(84, 84)
+		cl.size = Vector2(86, 86)
 		cl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		cl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		sb.add_child(cl)
 		spell_btns[id] = {"button": sb, "cd": ov, "label": cl}
-		x += 96
-	target_hint = UI.label("", 26, UI.GOLD, 8)
+		x += 98
+	target_hint = UI.label("", 26, UI.GOLD, 8, "ui_black")
 	target_hint.anchor_left = 0.5
 	target_hint.anchor_right = 0.5
 	target_hint.anchor_top = 1.0
@@ -218,50 +225,70 @@ func _mini_bar(c: Color) -> ProgressBar:
 	pb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return pb
 
+var info_stats: HFlowContainer
+
 func _build_info() -> void:
-	info = UI.panel(Color(0.06, 0.07, 0.12, 0.92), UI.GOLD_DARK, 14)
+	info = UI.framed("parch", 6)
 	info.anchor_left = 1.0
 	info.anchor_right = 1.0
 	info.anchor_top = 1.0
 	info.anchor_bottom = 1.0
-	info.offset_left = -360
-	info.offset_right = -14
-	info.offset_top = -14
-	info.offset_bottom = -14
+	info.offset_left = -372
+	info.offset_right = -16
+	info.offset_top = -16
+	info.offset_bottom = -16
 	info.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 2)
-	info_title = UI.label("", 26, UI.GOLD, 6)
-	info_body = UI.label("", 19, UI.TEXT, 4)
+	vb.add_theme_constant_override("separation", 3)
+	info_title = UI.ink("", 23, UI.INK, "title_kr")
+	info_body = UI.ink("", 16, UI.INK_SOFT)
 	info_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info_body.custom_minimum_size.x = 320
+	info_stats = HFlowContainer.new()
+	info_stats.add_theme_constant_override("h_separation", 12)
+	info_stats.add_theme_constant_override("v_separation", 2)
+	info_stats.custom_minimum_size.x = 320
 	vb.add_child(info_title)
 	vb.add_child(info_body)
+	vb.add_child(info_stats)
 	info.add_child(vb)
 	info.visible = false
 	root.add_child(info)
 
-func show_info(title: String, body: String) -> void:
+## Selection card. `stats` is a list of [icon, text] or [icon, text, highlighted].
+func show_info(title: String, body: String, stats: Array = []) -> void:
 	info_title.text = title
 	info_body.text = body
-	info.visible = true
-	info.modulate.a = 0.0
-	info.create_tween().tween_property(info, "modulate:a", 1.0, 0.15)
+	info_body.visible = body != ""
+	for c in info_stats.get_children():
+		c.queue_free()
+	for st in stats:
+		var up: bool = st.size() > 2 and st[2]
+		info_stats.add_child(UI.stat(st[0], st[1], 16, Color(0.12, 0.45, 0.08) if up else UI.INK))
+	info_stats.visible = not stats.is_empty()
+	if not info.visible:
+		info.visible = true
+		info.modulate.a = 0.0
+		info.position.y += 16
+		var tw := info.create_tween().set_parallel(true)
+		tw.set_ignore_time_scale(true)
+		tw.tween_property(info, "modulate:a", 1.0, 0.15)
+		tw.tween_property(info, "position:y", info.position.y - 16, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func hide_info() -> void:
 	info.visible = false
 
 func _build_banner() -> void:
-	banner = UI.label("", 54, UI.GOLD, 12, "title")
+	banner = UI.title("", 58, "title_kr", 12)
 	banner.anchor_left = 0.0
 	banner.anchor_right = 1.0
-	banner.offset_top = 120
+	banner.offset_top = 112
 	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	banner.modulate.a = 0.0
 	root.add_child(banner)
-	banner_sub = UI.label("", 26, UI.TEXT, 7)
+	banner_sub = UI.label("", 26, UI.TEXT, 7, "ui_black")
 	banner_sub.anchor_left = 0.0
 	banner_sub.anchor_right = 1.0
 	banner_sub.offset_top = 190
@@ -269,25 +296,30 @@ func _build_banner() -> void:
 	banner_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	banner_sub.modulate.a = 0.0
 	root.add_child(banner_sub)
-	hint = UI.panel(Color(0.96, 0.9, 0.74, 0.96), UI.GOLD_DARK, 14)
-	hint.add_theme_stylebox_override("panel", UI.box(Color(0.96, 0.9, 0.74, 0.96), UI.GOLD_DARK, 14, 3, 8, 14))
-	hint_l = UI.label("", 22, Color(0.2, 0.13, 0.08), 0)
+	# tutorial hints sit low and centred, clear of the wave banner and the corner widgets
+	hint = UI.framed("parch", 6)
+	hint_l = UI.ink("", 20, UI.INK, "ui_black")
 	hint_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint_l.custom_minimum_size.x = 420
+	hint_l.custom_minimum_size.x = 440
 	hint_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_child(hint_l)
 	hint.anchor_left = 0.5
 	hint.anchor_right = 0.5
-	hint.offset_left = -230
-	hint.offset_right = 230
-	hint.offset_top = 96
+	hint.anchor_top = 1.0
+	hint.anchor_bottom = 1.0
+	hint.offset_left = -240
+	hint.offset_right = 240
+	hint.offset_bottom = -150
+	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	hint.visible = false
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(hint)
 
 func show_banner(title: String, sub := "", col := UI.GOLD) -> void:
 	banner.text = title
-	banner.add_theme_color_override("font_color", col)
+	# gold gradient for normal announcements; other colours (boss / danger) drop the gradient
+	var gold := col == UI.GOLD
+	banner.add_theme_color_override("font_color", Color.WHITE if gold else col)
 	banner_sub.text = sub
 	for l in [banner, banner_sub]:
 		var tw := (l as Control).create_tween()
@@ -308,35 +340,23 @@ func show_hint(txt: String) -> void:
 	UI.pop_in(hint)
 
 func _build_boss_bar() -> void:
-	boss_panel = UI.panel(Color(0.08, 0.05, 0.06, 0.9), Color(0.75, 0.25, 0.2), 14)
+	boss_panel = UI.framed("slim", 2)
 	boss_panel.anchor_left = 0.5
 	boss_panel.anchor_right = 0.5
-	boss_panel.offset_left = -230
-	boss_panel.offset_right = 230
-	boss_panel.offset_top = 86
+	boss_panel.offset_left = -240
+	boss_panel.offset_right = 240
+	boss_panel.offset_top = 84
 	boss_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 4)
 	boss_panel.add_child(vb)
 	var hb := HBoxContainer.new()
 	hb.alignment = BoxContainer.ALIGNMENT_CENTER
-	hb.add_child(UI.icon(Assets.tex("crown"), 28))
-	boss_name = UI.label("", 20, Color(1.0, 0.75, 0.6), 5)
+	hb.add_child(UI.icon(Assets.tex("crown"), 30))
+	boss_name = UI.label("", 21, Color(1.0, 0.78, 0.62), 5, "ui_black")
 	hb.add_child(boss_name)
 	vb.add_child(hb)
-	boss_bar = ProgressBar.new()
-	boss_bar.show_percentage = false
-	boss_bar.custom_minimum_size = Vector2(430, 16)
-	boss_bar.max_value = 1.0
-	boss_bar.step = 0.001
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.15, 0.05, 0.05)
-	bg.set_corner_radius_all(6)
-	var fg := StyleBoxFlat.new()
-	fg.bg_color = Color(0.9, 0.2, 0.15)
-	fg.set_corner_radius_all(6)
-	boss_bar.add_theme_stylebox_override("background", bg)
-	boss_bar.add_theme_stylebox_override("fill", fg)
+	boss_bar = UI.bar("red", 440, 18)
 	vb.add_child(boss_bar)
 	boss_panel.visible = false
 	root.add_child(boss_panel)
@@ -383,25 +403,29 @@ func set_wave_preview(per_path: Array) -> void:
 		var w: Dictionary = wave_btns[i]
 		var row: HBoxContainer = w.get("preview")
 		if row == null:
+			var pill := UI.framed("pill", 0)
+			pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			row = HBoxContainer.new()
-			row.add_theme_constant_override("separation", 6)
+			row.add_theme_constant_override("separation", 4)
 			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			row.position = Vector2(-80, 66)
-			row.size = Vector2(160, 40)
 			row.alignment = BoxContainer.ALIGNMENT_CENTER
-			(w["node"] as Control).add_child(row)
+			pill.add_child(row)
+			pill.position = Vector2(-70, 70)
+			(w["node"] as Control).add_child(pill)
+			pill.resized.connect(func(): pill.position.x = -pill.size.x * 0.5)
 			w["preview"] = row
 		for c in row.get_children():
 			c.queue_free()
 		var counts: Dictionary = per_path[i] if i < per_path.size() else {}
+		(row.get_parent() as Control).visible = not counts.is_empty()
 		for k in counts:
 			var cell := VBoxContainer.new()
 			cell.add_theme_constant_override("separation", -6)
 			cell.custom_minimum_size = Vector2(40, 0)
 			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var ic := UI.icon(Assets.tex("portrait_" + k), 34)
+			var ic := UI.icon(Assets.tex("portrait_" + k), 32)
 			cell.add_child(ic)
-			var l := UI.label("x%d" % counts[k], 15, UI.TEXT, 4)
+			var l := UI.label("x%d" % counts[k], 15, UI.GOLD, 4, "ui_black")
 			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			cell.add_child(l)
 			row.add_child(cell)
@@ -461,7 +485,7 @@ var _toasts := 0
 
 ## Small slide-in notification (achievements).
 func toast(title: String, sub: String, icon: String) -> void:
-	var p := UI.panel(Color(0.1, 0.09, 0.05, 0.95), UI.GOLD, 14)
+	var p := UI.framed("parch", 2)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
@@ -469,8 +493,8 @@ func toast(title: String, sub: String, icon: String) -> void:
 	p.add_child(hb)
 	hb.add_child(UI.icon(Assets.tex(icon), 52))
 	var vb := VBoxContainer.new()
-	vb.add_child(UI.label(title, 22, UI.GOLD, 5))
-	vb.add_child(UI.label(sub, 17, UI.TEXT, 3))
+	vb.add_child(UI.ink(title, 21, UI.INK, "ui_black"))
+	vb.add_child(UI.ink(sub, 16, UI.INK_SOFT))
 	hb.add_child(vb)
 	root.add_child(p)
 	p.anchor_left = 0.5
@@ -493,6 +517,12 @@ func toast(title: String, sub: String, icon: String) -> void:
 func set_speed(fast: bool) -> void:
 	speed_b.icon = Assets.tex("speed2" if fast else "speed1")
 
+## Desktop hotkeys (the HUD keeps processing while the tree is paused, so Esc can also resume).
+func _unhandled_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and LevelMain.I:
+		if LevelMain.I.hotkey((ev as InputEventKey).keycode):
+			get_viewport().set_input_as_handled()
+
 func _process(delta: float) -> void:
 	var rd := delta / maxf(Engine.time_scale, 0.01)
 	if vignette:
@@ -514,23 +544,23 @@ func set_wave_buttons(points: Array) -> void:
 	for p in points:
 		var holder := Control.new()
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var b := UI.icon_button(Assets.tex("wave_call"), 78, Color(0.45, 0.1, 0.08, 0.95), 39)
-		b.position = Vector2(-39, -39)
+		var b := UI.icon_button(Assets.tex("wave_call"), 80, UI.NAVY, 40, "red")
+		b.position = Vector2(-40, -40)
 		b.pressed.connect(func(): wave_called.emit())
 		holder.add_child(b)
 		var ring := TextureProgressBar.new()
 		ring.texture_progress = _circle_tex
 		ring.fill_mode = TextureProgressBar.FILL_CLOCKWISE
 		ring.nine_patch_stretch = true
-		ring.size = Vector2(78, 78)
-		ring.position = Vector2(-39, -39)
+		ring.size = Vector2(66, 66)
+		ring.position = Vector2(-33, -33)
 		ring.max_value = 1.0
 		ring.step = 0.001
 		ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		ring.tint_progress = Color(1, 1, 1, 0.6)
 		holder.add_child(ring)
-		var lab := UI.label("", 20, UI.GOLD, 5)
-		lab.position = Vector2(-60, 40)
+		var lab := UI.label("", 21, UI.GOLD, 6, "ui_black")
+		lab.position = Vector2(-60, 38)
 		lab.size = Vector2(120, 30)
 		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -559,7 +589,7 @@ func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, lab
 
 # ---------------------------------------------------------------- menus
 
-func modal(title: String, build_body: Callable, wide := 520) -> Control:
+func modal(title: String, build_body: Callable, wide := 520, ribbon_kind := "red") -> Control:
 	var shade := ColorRect.new()
 	shade.color = Color(0, 0, 0, 0.55)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -568,19 +598,28 @@ func modal(title: String, build_body: Callable, wide := 520) -> Control:
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shade.add_child(center)
-	var p := UI.panel(Color(0.07, 0.08, 0.14, 0.97), UI.GOLD, 22)
-	p.add_theme_stylebox_override("panel", UI.box(Color(0.07, 0.08, 0.14, 0.97), UI.GOLD, 22, 4, 16, 26))
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", -30)
+	center.add_child(wrap)
+	var rib := UI.ribbon(title, 36, ribbon_kind, 420)
+	rib.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	rib.z_index = 1
+	wrap.add_child(rib)
+	var compact := root.get_viewport_rect().size.y < 600.0
+	var p := UI.framed("dark", 14 if compact else 20)
 	p.custom_minimum_size = Vector2(wide, 0)
-	center.add_child(p)
+	wrap.add_child(p)
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 14)
+	vb.add_theme_constant_override("separation", 12)
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
 	p.add_child(vb)
-	var t := UI.label(title, 44, UI.GOLD, 10, "title")
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vb.add_child(t)
+	var sp := Control.new()
+	sp.custom_minimum_size = Vector2(0, 12 if compact else 18)
+	vb.add_child(sp)
 	build_body.call(vb)
 	shade.modulate.a = 0.0
-	shade.create_tween().tween_property(shade, "modulate:a", 1.0, 0.2)
-	(func(): UI.pop_in(p)).call_deferred()
+	var tw := shade.create_tween()
+	tw.set_ignore_time_scale(true)
+	tw.tween_property(shade, "modulate:a", 1.0, 0.2)
+	(func(): UI.pop_in(wrap)).call_deferred()
 	return shade

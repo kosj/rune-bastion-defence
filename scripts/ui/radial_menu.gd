@@ -44,24 +44,26 @@ func open(p: Vector3, opts: Array) -> void:
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.position = Vector2(cos(a), sin(a)) * radius
 		add_child(holder)
-		var b := UI.icon_button(o["icon"], 76, Color(0.14, 0.18, 0.3, 0.96), 38)
-		b.position = Vector2(-38, -38)
+		var b := UI.icon_button(o["icon"], 78, UI.NAVY, 39, o.get("kind", "navy"))
+		b.add_theme_constant_override("icon_max_width", 50)
+		b.position = Vector2(-39, -39)
 		b.disabled = not o.get("enabled", true)
 		b.pressed.connect(_on_press.bind(o["id"]))
 		holder.add_child(b)
 		if o.has("label"):
-			var tag := UI.panel(Color(0.05, 0.06, 0.1, 0.92), UI.GOLD_DARK, 10)
-			tag.add_theme_stylebox_override("panel", UI.box(Color(0.05, 0.06, 0.1, 0.92), UI.GOLD_DARK, 10, 2, 3, 3))
+			var tag := UI.framed("pill", 0)
 			var hb := HBoxContainer.new()
 			hb.add_theme_constant_override("separation", 2)
+			hb.alignment = BoxContainer.ALIGNMENT_CENTER
 			if o.get("coin", false):
-				hb.add_child(UI.icon(Assets.tex("coin"), 18))
-			var l := UI.label(o["label"], 18, UI.GOLD if o.get("enabled", true) else Color(0.9, 0.4, 0.35), 4)
+				hb.add_child(UI.icon(Assets.tex("coin"), 20))
+			var l := UI.label(o["label"], 17, UI.GOLD if o.get("enabled", true) else Color(1.0, 0.45, 0.4), 5, "ui_black")
 			hb.add_child(l)
 			tag.add_child(hb)
-			tag.position = Vector2(-34, 30)
+			tag.position = Vector2(-34, 28)
 			tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			holder.add_child(tag)
+			tag.resized.connect(func(): tag.position.x = -tag.size.x * 0.5)
 		var check := UI.icon(Assets.tex("check"), 34)
 		check.position = Vector2(14, -44)
 		check.visible = false
@@ -114,5 +116,7 @@ func _update_pos() -> void:
 
 class _RingDraw extends Control:
 	func _draw() -> void:
-		draw_arc(Vector2.ZERO, 92.0, 0, TAU, 64, Color(0.98, 0.8, 0.35, 0.55), 4.0, true)
-		draw_circle(Vector2.ZERO, 92.0, Color(0.05, 0.05, 0.1, 0.25))
+		draw_circle(Vector2.ZERO, 94.0, Color(0.04, 0.05, 0.1, 0.32))
+		draw_arc(Vector2.ZERO, 94.0, 0, TAU, 96, Color(0.2, 0.11, 0.03, 0.75), 8.0, true)
+		draw_arc(Vector2.ZERO, 94.0, 0, TAU, 96, Color(0.98, 0.8, 0.36, 0.9), 4.0, true)
+		draw_arc(Vector2.ZERO, 86.0, 0, TAU, 96, Color(1.0, 0.92, 0.6, 0.35), 1.5, true)

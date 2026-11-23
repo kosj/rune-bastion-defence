@@ -24,5 +24,6 @@ def extract(ttc, want, out):
 os.makedirs('assets/fonts', exist_ok=True)
 extract('/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', 'Noto Sans CJK KR', 'assets/fonts/ui.ttf')
 extract('/usr/share/fonts/opentype/noto/NotoSerifCJK-Black.ttc', 'Noto Serif CJK KR', 'assets/fonts/title_kr.ttf')
+extract('/usr/share/fonts/opentype/noto/NotoSansCJK-Black.ttc', 'Noto Sans CJK KR', 'assets/fonts/ui_black.ttf')
 shutil.copy('/usr/share/fonts/truetype/google-fonts/ofl/cardo/Cardo-Bold.ttf', 'assets/fonts/title.ttf')
 print('glyphs', len(txt))

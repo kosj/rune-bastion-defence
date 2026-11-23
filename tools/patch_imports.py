@@ -5,7 +5,9 @@ web build stays small and works on every WebGL2 / mobile GPU):
   *_normal.*  lossless                  - XYZ in RGB: lossy YUV 4:2:0 would corrupt directions
   *_orm.*     lossless                  - occlusion/roughness/metal in separate channels
   other 3D    lossy WebP (legacy)
-All 3D textures get mipmaps; UI images are left alone apart from detect_3d.
+All 3D textures get mipmaps.
+UI kit (assets/ui/kit, authored at 2x) and the painted world map: lossy WebP + mipmaps so they
+minify cleanly when the canvas is drawn below their native size. Other UI images stay lossless.
 """
 import glob
 import os
@@ -33,6 +35,11 @@ for f in glob.glob("assets/**/*.import", recursive=True):
         s = re.sub(r"mipmaps/generate=\w+", "mipmaps/generate=true", s)
         if "_normal" in base:
             s = re.sub(r"compress/normal_map=\d", "compress/normal_map=1", s)
+    elif "/ui/kit/" in f or base.startswith("world_map"):
+        q = 0.85 if base.startswith("world_map") else 0.92
+        s = re.sub(r"compress/mode=\d", "compress/mode=1", s)
+        s = re.sub(r"compress/lossy_quality=[0-9.]+", "compress/lossy_quality=%.2f" % q, s)
+        s = re.sub(r"mipmaps/generate=\w+", "mipmaps/generate=true", s)
     s = re.sub(r"detect_3d/compress_to=\d", "detect_3d/compress_to=0", s)
     if s != o:
         open(f, "w").write(s)
