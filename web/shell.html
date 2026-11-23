@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, height=device-height, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d18">
+<title>Rune Bastion · 룬 바스티온</title>
+<style>
+html, body, #canvas { margin: 0; padding: 0; border: 0; }
+body { background: #0b0d18; color: #f4ead2; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none;
+  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; }
+#canvas { display: block; position: absolute; inset: 0; width: 100vw; height: 100vh; }
+#canvas:focus { outline: none; }
+#status { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 30%, #2a2140 0%, #121427 55%, #07080f 100%); z-index: 5; transition: opacity .6s; }
+#status.hide { opacity: 0; pointer-events: none; }
+.crest { width: 88px; height: 88px; margin-bottom: 14px; filter: drop-shadow(0 6px 14px rgba(0,0,0,.6)); }
+h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 700; letter-spacing: .12em; margin: 0; font-size: clamp(30px, 7vw, 64px);
+  background: linear-gradient(180deg, #ffe9a8 0%, #f2b94a 55%, #a86b1c 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 4px 18px rgba(240,170,60,.25); }
+h2 { margin: 6px 0 34px; font-weight: 600; font-size: clamp(15px, 3.2vw, 22px); color: #e9dcc0; letter-spacing: .3em; opacity: .9; }
+.bar { width: min(460px, 76vw); height: 16px; border-radius: 10px; background: rgba(0,0,0,.55); border: 2px solid #a8762a; overflow: hidden;
+  box-shadow: 0 0 0 3px rgba(0,0,0,.35), inset 0 2px 6px rgba(0,0,0,.6); }
+.fill { height: 100%; width: 0%; background: linear-gradient(90deg, #b5401f, #f0a43a 60%, #ffe08a); box-shadow: 0 0 14px #f6a83a; transition: width .25s; }
+#pct { margin-top: 10px; font-size: 14px; color: #cdbf9f; letter-spacing: .08em; }
+#tip { margin-top: 28px; max-width: min(560px, 86vw); text-align: center; font-size: 15px; line-height: 1.55; color: #bfb39b; min-height: 48px; }
+#notice { display: none; margin: 18px; padding: 14px 18px; background: #5b2b2b; border: 1px solid #b04848; border-radius: 10px; white-space: pre-line; text-align: center; }
+#rotate { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(7,8,15,.92);
+  z-index: 10; font-size: 18px; text-align: center; gap: 12px; }
+#rotate .ph { width: 46px; height: 76px; border: 4px solid #f2b94a; border-radius: 10px; animation: rot 1.8s ease-in-out infinite; }
+@keyframes rot { 0%,30% { transform: rotate(0) } 60%,100% { transform: rotate(-90deg) } }
+#rotate button { margin-top: 8px; background: #b5401f; color: #fff; border: 2px solid #f2b94a; border-radius: 12px; padding: 10px 22px; font-size: 16px; }
+</style>
+$GODOT_HEAD_INCLUDE
+</head>
+<body>
+<canvas id="canvas">Your browser does not support the canvas tag.</canvas>
+<noscript>JavaScript가 필요합니다.</noscript>
+<div id="status">
+  <svg class="crest" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#b07020"/></linearGradient></defs>
+    <path d="M50 4 L88 18 L84 58 Q78 82 50 96 Q22 82 16 58 L12 18 Z" fill="#1d2448" stroke="url(#g)" stroke-width="5"/>
+    <path d="M32 70 V40 l6-6 6 6 v6 h12 v-6 l6-6 6 6 v30 Z" fill="#e8dcc2" stroke="#3a2410" stroke-width="2"/>
+    <path d="M44 70 v-10 a6 6 0 0 1 12 0 v10 Z" fill="#3a2410"/>
+    <path d="M50 18 l3 7 7 1 -5 5 1 7 -6 -3 -6 3 1 -7 -5 -5 7 -1 Z" fill="#f4c24c"/></svg>
+  <h1>RUNE BASTION</h1>
+  <h2>룬 바스티온 · 왕국 수호전</h2>
+  <div class="bar"><div class="fill" id="fill"></div></div>
+  <div id="pct">전장을 준비하는 중... 0%</div>
+  <div id="tip"></div>
+  <div id="notice"></div>
+</div>
+<div id="rotate"><div class="ph"></div><div>가로 모드로 돌리면 더 넓게 볼 수 있어요</div><button id="rotok">세로로 계속하기</button></div>
+<script>
+// --- compressed asset loader: index.wasm / index.pck are shipped gzip'd as *.gz.bin and inflated in the browser ---
+(function () {
+  const GZ = $RB_GZ_MAP;
+  const origFetch = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const url = (typeof input === 'string') ? input : input.url;
+    for (const key in GZ) {
+      if (url.split('?')[0].endsWith(key) && 'DecompressionStream' in window) {
+        const parts = GZ[key].parts;
+        const mime = GZ[key].mime;
+        const base = url.substring(0, url.lastIndexOf('/') + 1);
+        const stream = new ReadableStream({
+          async start(controller) {
+            for (const p of parts) {
+              const r = await origFetch(base + p, { cache: 'force-cache' });
+              if (!r.ok) { controller.error(new Error('HTTP ' + r.status + ' ' + p)); return; }
+              if (p.endsWith('.txt')) {
+                // base64 text part (for hosts that only serve web/text file types)
+                const txt = (await r.text()).replace(/\s+/g, '');
+                if (Uint8Array.fromBase64) { controller.enqueue(Uint8Array.fromBase64(txt)); continue; }
+                const SL = 4 * 1024 * 1024;
+                for (let o = 0; o < txt.length; o += SL) {
+                  const bin = atob(txt.substring(o, o + SL));
+                  const u = new Uint8Array(bin.length);
+                  for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
+                  controller.enqueue(u);
+                }
+                continue;
+              }
+              const reader = r.body.getReader();
+              for (;;) { const { done, value } = await reader.read(); if (done) break; controller.enqueue(value); }
+            }
+            controller.close();
+          }
+        });
+        const inflated = stream.pipeThrough(new DecompressionStream('gzip'));
+        return new Response(inflated, { status: 200, headers: { 'Content-Type': mime } });
+      }
+    }
+    return origFetch(input, init);
+  };
+})();
+</script>
+<script src="$GODOT_URL"></script>
+<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+const engine = new Engine(GODOT_CONFIG);
+(function () {
+  const status = document.getElementById('status');
+  const fill = document.getElementById('fill');
+  const pct = document.getElementById('pct');
+  const notice = document.getElementById('notice');
+  const tip = document.getElementById('tip');
+  const tips = [
+    '빈 건설 부지를 탭하면 궁수 · 병영 · 마법사 · 포병 타워를 지을 수 있습니다.',
+    '오크 돌격병은 중장갑! 마법사 탑의 마법 피해가 효과적입니다.',
+    '가고일은 하늘을 납니다. 병영과 포병은 공격할 수 없어요.',
+    '해골 버튼으로 다음 웨이브를 일찍 부르면 보너스 골드를 받습니다.',
+    '영웅 카엘을 탭한 뒤 땅을 탭하면 원하는 곳으로 이동합니다.',
+    '3레벨 타워는 두 가지 전문화 중 하나를 선택할 수 있습니다.',
+  ];
+  let ti = 0;
+  const showTip = () => { tip.textContent = '💡 ' + tips[ti++ % tips.length]; };
+  showTip(); const tipTimer = setInterval(showTip, 3500);
+  function fail(err) {
+    console.error(err);
+    notice.style.display = 'block';
+    notice.textContent = '로딩 실패: ' + (err && err.message ? err.message : err) + '\nWebGL2를 지원하는 최신 브라우저(Chrome, Safari 16.4+, Edge, Firefox)에서 열어주세요.';
+  }
+  const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
+  if (missing.length) { fail('필요한 브라우저 기능이 없습니다:\n' + missing.join('\n')); return; }
+  engine.startGame({
+    onProgress: function (cur, total) {
+      if (cur > 0 && total > 0) {
+        const p = Math.min(100, Math.round(cur / total * 100));
+        fill.style.width = p + '%';
+        pct.textContent = (p < 100 ? '전장을 준비하는 중... ' : '엔진 초기화 중... ') + p + '%';
+      }
+    },
+  }).then(() => {
+    clearInterval(tipTimer);
+    status.classList.add('hide');
+    setTimeout(() => status.remove(), 700);
+  }, fail);
+  // portrait hint on phones
+  const rot = document.getElementById('rotate');
+  let dismissed = false;
+  document.getElementById('rotok').onclick = () => { dismissed = true; rot.style.display = 'none'; };
+  const check = () => {
+    const portrait = window.innerHeight > window.innerWidth * 1.15;
+    const phone = Math.min(window.innerWidth, window.innerHeight) < 600;
+    rot.style.display = (portrait && phone && !dismissed) ? 'flex' : 'none';
+  };
+  window.addEventListener('resize', check); check();
+}());
+</script>
+</body>
+</html>

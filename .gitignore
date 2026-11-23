@@ -1,0 +1,22 @@
+# Godot cache / build output
+.godot/
+build/
+*.tmp
+__pycache__/
+
+# Textures that Godot extracts from the GLB models on first import.
+# They are regenerated automatically; tools/patch_imports.py then applies the role-based
+# compression settings (lossy albedo, lossless normal/ORM). Do not commit them: a stale
+# .import without its PNG blocks the extraction.
+assets/models/*_albedo.png
+assets/models/*_normal.png
+assets/models/*_orm.png
+assets/models/*_albedo.png.import
+assets/models/*_normal.png.import
+assets/models/*_orm.png.import
+assets/characters/*_albedo.png
+assets/characters/*_normal.png
+assets/characters/*_orm.png
+assets/characters/*_albedo.png.import
+assets/characters/*_normal.png.import
+assets/characters/*_orm.png.import
