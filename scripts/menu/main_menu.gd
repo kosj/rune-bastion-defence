@@ -227,6 +227,11 @@ func _build_ui() -> void:
 		b.add_theme_constant_override("icon_max_width", 30)
 		var fn: Callable = it[2]
 		b.pressed.connect(func(): fn.call())
+		if it[0] == "영웅" and DB.unspent_talents() > 0:
+			# unspent talent points: same red badge the upgrade dock uses for unspent stars
+			var bd := UI.badge(str(DB.unspent_talents()), 28, 15)
+			bd.position = Vector2(97, -8)
+			b.add_child(bd)
 		row.add_child(b)
 	vb.add_child(row)
 	var settings := UI.button("설정", 24, false, Vector2(380, 62), "blue")
@@ -564,11 +569,29 @@ func _open_talents(id: String) -> void:
 # ---------------------------------------------------------------- bestiary
 
 ## Bestiary: every enemy met so far, with stats and how to counter it.
-func _open_bestiary() -> void:
-	var o := _overlay("적 도감", "dark")
+func _open_bestiary(tab := "enemy") -> void:
+	var o := _overlay("도감", "dark")
+	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
 	var vs := get_viewport().get_visible_rect().size
 	var compact := vs.y < 600.0
+	# tabs: enemies / towers
+	var tabs := HBoxContainer.new()
+	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
+	tabs.add_theme_constant_override("separation", 8)
+	for tb in [["enemy", "적"], ["tower", "타워"]]:
+		var b := UI.button(tb[1], 19, false, Vector2(140, 44), "gold" if tab == tb[0] else "gray")
+		var id: String = tb[0]
+		b.pressed.connect(func():
+			if id != tab:
+				Audio.play("click", -4.0)
+				shade.queue_free()
+				_open_bestiary(id))
+		tabs.add_child(b)
+	vb.add_child(tabs)
+	if tab == "tower":
+		_tower_codex(vb, vs, compact)
+		return
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 16)
 	vb.add_child(hb)
@@ -645,6 +668,121 @@ func _open_bestiary() -> void:
 	var cnt := UI.label(tr("발견 %d / %d") % [seen_n, DB.ENEMIES.size()], 18, UI.GOLD, 4, "ui_black")
 	cnt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	left.add_child(cnt)
+
+## Tower codex: every tower's three levels, both specializations and their special abilities.
+func _tower_codex(vb: VBoxContainer, vs: Vector2, compact: bool) -> void:
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 16)
+	vb.add_child(hb)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 8)
+	hb.add_child(left)
+	var dw := minf(vs.x - 300.0, 640.0)
+	var detail := UI.framed("parch", 12)
+	detail.custom_minimum_size = Vector2(dw, minf(vs.y - 250.0, 400.0))
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.custom_minimum_size = Vector2(dw - 24, minf(vs.y - 274.0, 376.0))
+	detail.add_child(sc)
+	var dv := VBoxContainer.new()
+	dv.add_theme_constant_override("separation", 6)
+	dv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(dv)
+	hb.add_child(detail)
+	var show := func(t: String):
+		for c in dv.get_children():
+			c.queue_free()
+		sc.scroll_vertical = 0
+		var d: Dictionary = DB.TOWERS[t]
+		var top := HBoxContainer.new()
+		top.add_theme_constant_override("separation", 10)
+		top.add_child(UI.icon(Assets.tex("tower_%s_3" % t), 72 if not compact else 58))
+		var nv := VBoxContainer.new()
+		nv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nv.add_child(UI.ink(d["name"], 24, UI.INK, "title_kr"))
+		var dl := UI.ink(d["desc"], 16, UI.INK_SOFT)
+		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		dl.custom_minimum_size.x = dw - 140
+		nv.add_child(dl)
+		top.add_child(nv)
+		dv.add_child(top)
+		# level 1-3 stats, one row each
+		for lv in 3:
+			var st := DB.tower_stats(t, lv + 1, "")
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 12)
+			row.add_child(UI.ink("Lv.%d" % (lv + 1), 17, Color(0.6, 0.16, 0.08), "ui_black"))
+			row.add_child(UI.stat("coin", str(d["levels"][lv]["cost"]), 16))
+			if t == "barracks":
+				row.add_child(UI.stat("st_unit", tr("병사 %d") % st["count"], 16))
+				row.add_child(UI.stat("heart", "%d" % st["soldier_hp"], 16))
+				row.add_child(UI.stat("st_dmg", "%d-%d" % [st["soldier_dmg"][0], st["soldier_dmg"][1]], 16))
+			else:
+				row.add_child(UI.stat("st_dmg", "%d-%d" % [st["dmg"][0], st["dmg"][1]], 16))
+				row.add_child(UI.stat("st_rate", tr("%.1f초") % st["rate"], 16))
+				row.add_child(UI.stat("st_range", "%.1f" % st["range"], 16))
+			dv.add_child(row)
+		dv.add_child(UI.divider(dw - 50))
+		# the two specializations (level 4), each with its special ability
+		for m in d["masteries"]:
+			var mh := HBoxContainer.new()
+			mh.add_theme_constant_override("separation", 10)
+			mh.add_child(UI.icon(Assets.tex("m_" + m["id"]), 46 if not compact else 40))
+			var mv := VBoxContainer.new()
+			mv.add_theme_constant_override("separation", 0)
+			mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var mt := HBoxContainer.new()
+			mt.add_theme_constant_override("separation", 8)
+			mt.add_child(UI.ink(m["name"], 19, UI.INK, "ui_black"))
+			mt.add_child(UI.stat("coin", str(m["cost"]), 15))
+			mv.add_child(mt)
+			var md := UI.ink(m["desc"], 15, UI.INK_SOFT)
+			md.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			md.custom_minimum_size.x = dw - 120
+			mv.add_child(md)
+			mh.add_child(mv)
+			dv.add_child(mh)
+			var ab: Dictionary = m.get("ability", {})
+			if not ab.is_empty():
+				var ah := HBoxContainer.new()
+				ah.add_theme_constant_override("separation", 10)
+				var pad := Control.new()
+				pad.custom_minimum_size.x = 26
+				ah.add_child(pad)
+				ah.add_child(UI.icon(Assets.tex("a_" + ab["id"]), 36 if not compact else 32))
+				var av := VBoxContainer.new()
+				av.add_theme_constant_override("separation", 0)
+				av.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				var at := HBoxContainer.new()
+				at.add_theme_constant_override("separation", 8)
+				at.add_child(UI.ink(tr("특수 능력 · ") + tr(ab["name"]), 16, Color(0.1, 0.4, 0.5), "ui_black"))
+				at.add_child(UI.stat("coin", str(DB.ability_cost(t, m["id"])), 14))
+				av.add_child(at)
+				var adl := UI.ink(ab["desc"], 14, UI.INK_SOFT)
+				adl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				adl.custom_minimum_size.x = dw - 150
+				av.add_child(adl)
+				ah.add_child(av)
+				dv.add_child(ah)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	left.add_child(grid)
+	var cell := 96 if not compact else 76
+	for t in ["archer", "barracks", "mage", "artillery"]:
+		var b := UI.icon_button(Assets.tex("tower_%s_1" % t), cell, UI.NAVY, 14, "navy")
+		b.add_theme_constant_override("icon_max_width", int(cell * 0.8))
+		b.tooltip_text = DB.TOWERS[t]["name"]
+		b.pressed.connect(func():
+			Audio.play("click", -6.0)
+			show.call(t))
+		grid.add_child(b)
+	var hint := UI.label("3레벨 타워는 전문화로 4레벨이 되고, 전문화한 타워는 특수 능력을 하나 더 배울 수 있습니다.", 15, UI.MUTED, 3)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size.x = cell * 2 + 6
+	left.add_child(hint)
+	show.call("archer")
 
 # ---------------------------------------------------------------- achievements
 
@@ -867,6 +1005,10 @@ func _open_settings() -> void:
 		Game.vibration = v
 		Game.save()
 		Game.vibrate(60)))
+	left.add_child(_toggle("배터리 절약 (30 FPS)", Game.battery_saver, func(v):
+		Game.battery_saver = v
+		Game.apply_quality()
+		Game.save()))
 	# --- interface, language, save data
 	right.add_child(_section("화면 · 언어"))
 	var scales := [[0.9, "작게"], [1.0, "보통"], [1.15, "크게"]]
@@ -1035,6 +1177,9 @@ func _open_save_code(export: bool) -> void:
 func _test_card() -> void:
 	_open_select()
 	(func(): (_select as WorldMap)._open_card(1)).call_deferred()
+
+func _test_codex_towers() -> void:
+	_open_bestiary("tower")
 
 func _test_talents() -> void:
 	_open_talents("kael")

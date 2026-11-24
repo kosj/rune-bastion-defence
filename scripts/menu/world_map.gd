@@ -150,6 +150,10 @@ func _build_chrome() -> void:
 			var bd := UI.badge(str(Game.available_stars()), 28, 15)
 			bd.position = Vector2(46, -4)
 			b.add_child(bd)
+		if it[0] == "ic_hero" and DB.unspent_talents() > 0:
+			var bd := UI.badge(str(DB.unspent_talents()), 28, 15)
+			bd.position = Vector2(46, -4)
+			b.add_child(bd)
 		dock.add_child(col)
 	add_child(dock)
 

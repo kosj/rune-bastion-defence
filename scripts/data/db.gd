@@ -165,6 +165,14 @@ static func hero_rank_progress(id: String) -> Array:
 static func talent(id: String, t: String) -> int:
 	return int((Game.hero_talents.get(id, {}) as Dictionary).get(t, 0))
 
+## Talent points waiting to be spent across the heroes the player has unlocked.
+static func unspent_talents() -> int:
+	var n := 0
+	for id in HEROES:
+		if Game.hero_unlocked(id):
+			n += talent_points(id)
+	return n
+
 static func talent_points(id: String) -> int:
 	var used := 0
 	for t in HERO_TALENTS:

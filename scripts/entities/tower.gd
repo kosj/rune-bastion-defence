@@ -6,6 +6,7 @@ var type := ""
 var level := 1
 var mastery := ""
 var ability := ""  # special ability bought after the mastery (one per mastery)
+static var ability_hits := {}  # ability id -> times it fired (stats for tests / tuning)
 var _tele_cd := 0.0
 var stats: Dictionary
 var invested := 0
@@ -490,7 +491,11 @@ func _chain_lightning(first: Enemy) -> void:
 		cur = nxt
 
 ## Arcane ability: fold space and drop the enemy 8 m back down its path.
+static func count_ability(id: String) -> void:
+	ability_hits[id] = int(ability_hits.get(id, 0)) + 1
+
 func _teleport(e: Enemy) -> void:
+	count_ability("teleport")
 	var fx := LevelMain.I.fx
 	fx.magic_burst(e.aim_point(), Color(0.8, 0.5, 1.0), 1.0)
 	fx.rune_circle(e.global_position + Vector3(0, 0.1, 0), Color(0.8, 0.5, 1.0), 1.3, 0.6)

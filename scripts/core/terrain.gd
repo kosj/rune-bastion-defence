@@ -440,7 +440,9 @@ func scatter_decor(defs: Array, seed_val: int) -> void:
 		if not decor_xf.has(name):
 			decor_xf[name] = []
 		(decor_xf[name] as Array).append_array(xf)
-		var mmi := Assets.multimesh(name, xf, self, region != "tiny")
+		# low quality (phones): only trees and houses keep shadow-map shadows; small props skip the shadow pass
+		var shadows: bool = region != "tiny" and (Game.high_quality or name.begins_with("tree") or name == "house")
+		var mmi := Assets.multimesh(name, xf, self, shadows)
 		if mmi and name in ["lamp", "crystals", "house", "barrels", "fence"] and decor_snow > 0.0:
 			mmi.material_overlay = Assets.snow_overlay()
 		elif mmi and (decor_colorize.a > 0.0 or decor_snow > 0.0):

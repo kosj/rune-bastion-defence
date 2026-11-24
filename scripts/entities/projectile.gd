@@ -169,8 +169,10 @@ func _impact() -> void:
 				fx.hit_spark(dest, Color(1, 0.95, 0.8), 0.6)
 				if ability == "poison" and target.alive:
 					target.poison(9.0, 3.0)
+					Tower.count_ability("poison")
 				elif ability == "execute" and target.alive and not target.boss and target.hp <= target.max_hp * 0.25:
 					target.damage(target.hp + 1.0, "true")
+					Tower.count_ability("execute")
 					LevelMain.I.overlay.float_text(dest + Vector3(0, 0.7, 0), "처형!", Color(1.0, 0.4, 0.3), 1.1)
 					fx.magic_burst(dest, Color(1.0, 0.35, 0.25), 0.7)
 				if crit:
@@ -185,6 +187,7 @@ func _impact() -> void:
 							e.slow(1.0 - slow, 2.5)
 						if ability == "freeze" and e.alive and randf() < 0.2:
 							e.freeze(1.5)
+							Tower.count_ability("freeze")
 				fx.frost_nova(dest, splash)
 				Audio.play("frost", -6.0, 0.1)
 			elif target != null and is_instance_valid(target) and target.alive:
@@ -202,6 +205,8 @@ func _impact() -> void:
 					var to := dest + Vector3(cos(a), 0, sin(a)) * randf_range(1.6, 2.6)
 					to.y = LevelMain.I.terrain.walk_height(to.x, to.z)
 					Projectile.bomb(dest + Vector3(0, 0.3, 0), to, dmg * 0.4, 1.4, 10.0 if ability == "napalm" else 0.0, 0, true)
+					if ability == "napalm":
+						Tower.count_ability("napalm")
 		Kind.METEOR:
 			_explode(dest, splash, dmg, true, "magic")
 			fx.scorch(dest, splash)
@@ -230,3 +235,4 @@ func _explode(at: Vector3, r: float, d: float, big: bool, dtype := "physical") -
 				e.burn(burn * 0.5, 3.0)
 			if ability == "shock" and e.alive:
 				e.stun(0.8)
+				Tower.count_ability("shock")

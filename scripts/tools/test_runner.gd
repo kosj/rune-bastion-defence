@@ -7,6 +7,7 @@ var t := 0.0
 var shot_i := 0
 var built := false
 var _next_report := 0.0
+var _next_ab := 0.0
 var _shots_at := []
 
 func _ready() -> void:
@@ -20,6 +21,9 @@ func _ready() -> void:
 	if args.has("lang"):
 		Game.language = args["lang"]
 		Lang.apply(Game.language)
+	if args.has("hq"):
+		Game.high_quality = args["hq"] == "1"
+		Game.apply_quality()
 	if args.has("ui_scale"):
 		Game.ui_scale = float(args["ui_scale"])
 		Game._fit_ui()
@@ -205,6 +209,11 @@ func _process(delta: float) -> void:
 				c /= n
 				L3.cam_rig.zoom = float(args.get("zoom", "16"))
 				L3.cam_rig.target = L3.cam_rig.target.lerp(c, 0.04)
+		if args.get("god", "0") == "1":
+			LevelMain.I.lives = maxi(LevelMain.I.lives, 15)
+		if args.has("abreport") and t > _next_ab:
+			_next_ab = t + 10.0
+			print("ABILITIES ", Tower.ability_hits)
 		if LevelMain.I.state == "ready" and t > 2.0:
 			Engine.time_scale = float(args.get("speed", "3"))
 			LevelMain.I._call_wave()
@@ -474,7 +483,9 @@ func _build_all() -> void:
 				tw.upgrade()
 		if args.get("mastery", "0") == "1" and tw.level == 3:
 			var ms: Array = tw.data()["masteries"]
-			tw.apply_mastery(ms[i % 2]["id"])
+			tw.apply_mastery(ms[(i + int(args.get("mflip", "0"))) % 2]["id"])
+			if args.get("abilities", "0") == "1":
+				tw.buy_ability()
 	L.hud.set_gold(L.gold)
 
 ## Save-code round trip, corrupted codes, talent math (headless).
@@ -522,6 +533,19 @@ func _lod_probe() -> void:
 	for k in 4:
 		await RenderingServer.frame_post_draw
 	var base := Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+	print("BASE primitives=%d draws=%d" % [base, Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)])
+	var us := get_tree().get_nodes_in_group("unit_shadow")
+	var nb := 0
+	for u in us:
+		if u._blob and u._blob.visible:
+			nb += 1
+	print("UNITS %d with blob %d hq=%s" % [us.size(), nb, Game.high_quality])
+	if not us.is_empty():
+		var u0: CharacterModel = us[0]
+		print("blob0 ", u0._blob.global_position if u0._blob else "none", " model ", u0.global_position, " body_shadow ", u0.body.cast_shadow if u0.body else -1)
+	if args.get("groups", "0") != "1":
+		get_tree().quit()
+		return
 	var groups := {}
 	for n in LevelMain.I.find_children("*", "GeometryInstance3D", true, false):
 		if not (n as GeometryInstance3D).visible:

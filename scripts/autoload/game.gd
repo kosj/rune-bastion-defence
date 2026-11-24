@@ -28,6 +28,7 @@ var ui_scale := 1.0
 var screen_shake := true
 var vibration := true
 var language := ""       # "" = follow the browser / OS language
+var battery_saver := false  # cap the frame rate at 30 (cooler, longer-lasting phones)
 
 var _fade_layer: CanvasLayer
 var _fade_rect: ColorRect
@@ -75,6 +76,8 @@ func apply_quality() -> void:
 	vp.scaling_3d_scale = 1.0 if high_quality else 0.8
 	# automatic mesh LOD: on the low setting accept ~4 px of simplification error (phones, small screens)
 	vp.mesh_lod_threshold = 1.0 if high_quality else 4.0
+	get_tree().call_group("unit_shadow", "refresh_shadow")
+	Engine.max_fps = 30 if battery_saver else 0
 
 func set_ui_scale(v: float) -> void:
 	ui_scale = v
@@ -204,6 +207,7 @@ func save() -> void:
 	cf.set_value("settings", "shake", screen_shake)
 	cf.set_value("settings", "vibration", vibration)
 	cf.set_value("settings", "language", language)
+	cf.set_value("settings", "battery_saver", battery_saver)
 	cf.save(SAVE_PATH)
 
 func _load() -> void:
@@ -245,6 +249,7 @@ func _apply_config(cf: ConfigFile) -> void:
 	screen_shake = bool(cf.get_value("settings", "shake", screen_shake))
 	vibration = bool(cf.get_value("settings", "vibration", vibration))
 	language = str(cf.get_value("settings", "language", language))
+	battery_saver = bool(cf.get_value("settings", "battery_saver", battery_saver))
 
 # ---------------------------------------------------------------- save transfer codes
 

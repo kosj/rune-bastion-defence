@@ -74,6 +74,7 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		"orc": weapon = "w_axe"
 		"troll": weapon = "w_club"
 	model = CharacterModel.new()
+	model.ground_blob = not flying
 	add_child(model)
 	model.setup(d["model"], sc, d.get("tint", Color.WHITE), weapon)
 	if type == "shaman":
@@ -83,6 +84,8 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		add_child(staff)
 	if d["model"] == "wolf" and model.anim == null:
 		model.position.y = 0.42 * sc
+		if model._blob:
+			model._blob.position.y = 0.14 - model.position.y
 	if flying:
 		model.rotation_degrees.x = 8.0
 	_anim_base = 1.0 / sc * 1.7

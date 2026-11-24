@@ -97,7 +97,7 @@
 룬 바스티온 · 왕국 수호전	Defender of the Realm
 게임 시작	Play
 영웅	Heroes
-도감	Bestiary
+도감	Codex
 업적	Trophies
 설정	Settings
 3D 애셋: NCSOFT VARCO 3D 생성형 AI  ·  파이프라인: Blender  ·  엔진: Godot 4	3D assets: NCSOFT VARCO 3D generative AI  ·  Pipeline: Blender  ·  Engine: Godot 4
@@ -183,3 +183,9 @@ UI 크기	UI size
 일반|difficulty	Normal
 앱으로 설치	Install App
 Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 화면으로 실행됩니다.	In Safari, tap Share → 'Add to Home Screen' to play full-screen.
+배터리 절약 (30 FPS)	Battery saver (30 FPS)
+타워	Towers
+적	Enemies
+특수 능력을 배울 수 있어요	Special ability available
+전문화한 타워를 다시 탭하면 특수 능력을 배울 수 있어요.	Tap a specialized tower again to learn its special ability.
+3레벨 타워는 전문화로 4레벨이 되고, 전문화한 타워는 특수 능력을 하나 더 배울 수 있습니다.	Level 3 towers specialize into level 4, and a specialized tower can learn one more special ability.

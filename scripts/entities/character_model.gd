@@ -9,6 +9,8 @@ const ATTACK_IMPACT := 0.62  # seconds into the trimmed attack clip
 
 static var _prepared := {}
 static var _tint_mats := {}
+static var _blob_mesh: QuadMesh
+static var _blob_mat: StandardMaterial3D
 
 var anim: AnimationPlayer
 var skel: Skeleton3D
@@ -20,6 +22,10 @@ var _flash_mat: StandardMaterial3D
 var _base_mat: Material
 var _inst: Node3D
 var _yaw_target := 0.0
+var _blob: MeshInstance3D
+var _blob_size := 1.0
+## Flying units (gargoyles) hover above the ground: no contact shadow under them.
+var ground_blob := true
 
 func setup(p_model: String, p_scale: float, tint := Color.WHITE, weapon := "") -> CharacterModel:
 	model_name = p_model
@@ -39,10 +45,59 @@ func setup(p_model: String, p_scale: float, tint := Color.WHITE, weapon := "") -
 		_base_mat = body.mesh.surface_get_material(0)
 		if tint != Color.WHITE:
 			body.material_override = _tinted(p_model, tint)
-		body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	if weapon != "" and skel:
 		attach_weapon(weapon)
+	_blob_size = clampf(p_scale * 0.55, 0.7, 3.0)
+	add_to_group("unit_shadow")
+	refresh_shadow()
 	return self
+
+## Shadows by quality: real shadow-map shadows on the high setting; on the low setting (phones)
+## units skip the shadow pass (their dense skinned meshes are most of its cost) and get a soft
+## contact blob instead. Called again for every unit when the setting changes.
+func refresh_shadow() -> void:
+	var cheap := not Game.high_quality
+	for g in find_children("*", "GeometryInstance3D", true, false):
+		if g != _blob:
+			(g as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if cheap else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	if cheap and ground_blob and _blob == null:
+		_blob = MeshInstance3D.new()
+		_blob.mesh = _blob_quad()
+		_blob.material_override = _blob_material()
+		_blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_blob.rotation_degrees.x = -90.0
+		_blob.position.y = 0.14
+		_blob.scale = Vector3.ONE * _blob_size
+		add_child(_blob)
+	if _blob:
+		_blob.visible = cheap and ground_blob
+
+static func _blob_quad() -> QuadMesh:
+	if _blob_mesh == null:
+		_blob_mesh = QuadMesh.new()
+		_blob_mesh.size = Vector2(1, 1)
+	return _blob_mesh
+
+static func _blob_material() -> StandardMaterial3D:
+	if _blob_mat == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0.02, 0.02, 0.03, 0.8))
+		g.set_color(1, Color(0.02, 0.02, 0.03, 0.0))
+		g.add_point(0.5, Color(0.02, 0.02, 0.03, 0.55))
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 0.5)
+		gt.width = 64
+		gt.height = 64
+		_blob_mat = StandardMaterial3D.new()
+		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_blob_mat.albedo_texture = gt
+		_blob_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		_blob_mat.render_priority = -1
+	return _blob_mat
 
 func _prepare_anims(key: String) -> void:
 	if _prepared.has(key):

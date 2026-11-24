@@ -403,7 +403,7 @@ func _place_plots() -> void:
 	for p in plots:
 		# signpost faces roughly toward the camera side for readability
 		_plot_xf.append(Transform3D(Basis(Vector3.UP, randf_range(-0.6, 0.6)), Vector3(p.x, terrain.height_at(p.x, p.y), p.y)))
-	_plot_mmi = Assets.multimesh("plot", _plot_xf, world)
+	_plot_mmi = Assets.multimesh("plot", _plot_xf, world, Game.high_quality)
 	if _plot_mmi:
 		_theme_overlay(_plot_mmi)
 
@@ -1017,6 +1017,11 @@ func _on_radial_chosen(id: String) -> void:
 		Audio.play("upgrade", 0.0)
 		hud.show_banner(md["name"], "전문화 완료!", md["tint"])
 		_deselect()
+		# one-time pointer to the next step (special abilities), for players who have not found it yet
+		if int(Game.stats.get("abilities", 0)) == 0 and int(Game.stats.get("ability_tip", 0)) == 0:
+			Game.stats["ability_tip"] = 1
+			var ad0 := DB.ability_def(tower.type, mid)
+			hud.toast("특수 능력을 배울 수 있어요", "전문화한 타워를 다시 탭하면 특수 능력을 배울 수 있어요.", "a_" + str(ad0.get("id", "poison")))
 	elif id == "ability":
 		var ac := DB.ability_cost(tower.type, tower.mastery)
 		if gold < ac or tower.ability != "":

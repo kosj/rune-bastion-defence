@@ -139,6 +139,7 @@ func _on_hit(e: Enemy) -> void:
 	e.damage(v, "physical")
 	if holy > 0.0 and e.alive:
 		e.damage(v * holy, "magic", false)
+		Tower.count_ability("holy")
 		LevelMain.I.fx.hit_spark(e.aim_point(), Color(1.0, 0.95, 0.55), 0.9)
 	LevelMain.I.fx.hit_spark(e.aim_point(), Color(1.0, 0.9, 0.6))
 	Audio.play("sword", -8.0, 0.15, 3)
@@ -157,6 +158,7 @@ func _throw_javelin() -> void:
 	if best == null:
 		return
 	_jav_cd = 3.0
+	Tower.count_ability("javelin")
 	Projectile.arrow(aim_point() + Vector3(0, 0.4, 0), best, randf_range(18.0, 28.0), false, 0.0, "javelin")
 	Audio.play("bow", -9.0, 0.15, 2)
 
