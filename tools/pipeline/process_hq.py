@@ -9,7 +9,7 @@ generate-high / reduce / bake workflow):
     low-poly at 2x resolution, then downsample (falls back to the source map if the bake is bad)
  5. export with lossless, role-named textures (albedo / normal / orm) for role-aware engine import
 
-blender -b -P process_hq.py -- IN_DIR OUT_DIR META_JSON name:mode:size:tris:albedo:normal:style[:orm] ...
+blender -b -P process_hq.py -- IN_DIR OUT_DIR META_JSON name:mode:size:tris:albedo:normal:style[:orm[:pivot[:yaw]]] ...
   mode  foot|tower|height   style  hard|soft
 """
 import bpy
@@ -77,6 +77,17 @@ for spec in specs:
     high.name = "High"
 
     # 1. normalise
+    if len(p) > 9 and float(p[9]) != 0.0:
+        # optional yaw (degrees) so a held prop's blade / a cannon's muzzle faces the engine's convention
+        a = math.radians(float(p[9]))
+        co = np.zeros(len(high.data.vertices) * 3)
+        high.data.vertices.foreach_get("co", co)
+        co = co.reshape(-1, 3)
+        x, y = co[:, 0].copy(), co[:, 1].copy()
+        co[:, 0] = x * math.cos(a) - y * math.sin(a)
+        co[:, 1] = x * math.sin(a) + y * math.cos(a)
+        high.data.vertices.foreach_set("co", co.ravel())
+        high.data.update()
     mn, mx = bounds(high)
     ext = mx - mn
     if mode == "foot":
@@ -91,9 +102,18 @@ for spec in specs:
     co = np.zeros(len(high.data.vertices) * 3)
     high.data.vertices.foreach_get("co", co)
     co = co.reshape(-1, 3)
+    if len(p) > 8 and mode == "height":
+        # held props: centre on the handle (lowest fifth), not on the bounding box an axe head skews
+        low_band = co[co[:, 2] < mn.z + 0.2 * ext.z]
+        if len(low_band) > 10:
+            cx = (low_band[:, 0].min() + low_band[:, 0].max()) / 2
+            cy = (low_band[:, 1].min() + low_band[:, 1].max()) / 2
     co[:, 0] = (co[:, 0] - cx) * s
     co[:, 1] = (co[:, 1] - cy) * s
     co[:, 2] = (co[:, 2] - mn.z) * s
+    if len(p) > 8:
+        # optional pivot height as a fraction of the height (held props: the grip sits at the origin)
+        co[:, 2] -= float(p[8]) * ext.z * s
     high.data.vertices.foreach_set("co", co.ravel())
     high.data.update()
     src_tris = tri_count(high)

@@ -136,24 +136,12 @@ func _build_model(animate: bool) -> void:
 func _make_crystal() -> Node3D:
 	var root := Node3D.new()
 	root.name = "Crystal"
-	var mi := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radial_segments = 4
-	sm.rings = 2
-	sm.radius = 0.2
-	sm.height = 0.62
-	mi.mesh = sm
-	var m := StandardMaterial3D.new()
+	# a painted double-terminated amethyst (VARCO mesh) whose own colours glow; frost mastery turns it icy
 	var c := Color(0.75, 0.45, 1.0) if mastery != "frost" else Color(0.5, 0.9, 1.0)
-	m.albedo_color = c.lerp(Color.WHITE, 0.3)
-	m.emission_enabled = true
-	m.emission = c
-	m.emission_energy_multiplier = 2.6
-	m.metallic = 0.3
-	m.roughness = 0.15
-	mi.material_override = m
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(mi)
+	var gem := Assets.instance_glow("mage_crystal", 1.5, c.lerp(Color.WHITE, 0.3),
+		Color.WHITE if mastery != "frost" else Color(0.5, 0.95, 1.3))
+	gem.scale = Vector3.ONE * 0.66
+	root.add_child(gem)
 	var glow := MeshInstance3D.new()
 	var qm := QuadMesh.new()
 	qm.size = Vector2(1.3, 1.3)
@@ -227,23 +215,18 @@ func _cyl(parent: Node3D, top_r: float, bot_r: float, h: float, y: float, mat: S
 	return mi
 
 func _make_mortar(s: float) -> Node3D:
+	# the mortar is one painted mesh with its barrel already raised toward local +Z; "Tilt" is the
+	# part that kicks back on each shot and "Muzzle" where the shells leave
 	var root := Node3D.new()
 	root.name = "Barrel"
 	root.scale = Vector3.ONE * s
-	_cyl(root, 0.52, 0.6, 0.26, 0.13, "wood")
-	_cyl(root, 0.55, 0.55, 0.06, 0.27, "gold")
 	var tilt := Node3D.new()
 	tilt.name = "Tilt"
-	tilt.position.y = 0.42
-	tilt.rotation_degrees.x = 38.0
 	root.add_child(tilt)
-	_cyl(tilt, 0.27, 0.36, 0.95, 0.3, "iron")
-	_cyl(tilt, 0.38, 0.38, 0.1, 0.05, "gold")
-	_cyl(tilt, 0.33, 0.33, 0.12, 0.74, "gold")
-	_cyl(tilt, 0.22, 0.22, 0.02, 0.8, "hole")
+	tilt.add_child(Assets.instance("mortar"))
 	var mz := Marker3D.new()
 	mz.name = "Muzzle"
-	mz.position.y = 0.85
+	mz.position = Vector3(0.0, 1.12, 0.3)
 	tilt.add_child(mz)
 	return root
 

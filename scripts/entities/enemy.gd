@@ -80,8 +80,8 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 	add_child(model)
 	model.setup(d["model"], sc, d.get("tint", Color.WHITE), weapon)
 	if type == "shaman":
-		var staff := Assets.instance("crystal_staff")
-		staff.scale = Vector3.ONE * 0.35
+		var staff := Assets.instance_glow("shaman_crystal", 1.3)
+		staff.scale = Vector3.ONE * 0.42
 		staff.position = Vector3(0, height + 0.25, 0)
 		add_child(staff)
 	if d["model"] == "wolf" and model.anim == null:

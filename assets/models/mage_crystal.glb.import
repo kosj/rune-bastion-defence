@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dbygtreoe0ngq"
-path="res://.godot/imported/rock_0.glb-7fb6fa15e6875b76e3bd29af90792f86.scn"
+uid="uid://dt260810iwiml"
+path="res://.godot/imported/mage_crystal.glb-4b2149aaf37374bfe62524eabe5790e5.scn"
 
 [deps]
 
-source_file="res://assets/models/rock_0.glb"
-dest_files=["res://.godot/imported/rock_0.glb-7fb6fa15e6875b76e3bd29af90792f86.scn"]
+source_file="res://assets/models/mage_crystal.glb"
+dest_files=["res://.godot/imported/mage_crystal.glb-4b2149aaf37374bfe62524eabe5790e5.scn"]
 
 [params]
 

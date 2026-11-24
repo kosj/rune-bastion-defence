@@ -481,7 +481,7 @@ func lightning(a: Vector3, b: Vector3, c: Color) -> void:
 	tw.tween_property(m, "albedo_color:a", 0.0, 0.25).set_delay(0.05)
 	tw.tween_callback(holder.queue_free)
 
-func trail(parent: Node3D, c: Color, size: float, smoky := false) -> CPUParticles3D:
+func trail(parent: Node3D, c: Color, size: float, smoky := false, head := Color(1, 1, 1, 1)) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
 	p.amount = 18 if hq else 9
 	p.lifetime = 0.35 if not smoky else 0.7
@@ -501,7 +501,7 @@ func trail(parent: Node3D, c: Color, size: float, smoky := false) -> CPUParticle
 	if smoky:
 		p.color_ramp = _grad("tr_smoke", [Color(0.9, 0.9, 0.9, 0.55), Color(0.5, 0.5, 0.5, 0)])
 	else:
-		p.color_ramp = _grad("tr" + c.to_html(), [Color(1, 1, 1, 1), c, Color(c.r, c.g, c.b, 0)])
+		p.color_ramp = _grad("tr" + c.to_html() + head.to_html(), [head, c, Color(c.r, c.g, c.b, 0)])
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(p)
 	p.emitting = true

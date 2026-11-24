@@ -517,29 +517,8 @@ def build_props():
 
 
 def build_weapons():
-    """Weapons that get attached to the right-hand bone in Godot (grip at origin, blade along +Z)."""
-    if scene("w_sword"):
-        g = [cyl(0.035, 0.28, 8, (0, 0, -0.14), m="wood_dark", bevel=0), sphere(0.05, (0, 0, -0.17), m="gold", sub=1),
-             box(0.32, 0.06, 0.05, (0, 0, 0.12), m="gold", bevel=0.01),
-             box(0.11, 0.025, 0.95, (0, 0, 0.16), m="iron", bevel=0.008), crystal(0.055, 0.12, (0, 0, 1.1), (0, 0, 0), m="iron", sides=4)]
-        g[-1].scale = (1, 0.35, 1)
-        finalize("w_sword", {"Weapon": g}, ao=False)
-    if scene("w_axe"):
-        g = [cyl(0.045, 1.25, 8, (0, 0, -0.35), m="wood_dark", bevel=0)]
-        bm_blade = box(0.5, 0.05, 0.42, (0.22, 0, 0.55), m="iron", bevel=0.02)
-        g += [bm_blade, box(0.12, 0.09, 0.3, (0.02, 0, 0.6), m="iron_dark", bevel=0.02), cone(0.06, 0.15, 6, (0, 0, 0.9), m="iron_dark")]
-        finalize("w_axe", {"Weapon": g}, ao=False)
-    if scene("w_club"):
-        g = [cyl(0.08, 0.5, 8, (0, 0, -0.25), m="wood_dark", bevel=0), cyl(0.12, 1.4, 9, (0, 0, 0.2), m="wood", bevel=0.03, r2=0.26)]
-        for i in range(10):
-            a = i * 2.4
-            z = 0.7 + (i % 4) * 0.22
-            g.append(cone(0.05, 0.22, 5, (math.cos(a) * 0.2, math.sin(a) * 0.2, z), (math.cos(a + math.pi / 2) * -1.5, math.sin(a + math.pi / 2) * -1.5, 0), m="iron"))
-        finalize("w_club", {"Weapon": g}, ao=False)
-    if scene("w_dagger"):
-        g = [cyl(0.03, 0.16, 6, (0, 0, -0.08), m="wood_dark", bevel=0), box(0.16, 0.04, 0.04, (0, 0, 0.08), m="iron_dark", bevel=0.01),
-             box(0.07, 0.02, 0.4, (0.01, 0, 0.1), (0, math.radians(-8), 0), m="iron_dark", bevel=0.005)]
-        finalize("w_dagger", {"Weapon": g}, ao=False)
+    """Projectiles only. The held weapons (w_sword, w_axe, w_club, w_dagger), the artillery mortar,
+    the meteor boulder and the crystals are VARCO meshes now (rebuild_assets.sh, "held props")."""
     # projectiles
     if scene("p_arrow"):
         g = [cyl(0.02, 0.9, 5, (0, 0, -0.45), m="wood", bevel=0), cone(0.05, 0.14, 4, (0, 0, 0.45), m="iron"),

@@ -23,6 +23,15 @@ blender -b -P "$H/process_hq.py" -- "$RAW/props_in" "$OUT/models" "$M" \
  barrels:foot:1.9:2000:512:256:hard:256 crystals:height:1.7:1500:512:256:hard:256 fence:foot:2.8:1200:512:256:hard:256 \
  bridge:foot:8.0:3500:1024:512:hard:256 flowers:foot:1.3:1500:512:256:soft:256 \
  2>&1 | grep -E "^(BAKE|DONE|AO|ORM)|Traceback|Error"
+# held props and small set pieces (VARCO image-to-3D, grip/centre pivot + yaw so blades face +X and
+# the mortar's muzzle faces +Z in Godot): name:mode:size:tris:albedo:normal:style:orm:pivot:yaw
+blender -b -P "$H/process_hq.py" -- "$RAW/weapons_in/raw" "$OUT/models" "$M" \
+ w_sword:height:1.44:2500:512:512:hard:256:0.15:0 w_axe:height:1.34:2500:512:512:hard:256:0.2:90 \
+ w_club:height:1.85:3000:512:512:soft:256:0.13:0 w_dagger:height:0.58:1500:512:256:hard:256:0.2:0 \
+ mortar:foot:1.25:5000:1024:512:hard:256:0:180 meteor:foot:1.4:1500:512:512:soft:256:0.5:0 \
+ shaman_crystal:height:1.1:2000:512:512:hard:256:0.12:0 mage_crystal:height:1.0:1500:512:512:hard:256:0.5:0 \
+ 2>&1 | grep -E "^(DONE)|Traceback|Error"
+python3 "$H/make_emit.py" "$OUT/models"
 # phone meshes for the mobile pack (mobile/models, swapped in by tools/build_web.sh)
 MOB=${MOB_OUT:-$OUT/mobile_models}
 blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq" "$MOB" "$MOB/meta.json" \

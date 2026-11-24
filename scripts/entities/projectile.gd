@@ -117,21 +117,25 @@ static func meteor(to: Vector3, d: float, radius: float, delay: float) -> void:
 	p.t = -delay
 	if _meteor_mat == null:
 		_meteor_mat = StandardMaterial3D.new()
-		_meteor_mat.albedo_color = Color(1.0, 0.5, 0.15)
-		_meteor_mat.emission_enabled = true
-		_meteor_mat.emission = Color(1.0, 0.45, 0.1)
-		_meteor_mat.emission_energy_multiplier = 5.0
-	var sm := SphereMesh.new()
-	sm.radius = 0.7
-	sm.height = 1.4
-	var mi := MeshInstance3D.new()
-	mi.mesh = sm
-	mi.material_override = _meteor_mat
-	p.add_child(mi)
-	var rock := Assets.instance("rock_0")
-	rock.scale = Vector3.ONE * 0.9
+		_meteor_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_meteor_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_meteor_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_meteor_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		_meteor_mat.albedo_texture = FX.tex("fx_glow")
+		_meteor_mat.albedo_color = Color(1.0, 0.42, 0.1, 0.4)
+	# a painted lava boulder whose cracks glow, wrapped in a soft additive fire halo
+	var glow := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = Vector2(2.4, 2.4)
+	glow.mesh = qm
+	glow.material_override = _meteor_mat
+	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.add_child(glow)
+	var rock := Assets.instance_glow("meteor", 2.2)
+	rock.scale = Vector3.ONE * 0.95
 	p.add_child(rock)
-	p._trail = LevelMain.I.fx.trail(p, Color(1.0, 0.5, 0.15), 0.9)
+	# the trail starts orange (a white-hot head would bloom over the boulder) and stays behind it
+	p._trail = LevelMain.I.fx.trail(p, Color(1.0, 0.38, 0.08, 0.8), 0.75, false, Color(1.0, 0.62, 0.25, 0.55))
 	p.global_position = p.start
 	p.visible = delay <= 0.0
 

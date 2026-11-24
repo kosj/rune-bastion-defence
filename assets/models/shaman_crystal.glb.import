@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://chlsb5iy35pgg"
-path="res://.godot/imported/crystal_staff.glb-e9f4976bc356bfdb43ee3f1c67202448.scn"
+uid="uid://ciyhnvfcgit83"
+path="res://.godot/imported/shaman_crystal.glb-ba09b543d27768fea3b094ff79f3365a.scn"
 
 [deps]
 
-source_file="res://assets/models/crystal_staff.glb"
-dest_files=["res://.godot/imported/crystal_staff.glb-e9f4976bc356bfdb43ee3f1c67202448.scn"]
+source_file="res://assets/models/shaman_crystal.glb"
+dest_files=["res://.godot/imported/shaman_crystal.glb-ba09b543d27768fea3b094ff79f3365a.scn"]
 
 [params]
 

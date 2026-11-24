@@ -187,6 +187,28 @@ func _process(delta: float) -> void:
 				L2.cam_rig.focus(Vector3(cp.x, 0, cp.y), float(args.get("zoom", "14")))
 				L2.cam_rig._pos = L2.cam_rig.target
 				L2.get_tree().create_timer(0.3).timeout.connect(func(): L2.hero.cast_skill())
+			"meteor":
+				var lpm: LanePath = L2.paths[0]
+				var mp := lpm.sample(float(args.get("at", "12")))
+				for k in 3:
+					Projectile.meteor(Vector3(mp.x + k * 1.2 - 1.2, 0, mp.y), 1.0, 2.0, k * 0.22)
+				L2.cam_rig.focus(Vector3(mp.x, 0, mp.y), float(args.get("zoom", "14")))
+				L2.cam_rig._pos = L2.cam_rig.target
+				if args.has("slowmo"):
+					Engine.time_scale = float(args["slowmo"])
+			"props":
+				# a row of models on the road for look-dev: name or name!glow, comma-separated
+				var lpp: LanePath = L2.paths[0]
+				var pp := lpp.sample(float(args.get("at", "12")))
+				var names: Array = (args.get("props", "meteor") as String).split(",")
+				for k in names.size():
+					var nm: String = names[k]
+					var nd: Node3D = Assets.instance_glow(nm.trim_suffix("!glow"), float(args.get("energy", "1.0"))) if nm.ends_with("!glow") else Assets.instance(nm)
+					nd.scale = Vector3.ONE * float(args.get("pscale", "1.0"))
+					L2.add_child(nd)
+					nd.global_position = Vector3(pp.x + (k - (names.size() - 1) * 0.5) * float(args.get("gap", "1.8")), float(args.get("py", "0.6")), pp.y)
+				L2.cam_rig.focus(Vector3(pp.x, 0, pp.y), float(args.get("zoom", "8")))
+				L2.cam_rig._pos = L2.cam_rig.target
 			"spawn":
 				var lp: LanePath = L2.paths[0]
 				for k in int(args.get("n", "6")):
@@ -230,6 +252,13 @@ func _process(delta: float) -> void:
 			if f.begins_with("xy:"):
 				var parts := f.split(":")
 				fp = Vector3(float(parts[1]), 0, float(parts[2]))
+			elif f.begins_with("tower_type:"):
+				for k in L2.towers:
+					if (L2.towers[k] as Tower).type == f.split(":")[1]:
+						fp = (L2.towers[k] as Tower).global_position
+						break
+			elif f == "hero" and L2.hero:
+				fp = L2.hero.global_position
 			elif f == "portal":
 				var s0: Vector2 = (L2.paths[0] as LanePath).sample(2.0)
 				fp = Vector3(s0.x, 0, s0.y)
@@ -243,6 +272,7 @@ func _process(delta: float) -> void:
 				var ti := int(f) % maxi(keys.size(), 1)
 				if not keys.is_empty():
 					fp = (L2.towers[keys[ti]] as Tower).global_position
+			fp.y += float(args.get("fy", "0"))
 			L2.cam_rig.zoom = float(args.get("zoom", "14"))
 			L2.cam_rig.target = fp
 			L2.cam_rig._pos = fp

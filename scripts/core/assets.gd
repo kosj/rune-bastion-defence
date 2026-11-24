@@ -28,6 +28,66 @@ static func instance(name: String) -> Node3D:
 	fix_vertex_color_materials(n)
 	return n
 
+## A model whose painted lava / crystal parts glow: every surface gets an emissive copy of its
+## material. The emission map is <name>_emit.png (the albedo masked to the glowing hues by
+## tools/pipeline/make_emit.py), so the cracks and shards light up while rock, wood and gold stay lit
+## normally; without a mask the albedo itself is used.
+static var _glow_mats := {}
+static var _glow_shader: Shader
+
+static func instance_glow(name: String, energy := 1.2, tint := Color.WHITE, albedo := Color.WHITE) -> Node3D:
+	var n := instance(name)
+	if _glow_shader == null:
+		# an explicit PBR shader: the stock material's emission map did not stay confined to the
+		# masked texels on the Compatibility renderer and washed the whole prop out
+		_glow_shader = Shader.new()
+		_glow_shader.code = """shader_type spatial;
+uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic;
+uniform sampler2D orm_tex : hint_default_white, filter_linear_mipmap;
+uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap;
+uniform sampler2D emit_tex : source_color, hint_default_black, filter_linear_mipmap;
+uniform vec4 albedo_mul : source_color = vec4(1.0);
+uniform vec4 emit_tint : source_color = vec4(1.0);
+uniform float energy = 1.0;
+uniform bool has_normal = true;
+void fragment() {
+	ALBEDO = texture(albedo_tex, UV).rgb * albedo_mul.rgb;
+	vec3 orm = texture(orm_tex, UV).rgb;
+	AO = orm.r;
+	AO_LIGHT_AFFECT = 0.4;
+	ROUGHNESS = orm.g;
+	METALLIC = orm.b;
+	if (has_normal) {
+		NORMAL_MAP = texture(normal_tex, UV).rgb;
+	}
+	EMISSION = texture(emit_tex, UV).rgb * emit_tint.rgb * energy;
+}"""
+	var emit_p := MODEL_DIR + name + "_emit.png"
+	for mi in n.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null:
+			continue
+		for s in m.mesh.get_surface_count():
+			var src := m.mesh.surface_get_material(s) as StandardMaterial3D
+			if src == null:
+				continue
+			var key := "%d_%.2f_%s_%s" % [src.get_instance_id(), energy, tint.to_html(), albedo.to_html()]
+			if not _glow_mats.has(key):
+				var g := ShaderMaterial.new()
+				g.shader = _glow_shader
+				g.set_shader_parameter("albedo_tex", src.albedo_texture)
+				g.set_shader_parameter("orm_tex", src.roughness_texture if src.roughness_texture else src.metallic_texture)
+				g.set_shader_parameter("normal_tex", src.normal_texture)
+				g.set_shader_parameter("has_normal", src.normal_texture != null)
+				g.set_shader_parameter("emit_tex", load(emit_p) if ResourceLoader.exists(emit_p) else src.albedo_texture)
+				g.set_shader_parameter("albedo_mul", albedo)
+				g.set_shader_parameter("emit_tint", tint)
+				g.set_shader_parameter("energy", energy)
+				_glow_mats[key] = g
+			m.set_surface_override_material(s, _glow_mats[key])
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return n
+
 ## Ensure meshes exported with baked vertex colors (AO) use them as albedo multiplier.
 static func fix_vertex_color_materials(root: Node) -> void:
 	for mi in root.find_children("*", "MeshInstance3D", true, false):
