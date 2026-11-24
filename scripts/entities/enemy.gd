@@ -48,6 +48,8 @@ var _poison_fx := 0.0
 var _revived := false
 var _revive_t := 0.0
 var _summon_cd := 6.0
+var _flinch := 0.0     # procedural recoil on hits (tilts the model back, decays fast)
+var _react_cd := 0.0
 
 func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 	type = p_type
@@ -88,7 +90,8 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 			model._blob.position.y = 0.14 - model.position.y
 	if flying:
 		model.rotation_degrees.x = 8.0
-	_anim_base = 1.0 / sc * 1.7
+	# clip playback per metre travelled (gallops cover far more ground per cycle than a jog)
+	_anim_base = float(d.get("anim_k", 1.0 / sc * 1.7))
 	model.play("run", clampf(speed * _anim_base, 0.5, 2.6))
 	_update_transform(0.0)
 	_prev = global_position
@@ -113,6 +116,11 @@ func _process(delta: float) -> void:
 	if delta <= 0.0:
 		return
 	_hit_t = maxf(_hit_t - delta, 0.0)
+	_react_cd -= delta
+	if _flinch > 0.0:
+		_flinch = maxf(_flinch - delta * 5.0, 0.0)
+		if model.anim != null:
+			model.rotation.x = (deg_to_rad(8.0) if flying else 0.0) - _flinch * 0.22
 	# status effects
 	if haste_t > 0.0:
 		haste_t -= delta
@@ -196,7 +204,7 @@ func _procedural_anim(delta: float) -> void:
 	if d["model"] == "wolf":
 		var ph := _bob * 1.0
 		model.position.y = 0.42 * sc + absf(sin(ph)) * 0.22 * sc
-		model.rotation.x = sin(ph * 2.0) * 0.12
+		model.rotation.x = sin(ph * 2.0) * 0.12 - _flinch * 0.22
 	elif flying:
 		var f := sin(Time.get_ticks_msec() * 0.018 + lane * 3.0)
 		model.scale = Vector3(1.0 + f * 0.14, 1.0 - f * 0.05, 1.0)
@@ -225,6 +233,15 @@ func _fight(delta: float) -> void:
 		var spd := model.anim_length("attack") / maxf(rate * 0.9, 0.3)
 		model.play("attack", maxf(spd, 0.8), 0.08, true)
 		_attacking = CharacterModel.ATTACK_IMPACT / maxf(spd, 0.8)
+		if model.anim != null and not model.has("attack"):
+			# no bite clip (wolves): slow the gait and lunge at the target instead
+			model.play("run", 0.35)
+			var lunge := create_tween()
+			lunge.tween_property(model, "position", Vector3(sin(_yaw), 0, cos(_yaw)) * 0.35, _attacking * 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+			lunge.tween_property(model, "position", Vector3.ZERO, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		if d.get("slam", false) and _slam_cd <= 0.0:
+			# telegraph: a red ring fills the blast zone during the wind-up
+			LevelMain.I.fx.telegraph(_slam_point(), 4.0 if boss else 3.0, _attacking, Color(1.0, 0.25, 0.15))
 	if _attacking > 0.0:
 		_attacking -= delta
 		if _attacking <= 0.0:
@@ -238,8 +255,11 @@ func _fight(delta: float) -> void:
 	elif model.current == "run":
 		model.play("attack", 0.0001)
 
+func _slam_point() -> Vector3:
+	return global_position + Vector3(sin(_yaw), 0, cos(_yaw)) * 0.6 * float(d["scale"]) * 0.4
+
 func _boss_slam() -> void:
-	var p := global_position + Vector3(sin(_yaw), 0, cos(_yaw)) * 0.6 * float(d["scale"]) * 0.4
+	var p := _slam_point()
 	var r := 4.0 if boss else 3.0
 	LevelMain.I.fx.shockwave(p, r, Color(1.0, 0.8, 0.5))
 	LevelMain.I.fx.dust(p, 2.0 if boss else 1.4)
@@ -297,7 +317,10 @@ func _enrage() -> void:
 	lv.hud.show_banner("보스 격노!", "해골 기사 군단이 일어납니다" if undead else "고블린 증원이 몰려옵니다", Color(1.0, 0.35, 0.25))
 	Audio.play("boss_roar", 3.0, 0.0)
 	Game.vibrate(160)
-	if model.has("roar"):
+	if model.has("cast"):
+		model.play("cast", 2.2, 0.1, true)
+		stun_t = 1.6
+	elif model.has("roar"):
 		model.play("roar", 1.4, 0.1, true)
 		stun_t = 1.6
 	var n := 3 if undead else 6
@@ -350,6 +373,14 @@ func damage(amount: float, dtype: String, flash := true, pierce := 0.0) -> void:
 		model.hit_flash()
 	if hp <= 0.0:
 		_die()
+		return
+	# hit feedback: everyone recoils a little; a blocked enemy between swings plays a real flinch
+	var frac := a / maxf(max_hp, 1.0)
+	if flash:
+		_flinch = minf(_flinch + (0.25 + frac * 2.5) * (0.3 if boss else 1.0), 1.0)
+	if engaged and not boss and _attacking <= 0.0 and _react_cd <= 0.0 and frac >= 0.07 and model.has("hit"):
+		_react_cd = 1.4
+		model.play("hit", 2.0, 0.05, true)
 
 func slow(mult: float, t: float) -> void:
 	if boss:
@@ -406,7 +437,12 @@ func _rise() -> void:
 	position.y = LevelMain.I.terrain.walk_height(position.x, position.z)
 	LevelMain.I.fx.rune_circle(global_position + Vector3(0, 0.1, 0), Color(0.5, 1.0, 0.45), 1.4, 0.7)
 	LevelMain.I.fx.soul(aim_point(), Color(0.5, 1.0, 0.45))
-	model.play("run", clampf(speed * _anim_base, 0.5, 2.6), 0.2, true)
+	if model.has("rise"):
+		# drags itself up off the ground before marching on
+		model.play("rise", 3.0, 0.12, true)
+		stun_t = model.anim_length("rise") / 3.0 * 0.85
+	else:
+		model.play("run", clampf(speed * _anim_base, 0.5, 2.6), 0.2, true)
 
 func _die() -> void:
 	alive = false
@@ -417,7 +453,7 @@ func _die() -> void:
 	engaged = false
 	if d.has("revive") and not _revived:
 		# down, not out: stays on the enemy list (the wave is not cleared) and rises again
-		_revive_t = 2.4
+		_revive_t = 1.2 if model.has("rise") else 2.4
 		if model.body:
 			model.body.material_overlay = null
 		if model.has("death"):
@@ -432,8 +468,10 @@ func _die() -> void:
 	fx.coin_burst(aim_point(), clampi(int(d["gold"]) / 6, 1, 8))
 	if model.body:
 		model.body.material_overlay = null
+	model.rotation.x = deg_to_rad(8.0) if flying else 0.0
 	if model.has("death"):
-		model.play("death", 1.0, 0.1, true)
+		var clip := "death2" if model.has("death2") and randf() < 0.5 else "death"
+		model.play(clip, 1.0 if clip == "death" else 1.5, 0.1, true)
 	Audio.play("die_" + ("big" if boss or type == "warchief" or type == "orc" else "small"), -4.0, 0.12)
 	var tw := create_tween()
 	if flying:

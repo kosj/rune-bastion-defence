@@ -23,21 +23,20 @@ blender -b -P "$H/process_hq.py" -- "$RAW/props_in" "$OUT/models" "$M" \
  barrels:foot:1.9:2000:512:256:hard:256 crystals:height:1.7:1500:512:256:hard:256 fence:foot:2.8:1200:512:256:hard:256 \
  bridge:foot:8.0:3500:1024:512:hard:256 flowers:foot:1.3:1500:512:256:soft:256 \
  2>&1 | grep -E "^(BAKE|DONE|AO|ORM)|Traceback|Error"
-A=$RAW/varco/anim; D2=$RAW/dl_v2; D3=$RAW/dl_v3; C="$OUT/characters"
+A4=$RAW/varco/anim_v4; A=$RAW/varco/anim; A5=$RAW/varco/anim_v5; D2=$RAW/dl_v2; D3=$RAW/dl_v3; C="$OUT/characters"
 mc() { local np=$1; shift; NORMAL_PX=$np blender -b -P "$H/merge_character.py" -- "$@" 2>&1 | grep -E "^(WROTE|AO|ORM)|Traceback|Error"; }
-mc 256 $C/footman.glb 1024 idle=$A/footman_idle.glb run=$A/footman_run.glb attack=$A/footman_attack.glb death=$A/footman_death.glb
-mc 256 $C/goblin.glb 1024 run=$A/goblin_run.glb attack=$A/goblin_attack.glb death=$A/goblin_death.glb
-mc 512 $C/hero.glb 1024 idle=$A/hero_idle.glb run=$A/hero_run.glb attack=$A/hero_attack.glb skill=$A/hero_skill.glb death=$A/hero_death.glb cheer=$A/hero_cheer.glb
-mc 256 $C/orc.glb 1024 run=$A/orc_run.glb attack=$A/orc_attack.glb death=$A/orc_death.glb
-mc 256 $C/troll.glb 1024 run=$A/troll_run.glb attack=$A/troll_attack.glb death=$A/troll_death.glb roar=$A/troll_roar.glb
+mc 256 $C/footman.glb 1024 idle=$A/footman_idle.glb run=$A/footman_run.glb attack=$A/footman_attack.glb death=$A/footman_death.glb hit=$A5/footman_hit.glb cheer=$A5/footman_cheer.glb
+mc 256 $C/goblin.glb 1024 run=$A/goblin_run.glb attack=$A/goblin_attack.glb death=$A/goblin_death.glb hit=$A5/goblin_hit.glb death2=$A5/goblin_death2.glb
+mc 512 $C/hero.glb 1024 idle=$A/hero_idle.glb run=$A/hero_run.glb attack=$A/hero_attack.glb skill=$A/hero_skill.glb death=$A/hero_death.glb cheer=$A/hero_cheer.glb hit=$A5/hero_hit.glb
+mc 256 $C/orc.glb 1024 run=$A/orc_run.glb attack=$A/orc_attack.glb death=$A/orc_death.glb hit=$A5/orc_hit.glb
+mc 256 $C/troll.glb 1024 run=$A/troll_run.glb attack=$A/troll_attack.glb death=$A/troll_death.glb roar=$A/troll_roar.glb taunt=$A5/troll_taunt.glb
 mc 256 $C/gargoyle.glb 1024 idle=$RAW/varco/raw/gargoyle.glb
-mc 256 $C/wolf.glb 1024 idle=$RAW/varco/raw/wolf.glb
+mc 256 $C/wolf.glb 1024 run=$A5/wolf_run.glb death=$A5/wolf_death.glb
 mc 256 $C/archer_unit.glb 1024 idle=$D2/archer_anim_a.glb attack=$D2/archer_anim_b.glb
 mc 256 $C/mage_unit.glb 1024 idle=$D2/mage_idle.glb attack=$D2/mage_cast.glb
-mc 256 $C/sapper.glb 1024 run=$D3/sapper_run.glb attack=$D3/sapper_attack.glb death=$D3/sapper_death.glb
+mc 256 $C/sapper.glb 1024 run=$D3/sapper_run.glb attack=$D3/sapper_attack.glb death=$D3/sapper_death.glb hit=$A5/sapper_hit.glb
 mc 256 $C/ogre.glb 1024 run=$D3/ogre_run.glb attack=$D3/ogre_attack.glb death=$D3/ogre_death.glb roar=$D3/ogre_roar.glb
-mc 512 $C/sera.glb 1024 idle=$D3/sera_idle.glb run=$D3/sera_run.glb attack=$D3/sera_attack.glb skill=$D3/sera_skill.glb death=$D3/sera_death.glb cheer=$D3/sera_cheer.glb
-A4=$RAW/varco/anim_v4
-mc 256 $C/skeleton_knight.glb 1024 run=$A4/skeleton_knight_run.glb attack=$A4/skeleton_knight_attack.glb death=$A4/skeleton_knight_death.glb
-mc 512 $C/lich.glb 1024 run=$A4/lich_walk.glb attack=$A4/lich_attack.glb death=$A4/lich_death.glb roar=$A4/lich_summon.glb
+mc 512 $C/sera.glb 1024 idle=$D3/sera_idle.glb run=$D3/sera_run.glb attack=$D3/sera_attack.glb skill=$D3/sera_skill.glb death=$D3/sera_death.glb cheer=$D3/sera_cheer.glb hit=$A5/sera_hit.glb
+mc 256 $C/skeleton_knight.glb 1024 run=$A4/skeleton_knight_run.glb attack=$A4/skeleton_knight_attack.glb death=$A4/skeleton_knight_death.glb hit=$A5/skeleton_knight_hit.glb rise=$A5/skeleton_knight_rise_supine.glb
+mc 512 $C/lich.glb 1024 run=$A4/lich_walk.glb attack=$A4/lich_attack.glb death=$A4/lich_death.glb roar=$A4/lich_summon.glb taunt=$A5/lich_taunt.glb cast=$A5/lich_cast.glb
 echo ALL_DONE

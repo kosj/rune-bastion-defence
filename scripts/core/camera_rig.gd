@@ -12,6 +12,7 @@ var zoom_max := 40.0
 var pitch_deg := 54.0
 var bounds := Rect2(-30, -18, 60, 34)
 var input_enabled := true
+var free := false  # cut-scenes may frame spots outside the playable bounds
 
 var _pos := Vector3.ZERO
 var _dragging := false
@@ -100,6 +101,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_clamp()
 
 func _clamp() -> void:
+	if free:
+		return
 	var margin := (zoom - zoom_min) / (zoom_max - zoom_min)
 	var shrink_x := lerpf(0.0, bounds.size.x * 0.32, margin)
 	var shrink_z := lerpf(0.0, bounds.size.y * 0.3, margin)

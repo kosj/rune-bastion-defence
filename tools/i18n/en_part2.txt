@@ -189,3 +189,17 @@ Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 �
 특수 능력을 배울 수 있어요	Special ability available
 전문화한 타워를 다시 탭하면 특수 능력을 배울 수 있어요.	Tap a specialized tower again to learn its special ability.
 3레벨 타워는 전문화로 4레벨이 되고, 전문화한 타워는 특수 능력을 하나 더 배울 수 있습니다.	Level 3 towers specialize into level 4, and a specialized tower can learn one more special ability.
+협곡을 짓밟는 자	Trampler of the Gorge
+죽음을 부리는 자	Master of the Dead
+제 %d 지역	Region %d
+보스 처치!	Boss Defeated!
+플레이 기록 보내기 (밸런스 피드백)	Share Play Log (balance feedback)
+플레이 기록	Play Log
+기록된 판 %d (승리 %d)	%d runs recorded (%d won)
+최근 판의 결과(도달 웨이브, 잃은 생명, 새어 나간 적, 지은 타워)를 코드로 묶었습니다. 복사해서 대화창에 붙여 넣으면 어디서 어려웠는지 분석해 난이도를 조정합니다. 개인 정보는 들어 있지 않습니다.	Your recent runs (waves reached, lives lost, enemies that got through, towers built) are packed into this code. Copy it and paste it into the chat so the difficulty can be tuned where it hurt. It contains no personal data.
+아직 기록이 없습니다. 몇 판 플레이한 뒤 다시 열어 주세요.	Nothing recorded yet. Play a few rounds, then open this again.
+복사	Copy
+복사했습니다	Copied
+쉬움	Casual
+쉬움|difficulty	Casual
+쉬움: 적 체력 -28% · 공격력 -15% · 시작 골드 +30% — 별은 그대로 얻습니다	Casual: enemy HP -28% · damage -15% · starting gold +30% — stars count as usual

@@ -190,6 +190,6 @@ func _process(delta: float) -> void:
 	if _inst and absf(_inst.rotation.y - _yaw_target) > 0.001:
 		_inst.rotation.y = lerp_angle(_inst.rotation.y, _yaw_target, clampf(delta * 14.0, 0.0, 1.0))
 	if flash > 0.0:
-		flash -= delta
+		flash -= delta / maxf(Engine.time_scale, 0.05)  # real time: no stuck white flash in slow motion
 		if flash <= 0.0 and body:
 			body.material_overlay = null

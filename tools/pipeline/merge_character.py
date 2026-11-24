@@ -19,6 +19,12 @@ def import_glb(path):
 
 base_name, base_file = pairs[0]
 base_objs = import_glb(base_file)
+# some rig exports carry an untextured helper sphere next to the body: drop it
+for o in list(base_objs):
+    if o.type == "MESH" and not any(sl.material for sl in o.material_slots) and len(o.data.polygons) < 200:
+        print("DROP helper mesh", o.name)
+        base_objs.remove(o)
+        bpy.data.objects.remove(o, do_unlink=True)
 arm = next((o for o in base_objs if o.type == "ARMATURE"), None)
 meshes = [o for o in base_objs if o.type == "MESH"]
 for m in meshes:

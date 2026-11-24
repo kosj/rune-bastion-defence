@@ -6,7 +6,7 @@ const SAVE_PATH := "user://rune_bastion_save.cfg"
 var stars: Array = []
 var heroic: Array = []
 var upgrades := {}
-var difficulty := 0  # 0 = normal, 1 = heroic (veteran)
+var difficulty := 0  # 0 = normal, 1 = heroic (veteran), 2 = casual (easy)
 var hero_id := "kael"
 var seen_enemies := {}
 var stats := {}
@@ -69,6 +69,10 @@ func _fit_ui() -> void:
 
 var compact := false
 var autopause := true  # off in automated test runs
+var testing := false  # automated runs: skip the first-visit level intros
+## Recent runs (newest last) for playtest feedback: shared as a code from the settings screen.
+var playlog: Array = []
+const PLAYLOG_MAX := 60
 
 func apply_quality() -> void:
 	var vp := get_tree().root
@@ -105,6 +109,19 @@ func reset_progress() -> void:
 	hero_id = "kael"
 	hero_xp = {}
 	hero_talents = {}
+	playlog = []
+
+func log_play(entry: Dictionary) -> void:
+	playlog.append(entry)
+	while playlog.size() > PLAYLOG_MAX:
+		playlog.pop_front()
+	save()
+
+## Play log as a compact text code (gzip + base64) a tester can paste into a chat or an issue.
+func playlog_code() -> String:
+	var body := JSON.stringify({"v": 1, "lang": TranslationServer.get_locale(), "runs": playlog})
+	var b64 := Marshalls.raw_to_base64(body.to_utf8_buffer().compress(FileAccess.COMPRESSION_GZIP))
+	return "RBP1-%s-%s" % [b64.md5_text().substr(0, 6), b64]
 
 ## Lifetime hero experience (talent ranks). Returns true when the hero reached a new rank.
 func add_hero_xp(id: String, v: float) -> bool:
@@ -200,6 +217,7 @@ func save() -> void:
 	cf.set_value("progress", "endless_best", endless_best)
 	cf.set_value("progress", "hero_xp", hero_xp)
 	cf.set_value("progress", "hero_talents", hero_talents)
+	cf.set_value("progress", "playlog", playlog)
 	cf.set_value("settings", "music", music_volume)
 	cf.set_value("settings", "sfx", sfx_volume)
 	cf.set_value("settings", "hq", high_quality)
@@ -242,6 +260,9 @@ func _apply_config(cf: ConfigFile) -> void:
 				"endless_best": endless_best = v
 				"hero_xp": hero_xp = v
 				"hero_talents": hero_talents = v
+	var pl = cf.get_value("progress", "playlog", [])
+	if pl is Array:
+		playlog = pl
 	music_volume = float(cf.get_value("settings", "music", music_volume))
 	sfx_volume = float(cf.get_value("settings", "sfx", sfx_volume))
 	high_quality = bool(cf.get_value("settings", "hq", high_quality))

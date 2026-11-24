@@ -83,7 +83,7 @@ func move_to(p: Vector3) -> void:
 	Audio.voice(hid + "_move")
 
 func _process(delta: float) -> void:
-	if delta <= 0.0:
+	if delta <= 0.0 or celebrating:
 		return
 	skill_cd = maxf(skill_cd - delta, 0.0)
 	if not alive:
@@ -187,7 +187,7 @@ func _engage(delta: float) -> void:
 			Projectile.bolt(from, target, randf_range(dmg[0], dmg[1]), Color(0.5, 0.85, 1.0), 0.0, 0.0)
 			LevelMain.I.fx.magic_burst(from, Color(0.5, 0.85, 1.0), 0.45)
 			Audio.play("magic", -8.0, 0.12)
-	elif model.current != "attack":
+	elif model.current != "attack" and _react_t <= 0.0:
 		model.play("idle")
 
 func cast_skill() -> bool:

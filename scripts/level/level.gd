@@ -45,6 +45,13 @@ var run_kills := 0
 var run_gold := 0
 var run_time := 0.0
 var _enemy_info_t := 0.0
+var cine: Cinematics
+var _env: Environment
+# playtest log for this run
+var _lost_by_wave := {}
+var _leaks := {}
+var _spells_used := 0
+var _logged := false
 
 func _ready() -> void:
 	I = self
@@ -64,6 +71,11 @@ func _ready() -> void:
 		hp_mult *= 1.15
 		lives = 10
 		enemy_dmg_mult = 1.1
+	elif Game.difficulty == 2:
+		# casual: softer enemies and a richer start for players still learning the towers
+		hp_mult *= 0.72
+		enemy_dmg_mult = 0.85
+		gold = int(gold * 1.3)
 	if DB.up("gold"):
 		gold += 60
 	if DB.up("lives"):
@@ -98,6 +110,7 @@ func _ready() -> void:
 	terrain.setup(paths, plots, def["theme"], bounds, keep, def.get("river_x", INF))
 	_place_landmarks()
 	_place_plots()
+	_place_vignette(bounds)
 	_decorate(def["theme"])
 	terrain.build_grass(2600 if Game.high_quality else 1100)
 	_make_range_ring()
@@ -129,16 +142,16 @@ func _ready() -> void:
 	hud.set_lives(lives)
 	hud.set_wave(0, waves.size())
 	_update_wave_preview()
-	# intro camera
-	var hs: Array = def["hero_start"]
-	cam_rig.zoom = 40.0
-	cam_rig.focus(Vector3(hs[0], 0, hs[1]))
-	cam_rig._pos = cam_rig.target
-	var tw := create_tween()
-	tw.tween_interval(0.4)
-	tw.tween_property(cam_rig, "zoom", 30.0, 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	hud.show_banner(def["name"], def["subtitle"])
-	Audio.play_music("battle")
+	# intro: the first visit flies along the enemy road; later visits just zoom in
+	cine = Cinematics.new()
+	add_child(cine)
+	cine.setup(self)
+	var intro_key := "intro_%d" % level_idx
+	var first := not Game.testing and not Game.endless and int(Game.stats.get(intro_key, 0)) == 0
+	if first:
+		Game.stat(intro_key)
+	cine.level_intro(first)
+	Audio.play_music(battle_music())
 	if level_idx == 0 and not Game.seen_tutorial:
 		tutorial_step = 0
 		get_tree().create_timer(2.5).timeout.connect(func(): if tutorial_step == 0: hud.show_hint("빈 건설 부지(돌 울타리)를 탭해서 타워를 지으세요.\n한 번 탭하면 미리보기, 한 번 더 탭하면 건설!"))
@@ -247,6 +260,7 @@ func _setup_environment(theme: String) -> void:
 	env.adjustment_contrast = 1.06
 	var we := WorldEnvironment.new()
 	we.environment = env
+	_env = env
 	add_child(we)
 	_sun = DirectionalLight3D.new()
 	_sun.light_color = sun_col
@@ -350,6 +364,184 @@ func _place_landmarks() -> void:
 					break
 
 const PORTAL_HOLE := Vector3(0.0, 2.25, 0.55)
+
+# ------------------------------------------------------------------ set pieces
+## Each region gets one composed scene in the clearest open ground beside the road, so maps
+## read as places rather than random scatter (the scatter keeps clear of it).
+const VIGNETTE := {"meadow": "farm", "river": "dock", "snow": "outpost", "night": "shrine",
+	"autumn": "camp", "necro": "ritual", "ruins": "henge", "swamp": "bog"}
+
+func _vignette_spot(bounds: Rect2, r: float) -> Vector2:
+	var best := Vector2.INF
+	var best_s := -1e9
+	var hs: Array = def["hero_start"]
+	var home := Vector2(hs[0], hs[1])
+	var center := bounds.get_center()
+	var gx := bounds.position.x + 3.0
+	while gx <= bounds.end.x - 3.0:
+		var gz := bounds.position.y + 3.0
+		while gz <= bounds.end.y - 2.5:
+			var p := Vector2(gx, gz)
+			gz += 1.5
+			var pd := terrain.path_dist(p.x, p.y)
+			if pd < r + 1.6 or terrain.in_river(p.x, p.y) or p.distance_to(home) < r + 3.0:
+				continue
+			var pl_d := 99.0
+			for pl in plots:
+				pl_d = minf(pl_d, (pl as Vector2).distance_to(p))
+			if pl_d < r + 2.0:
+				continue
+			var blocked := false
+			for k in terrain.keepout:
+				if Vector2(k.x, k.y).distance_to(p) < k.z + r:
+					blocked = true
+					break
+			if blocked or terrain.height_at(p.x, p.y) > 2.5:
+				continue
+			var sc := -absf(pd - (r + 2.8)) * 0.9 - p.distance_to(center) * 0.07 + minf(pl_d - r, 6.0) * 0.15
+			if sc > best_s:
+				best_s = sc
+				best = p
+		gx += 1.5
+	return best
+
+func _place_vignette(bounds: Rect2) -> void:
+	var kind: String = VIGNETTE.get(def["theme"], "")
+	if kind == "":
+		return
+	var r := 4.4
+	var c := _vignette_spot(bounds, r)
+	if c == Vector2.INF:
+		return
+	terrain.keepout.append(Vector3(c.x, c.y, r + 0.8))
+	# face the nearest stretch of road
+	var to_road := Vector2(0, 1)
+	var bd := 1e9
+	for lp in paths:
+		var cl: Vector2 = (lp as LanePath).closest(c)
+		if cl.x < bd:
+			bd = cl.x
+			var q: Vector2 = (lp as LanePath).sample(cl.y)
+			to_road = (q - c).normalized()
+	var yaw := atan2(to_road.x, to_road.y)
+	var basis := Basis(Vector3.UP, yaw)
+	var put := func(model: String, lx: float, lz: float, rot_deg := 0.0, sc := Vector3.ONE) -> Node3D:
+		var w := basis * Vector3(lx, 0, lz)
+		var n := Assets.instance(model)
+		world.add_child(n)
+		n.position = Vector3(c.x + w.x, terrain.height_at(c.x + w.x, c.y + w.z) - 0.05, c.y + w.z)
+		n.rotation.y = yaw + deg_to_rad(rot_deg)
+		n.scale = sc
+		_theme_overlay(n)
+		if not Game.high_quality and model != "house" and not model.begins_with("tree"):
+			for g in n.find_children("*", "GeometryInstance3D", true, false):
+				(g as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		return n
+	var at := func(lx: float, lz: float, y := 0.0) -> Vector3:
+		var w := basis * Vector3(lx, 0, lz)
+		return Vector3(c.x + w.x, terrain.height_at(c.x + w.x, c.y + w.z) + y, c.y + w.z)
+	match kind:
+		"farm":
+			put.call("house", -3.3, -1.8, 8.0, Vector3.ONE * 0.85)
+			put.call("house", 3.2, -2.3, -10.0, Vector3.ONE * 0.8)
+			for f in [[-3.9, 2.2, 90.0], [-1.3, 3.0, 0.0], [1.3, 3.0, 0.0], [3.9, 2.2, -90.0]]:
+				put.call("fence", f[0], f[1], f[2])
+			put.call("barrels", 0.1, -0.9, 30.0)
+			put.call("lamp", 0.2, 1.2)
+			for fl in [[-0.8, 1.4], [1.5, 1.3], [-4.3, 0.2]]:
+				put.call("flowers", fl[0], fl[1], randf() * 360.0, Vector3.ONE * 1.2)
+			put.call("tree_round_v", 0.2, -4.6, 0.0, Vector3.ONE * 1.1)
+		"dock":
+			put.call("house", -0.4, -1.8, 0.0)
+			put.call("barrels", 2.2, 0.5, 15.0)
+			put.call("barrels", 3.0, -0.6, 70.0, Vector3.ONE * 0.8)
+			put.call("fence", -2.6, 1.9, 0.0)
+			put.call("fence", 0.0, 2.5, 6.0)
+			put.call("lamp", -2.6, 0.1)
+			put.call("bush", -3.6, -1.3, 0.0, Vector3.ONE * 1.1)
+			put.call("flowers", 1.4, 1.7, 0.0, Vector3.ONE * 1.2)
+		"outpost":
+			put.call("crystals", 0.0, 0.0, 0.0, Vector3.ONE * 1.5)
+			put.call("crystals", -1.7, 1.1, 40.0, Vector3.ONE * 0.9)
+			put.call("crystals", 1.6, 1.0, -30.0, Vector3.ONE)
+			put.call("lamp", -3.0, -0.6)
+			put.call("lamp", 3.0, -0.6)
+			put.call("barrels", 2.5, -2.2, 10.0)
+			put.call("fence", -2.6, 2.7, 20.0)
+			put.call("fence", 2.6, 2.7, -20.0)
+			_set_light(at.call(0.0, 0.0, 1.6), Color(0.55, 0.8, 1.0), 1.6, 8.0)
+		"shrine":
+			put.call("crystals", 0.0, 0.0, 0.0, Vector3.ONE * 1.7)
+			for i in 6:
+				var a := i * TAU / 6.0
+				put.call("crystals", cos(a) * 2.7, sin(a) * 2.7, i * 50.0, Vector3.ONE * (0.75 + 0.1 * (i % 3)))
+			_rune_disc(at.call(0.0, 0.0, 0.06), 6.4, Color(0.35, 0.95, 1.0, 0.75))
+			_set_light(at.call(0.0, 0.0, 1.8), Color(0.4, 0.9, 1.0), 2.2, 9.0)
+		"camp":
+			for i in 7:
+				var a := i * TAU / 7.0 + 0.3
+				put.call("rocks_v", cos(a) * 2.3, sin(a) * 2.3, i * 47.0, Vector3.ONE * (0.5 + 0.08 * (i % 3)))
+			fx.campfire(at.call(0.0, 0.0, 0.15))
+			put.call("barrels", 3.5, -1.3, 20.0)
+			put.call("barrels", 4.1, -0.3, 80.0, Vector3.ONE * 0.8)
+			put.call("fence", -3.7, 0.5, 70.0)
+			put.call("bush", -3.1, -2.7, 0.0, Vector3.ONE * 1.1)
+		"ritual":
+			for i in 8:
+				var a := i * TAU / 8.0
+				put.call("crystals", cos(a) * 3.0, sin(a) * 3.0, i * 45.0, Vector3.ONE * 0.85)
+			_rune_disc(at.call(0.0, 0.0, 0.06), 7.0, Color(1.0, 0.3, 0.18, 0.8))
+			put.call("lamp", -4.0, 0.0)
+			put.call("lamp", 4.0, 0.0)
+			_set_light(at.call(0.0, 0.0, 1.5), Color(1.0, 0.35, 0.2), 2.4, 9.0)
+		"henge":
+			for i in 7:
+				var a := i * TAU / 7.0
+				var tall := 2.2 if i % 3 != 1 else 1.1  # a few have fallen to stumps
+				put.call("rocks_v", cos(a) * 3.0, sin(a) * 3.0, i * 31.0, Vector3(0.55, tall, 0.55))
+			put.call("crystals", 0.0, 0.0, 0.0, Vector3.ONE * 1.3)
+			_rune_disc(at.call(0.0, 0.0, 0.06), 5.2, Color(0.5, 1.0, 0.8, 0.55))
+			_set_light(at.call(0.0, 0.0, 1.6), Color(0.5, 1.0, 0.8), 1.8, 8.0)
+		"bog":
+			put.call("crystals", -1.6, 0.2, 10.0, Vector3.ONE * 1.1)
+			put.call("crystals", 1.4, -0.8, 70.0, Vector3.ONE * 0.8)
+			put.call("crystals", 0.2, 1.6, 140.0, Vector3.ONE * 0.7)
+			put.call("lamp", -3.2, -1.4)
+			put.call("lamp", 3.1, 1.2)
+			for b2 in [[-3.4, 1.8], [2.9, -2.6], [0.4, -3.2]]:
+				put.call("bush", b2[0], b2[1], randf() * 360.0, Vector3.ONE * 1.2)
+			_rune_disc(at.call(0.0, 0.0, 0.06), 5.6, Color(0.5, 1.0, 0.35, 0.6))
+			_set_light(at.call(0.0, 0.0, 1.4), Color(0.55, 1.0, 0.45), 2.4, 9.0)
+
+func _set_light(p: Vector3, col: Color, energy: float, rng: float) -> void:
+	var l := OmniLight3D.new()
+	l.light_color = col
+	l.light_energy = energy
+	l.omni_range = rng
+	l.omni_attenuation = 1.4
+	l.shadow_enabled = false
+	world.add_child(l)
+	l.global_position = p
+
+## Slowly turning glowing rune circle on the ground.
+func _rune_disc(p: Vector3, size: float, col: Color) -> void:
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.orientation = PlaneMesh.FACE_Y
+	q.size = Vector2(size, size)
+	mi.mesh = q
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.albedo_texture = FX.tex("fx_rune")
+	m.albedo_color = col
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	world.add_child(mi)
+	mi.global_position = p
+	var tw := mi.create_tween().set_loops()
+	tw.tween_property(mi, "rotation:y", TAU, 60.0).from(0.0)
 
 func _theme_overlay(n: Node3D) -> void:
 	if def["theme"] != "snow":
@@ -589,15 +781,17 @@ func _spawn_enemy(type: String, path_i: int) -> void:
 		seen[type] = true
 		_show_enemy_card(type)
 	if e.boss:
-		hud.show_banner("보스 출현!", DB.ENEMIES[type]["name"], Color(1.0, 0.4, 0.3))
-		Audio.play("boss_roar", 2.0, 0.0)
-		Game.vibrate(140)
 		Audio.voice("ann_boss")
-		Audio.play_music("boss", 1.5)
-		cam_rig.shake(0.6)
-		if e.model.has("roar"):
-			e.model.play("roar", 1.4, 0.1, true)
-			e.stun_t = 2.0
+		Audio.play_music("boss", 1.0)
+		if not cine.boss_intro(e):
+			hud.show_banner("보스 출현!", DB.ENEMIES[type]["name"], Color(1.0, 0.4, 0.3))
+			Audio.play("boss_intro", 0.0, 0.0)
+			Audio.play("boss_roar", 2.0, 0.0)
+			Game.vibrate(140)
+			cam_rig.shake(0.6)
+			if e.model.has("roar"):
+				e.model.play("roar", 1.4, 0.1, true)
+				e.stun_t = 2.0
 
 func _call_wave() -> void:
 	if state == "won" or state == "lost":
@@ -711,7 +905,8 @@ func on_enemy_killed(e: Enemy) -> void:
 		Game.stat("boss_kills")
 		if e.type == "lich":
 			Game.stat("lich_kills")
-		Audio.play_music("battle", 2.0)
+		cine.boss_down(e)
+		Audio.play_music(battle_music(), 2.5)
 	Audio.play("coin", -10.0, 0.1)
 	if hero:
 		var xp := float(e.d["gold"]) * 2.0 * (1.3 if DB.up("hero_xp") else 1.0)
@@ -725,6 +920,9 @@ func on_enemy_exit(e: Enemy) -> void:
 	if state == "won" or state == "lost":
 		return
 	lives = maxi(lives - int(e.d["lives"]), 0)
+	var wk := str(wave_idx + 1)
+	_lost_by_wave[wk] = int(_lost_by_wave.get(wk, 0)) + int(e.d["lives"])
+	_leaks[e.type] = int(_leaks.get(e.type, 0)) + int(e.d["lives"])
 	hud.set_lives(lives)
 	Game.vibrate(45)
 	hud.flash_damage(lives <= maxi(max_lives / 4, 3))
@@ -1074,6 +1272,7 @@ func _handle_targeting(gp: Vector3) -> void:
 		"meteor":
 			spell_cd["meteor"] = spell_defs["meteor"]["cd"]
 			Game.stat("meteors")
+			_spells_used += 1
 			var sp: Dictionary = spell_defs["meteor"]
 			for i in int(sp["count"]):
 				var off := Vector3.ZERO if i == 0 else Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() * randf_range(1.2, 2.6)
@@ -1088,6 +1287,7 @@ func _handle_targeting(gp: Vector3) -> void:
 				Audio.play("error", -6.0)
 				return
 			spell_cd["reinforce"] = spell_defs["reinforce"]["cd"]
+			_spells_used += 1
 			var sd: Dictionary = spell_defs["reinforce"]
 			var cnt: int = sd["count"]
 			for i in cnt:
@@ -1173,6 +1373,10 @@ func hotkey(k: int) -> bool:
 		return true
 	if _modal != null or state == "won" or state == "lost":
 		return false
+	if cine and cine.active != "":
+		if k == KEY_SPACE or k == KEY_ENTER:
+			cine.skip()
+		return true
 	match k:
 		KEY_SPACE:
 			_call_wave()
@@ -1205,6 +1409,8 @@ func _toggle_speed() -> void:
 func _pause() -> void:
 	if _modal != null or state == "won" or state == "lost":
 		return
+	if cine:
+		cine.abort()  # a cut-scene hides the HUD the pause menu lives in
 	get_tree().paused = true
 	_clear_cards()
 	var compact := hud.root.get_viewport_rect().size.y < 600.0
@@ -1283,16 +1489,39 @@ func _victory() -> void:
 	for v in Game.stars:
 		st_total += int(v)
 	Game.stat("stars", st_total, "max")
+	_log_run("won", stars)
 	Game.save()
 	Audio.voice("ann_victory", 0.0, 1.0)
+	cine.abort()
 	Engine.time_scale = 1.0
-	if hero and hero.alive:
-		hero.model.play("cheer", 1.0, 0.2, true)
-		cam_rig.focus(hero.global_position, 20.0)
+	_celebrate()
 	Audio.play("victory", 0.0, 0.0)
 	Audio.play_music("menu", 3.0)
 	_clear_cards()
 	get_tree().create_timer(1.6).timeout.connect(func(): _victory_modal(stars, prev_stars))
+
+## Everyone still standing cheers; fireworks go up over the gate.
+func _celebrate() -> void:
+	for s: Soldier in soldiers:
+		if s.alive and s != hero:
+			s.celebrate()
+	if hero and hero.alive:
+		hero.celebrate()
+		cam_rig.focus(hero.global_position, 20.0)
+	# fireworks go up where the camera is looking (the hero, else the gate)
+	var at := cam_rig.target
+	if hero and hero.alive:
+		at = hero.global_position
+	elif not paths.is_empty():
+		var lp: LanePath = paths[0]
+		var g := lp.sample(lp.length)
+		at = Vector3(g.x, 0, g.y)
+	cine.victory_fireworks(Vector3(at.x, terrain.height_at(at.x, at.z), at.z))
+
+func battle_music() -> String:
+	if Game.endless:
+		return "battle"
+	return "battle_dark" if def.get("theme", "") in ["night", "necro", "ruins", "swamp"] else "battle"
 
 func _victory_modal(stars: int, prev_stars: int) -> void:
 	var max_l: int = max_lives
@@ -1331,7 +1560,7 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 				var tw := st.create_tween()
 				tw.set_ignore_time_scale(true)
 				tw.tween_interval(0.35 + i * 0.38)
-				tw.tween_callback(func(): Audio.play("coin", -2.0 + i * 1.5, 0.0))
+				tw.tween_callback(func(): Audio.play_pitched("star", -3.0 + i * 1.5, 1.0 + i * 0.125))
 				tw.set_parallel(true)
 				tw.tween_property(st, "modulate:a", 1.0, 0.12)
 				tw.tween_property(st, "scale", Vector2.ONE, 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -1395,13 +1624,18 @@ func _defeat() -> void:
 	state = "lost"
 	Engine.time_scale = 1.0
 	Audio.play("defeat", 0.0, 0.0)
+	Audio.play_music("", 1.5)
 	Game.vibrate(300)
+	_log_run("lost")
 	Game.save()
+	_clear_cards()
+	cine.defeat(_env, _after_defeat)
+
+func _after_defeat() -> void:
 	if Game.endless:
 		_endless_over()
 		return
 	Audio.voice("ann_defeat", 0.0, 1.0)
-	_clear_cards()
 	_modal = hud.modal("패배...", func(vb: VBoxContainer):
 		var l := UI.label("성문이 뚫렸습니다. 전략을 바꿔 다시 도전하세요!", 21, UI.TEXT, 5, "ui_black")
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1480,7 +1714,23 @@ func _endless_over() -> void:
 		row.add_child(rb)
 		vb.add_child(row), 520, "blue")
 
+## One line in the playtest log: how far the run got, where lives were lost and what was built.
+func _log_run(result: String, stars := 0) -> void:
+	if _logged or Game.testing or wave_idx < 0:
+		return
+	_logged = true
+	var tw := []
+	for k in towers:
+		var t: Tower = towers[k]
+		tw.append("%s%d%s%s" % [t.type.substr(0, 2), t.level, ("-" + t.mastery) if t.mastery != "" else "", "+" if t.ability != "" else ""])
+	Game.log_play({"lv": level_idx, "d": Game.difficulty, "e": Game.endless, "h": hero.hid if hero else "",
+		"r": result, "s": stars, "wv": wave_idx + 1, "nw": waves.size(), "li": lives, "ml": max_lives,
+		"t": int(run_time), "k": run_kills, "g": gold, "tw": tw, "lw": _lost_by_wave, "lt": _leaks,
+		"sp": _spells_used, "hl": hero.level if hero else 0, "ts": int(Time.get_unix_time_from_system())})
+
 func _exit_tree() -> void:
+	if state == "playing" or state == "ready":
+		_log_run("quit")
 	if Game.achievement_unlocked.is_connected(_on_achievement):
 		Game.achievement_unlocked.disconnect(_on_achievement)
 	if I == self:

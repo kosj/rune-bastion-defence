@@ -366,7 +366,7 @@ func _open_card(i: int) -> void:
 	meta.add_theme_constant_override("separation", 18)
 	meta.add_child(UI.stat("skull", tr("웨이브 %d") % d["waves"].size(), 17))
 	meta.add_child(UI.stat("heart", tr("생명 %d") % (10 if Game.difficulty == 1 else int(d["lives"])), 17))
-	meta.add_child(UI.stat("coin", tr("시작 골드 %d") % int(d["gold"]), 17))
+	meta.add_child(UI.stat("coin", tr("시작 골드 %d") % int(int(d["gold"]) * (1.3 if Game.difficulty == 2 else 1.0)), 17))
 	vb.add_child(meta)
 	vb.add_child(UI.divider(520))
 	# difficulty + start
@@ -374,16 +374,16 @@ func _open_card(i: int) -> void:
 	bottom.add_theme_constant_override("separation", 10)
 	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
 	vb.add_child(bottom)
-	for dv in [[0, "일반"], [1, "영웅"]]:
+	for dv in [[2, "쉬움"], [0, "일반"], [1, "영웅"]]:
 		var sel: bool = Game.difficulty == dv[0]
-		var b := UI.button(tr(dv[1], "difficulty"), 20, false, Vector2(96, 54), "gold" if sel else "gray")
+		var b := UI.button(tr(dv[1], "difficulty"), 19, false, Vector2(86, 54), "gold" if sel else "gray")
 		var val: int = dv[0]
 		b.pressed.connect(func():
 			Game.difficulty = val
 			Game.save()
 			_open_card(i))
 		bottom.add_child(b)
-	var go := UI.button("출전", 30, true, Vector2(220, 62), "red")
+	var go := UI.button("출전", 30, true, Vector2(200, 62), "red")
 	go.icon = Assets.tex("ic_play")
 	go.pressed.connect(func(): Game.start_level(i))
 	bottom.add_child(go)
@@ -391,6 +391,10 @@ func _open_card(i: int) -> void:
 		var note := UI.ink("영웅 난이도: 적 체력 +15% · 공격력 +10% · 생명 10 — 클리어 시 보너스 ★", 15, Color(0.6, 0.16, 0.08))
 		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vb.add_child(note)
+	elif Game.difficulty == 2:
+		var note2 := UI.ink("쉬움: 적 체력 -28% · 공격력 -15% · 시작 골드 +30% — 별은 그대로 얻습니다", 15, Color(0.12, 0.42, 0.16))
+		note2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vb.add_child(note2)
 
 func _open_endless_card() -> void:
 	var maps := []

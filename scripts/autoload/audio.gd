@@ -98,6 +98,13 @@ func play_music(name: String, fade := 1.2) -> void:
 	if name == _music_current:
 		return
 	_music_current = name
+	if name == "":
+		if _music_a.playing:
+			var old := _music_a
+			var tw0 := create_tween()
+			tw0.tween_property(old, "volume_db", -40.0, fade)
+			tw0.tween_callback(old.stop)
+		return
 	var stream: AudioStream = _get_stream(name, MUSIC_DIR)
 	if stream == null:
 		return
@@ -118,6 +125,25 @@ func play_music(name: String, fade := 1.2) -> void:
 	if old.playing:
 		tw.tween_property(old, "volume_db", -40.0, fade)
 		tw.chain().tween_callback(old.stop)
+
+## One-off sound at an exact pitch (rising chimes, star reveals).
+func play_pitched(name: String, volume_db := 0.0, pitch := 1.0) -> void:
+	if Game.sfx_volume <= 0.01:
+		return
+	var s := _get_stream(name)
+	if s == null:
+		return
+	var player: AudioStreamPlayer = null
+	for p in _pool:
+		if not p.playing:
+			player = p
+			break
+	if player == null:
+		player = _pool[randi() % _pool.size()]
+	player.stream = s
+	player.volume_db = volume_db + linear_to_db(maxf(Game.sfx_volume, 0.001))
+	player.pitch_scale = pitch
+	player.play()
 
 func update_music_volume() -> void:
 	if _music_a.playing:

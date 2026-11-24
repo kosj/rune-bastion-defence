@@ -222,6 +222,105 @@ func explosion(pos: Vector3, s := 1.0) -> void:
 	_flat_decal(pos, "fx_crack", 2.2 * s, Color(1, 1, 1, 0.85), false, 4.0)
 	light_flash(p, Color(1.0, 0.6, 0.25), 4.0 * s, 8.0 * s, 0.35)
 
+## Danger zone for a telegraphed attack: a ring marks the edge while a disc fills toward it,
+## landing exactly when the blow does.
+func telegraph(pos: Vector3, r: float, t: float, c: Color) -> void:
+	t = maxf(t, 0.15)
+	var h := LevelMain.I.terrain.height_at(pos.x, pos.z) if LevelMain.I else pos.y
+	var at := Vector3(pos.x, maxf(pos.y, h) + 0.1, pos.z)
+	var parts := []
+	for kind in ["fx_ring", "fx_glow"]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = _flat
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.albedo_texture = tex(kind)
+		m.albedo_color = Color(c.r, c.g, c.b, 0.0)
+		m.disable_receive_shadows = true
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(mi)
+		mi.global_position = at
+		parts.append([mi, m])
+	var ring: MeshInstance3D = parts[0][0]
+	var rm: StandardMaterial3D = parts[0][1]
+	var disc: MeshInstance3D = parts[1][0]
+	var dm: StandardMaterial3D = parts[1][1]
+	ring.scale = Vector3.ONE * r * 2.2
+	disc.scale = Vector3.ONE * 0.3
+	var tw := ring.create_tween().set_parallel(true)
+	tw.tween_property(rm, "albedo_color:a", 0.9, 0.12)
+	tw.tween_property(dm, "albedo_color:a", 0.55, t)
+	tw.tween_property(disc, "scale", Vector3.ONE * r * 2.6, t).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.chain().tween_property(rm, "albedo_color:a", 0.0, 0.25)
+	tw.parallel().tween_property(dm, "albedo_color:a", 0.0, 0.25)
+	tw.chain().tween_callback(func():
+		ring.queue_free()
+		disc.queue_free())
+
+## Persistent bonfire: looping flames + smoke and a flickering warm light.
+func campfire(pos: Vector3) -> void:
+	var fire := CPUParticles3D.new()
+	fire.amount = 16 if hq else 9
+	fire.lifetime = 0.9
+	fire.mesh = _pmesh("fx_fire_flip", true, true)
+	fire.direction = Vector3.UP
+	fire.spread = 12.0
+	fire.initial_velocity_min = 0.6
+	fire.initial_velocity_max = 1.4
+	fire.gravity = Vector3(0, 1.2, 0)
+	fire.scale_amount_min = 0.7
+	fire.scale_amount_max = 1.1
+	fire.scale_amount_curve = _curve("puff")
+	fire.color_ramp = _grad("campf", [Color(1, 1, 1, 0.0), Color(1, 1, 1, 1), Color(1, 0.9, 0.8, 0)])
+	fire.anim_speed_min = 1.0
+	fire.anim_speed_max = 1.0
+	fire.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	fire.emission_sphere_radius = 0.3
+	fire.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(fire)
+	fire.global_position = pos
+	var sm := CPUParticles3D.new()
+	sm.amount = 6 if hq else 3
+	sm.lifetime = 3.0
+	sm.mesh = _pmesh("fx_smoke_flip", false, true)
+	sm.direction = Vector3.UP
+	sm.spread = 15.0
+	sm.initial_velocity_min = 0.5
+	sm.initial_velocity_max = 1.0
+	sm.gravity = Vector3(0.25, 0.5, 0)
+	sm.scale_amount_min = 1.0
+	sm.scale_amount_max = 1.6
+	sm.scale_amount_curve = _curve("puff")
+	sm.color_ramp = _grad("camps", [Color(0.4, 0.38, 0.36, 0.0), Color(0.35, 0.33, 0.32, 0.45), Color(0.3, 0.3, 0.3, 0)])
+	sm.anim_speed_min = 1.0
+	sm.anim_speed_max = 1.0
+	sm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(sm)
+	sm.global_position = pos + Vector3(0, 1.0, 0)
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.6, 0.28)
+	l.light_energy = 2.0
+	l.omni_range = 8.0
+	l.shadow_enabled = false
+	add_child(l)
+	l.global_position = pos + Vector3(0, 1.0, 0)
+	var tw := l.create_tween().set_loops()
+	tw.tween_property(l, "light_energy", 2.5, 0.23).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(l, "light_energy", 1.7, 0.31).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(l, "light_energy", 2.2, 0.19).set_trans(Tween.TRANS_SINE)
+
+## Celebration rocket burst high above the field.
+func firework(pos: Vector3, c: Color) -> void:
+	var g := _grad("fw" + c.to_html(), [Color(1, 1, 1, 1), c, Color(c.r, c.g, c.b, 0)])
+	_burst(pos, 1, 0.25, _pmesh("fx_glow"), g, 0.0, 0.0, 0.0, 3.0, 3.6, Vector3.ZERO, Vector3.UP, 0.0, "pop")
+	_burst(pos, 46, 1.5, _pmesh("fx_spark"), g, 5.0, 8.0, 180.0, 0.16, 0.3, Vector3(0, -3.5, 0), Vector3.UP, 0.2, "shrink", 1.6)
+	_burst(pos, 14, 1.1, _pmesh("fx_star"), _grad("fws" + c.to_html(), [Color(1, 1, 1, 1), Color(c.r, c.g, c.b, 0)]), 2.0, 4.5, 180.0,
+		0.3, 0.5, Vector3(0, -2.0, 0), Vector3.UP, 0.3, "pop", 1.0)
+	light_flash(pos, c, 5.0, 16.0, 0.5)
+
 func shockwave(pos: Vector3, r: float, c: Color) -> void:
 	_flat_decal(pos, "fx_ring", r * 0.4, Color(c.r, c.g, c.b, 1.0), true, 0.45, 2.6)
 

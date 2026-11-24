@@ -13,10 +13,13 @@ var _shots_at := []
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS  # keep shooting while the game is paused (pause menu shots)
 	Game.autopause = false
+	Game.testing = true
 	for a in OS.get_cmdline_user_args():
 		var kv := a.split("=")
 		if kv.size() == 2:
 			args[kv[0]] = kv[1]
+	if args.get("cine", "0") == "1":
+		Game.testing = false  # review runs: keep the level intro / boss cinematics
 	var mode: String = args.get("mode", "auto")
 	if args.has("lang"):
 		Game.language = args["lang"]
@@ -47,6 +50,8 @@ func _ready() -> void:
 			get_tree().create_timer(4.0).timeout.connect(func(): _menu.call(args["open"]))
 		return
 	Game.current_level = int(args.get("level", "0"))
+	if args.get("intro", "1") == "0":
+		Game.stats["intro_%d" % Game.current_level] = 1
 	Game.seen_tutorial = args.get("tutorial", "0") == "0"
 	Game.difficulty = int(args.get("diff", "0"))
 	Game.hero_id = args.get("hero", "kael")
@@ -113,6 +118,12 @@ func _process(delta: float) -> void:
 				L2._defeat()
 			"enemy":
 				L2._show_enemy_card(args.get("enemy", "orc"))
+			"boss":
+				L2._spawn_enemy(args.get("enemy", "troll"), 0)
+			"spawn":
+				var lp: LanePath = L2.paths[0]
+				for k in int(args.get("n", "6")):
+					L2.spawn_enemy_at(args.get("enemy", "wolf"), lp, float(args.get("at", "6")) + k * 1.3)
 			"inspect":
 				if not L2.enemies.is_empty():
 					var e: Enemy = L2.enemies[L2.enemies.size() / 2]
@@ -173,6 +184,10 @@ func _process(delta: float) -> void:
 			await get_tree().process_frame
 		if args.get("follow", "0") == "1" and LevelMain.I and not LevelMain.I.enemies.is_empty():
 			var e: Enemy = LevelMain.I.enemies[LevelMain.I.enemies.size() / 2]
+			for c: Enemy in LevelMain.I.enemies:
+				if c.type == args.get("follow_type", "") and c.alive:
+					e = c
+					break
 			LevelMain.I.cam_rig.focus(e.global_position, float(args.get("zoom", "22")))
 			LevelMain.I.cam_rig._pos = LevelMain.I.cam_rig.target
 			await get_tree().process_frame
@@ -214,7 +229,7 @@ func _process(delta: float) -> void:
 		if args.has("abreport") and t > _next_ab:
 			_next_ab = t + 10.0
 			print("ABILITIES ", Tower.ability_hits)
-		if LevelMain.I.state == "ready" and t > 2.0:
+		if LevelMain.I.state == "ready" and t > 2.0 and args.get("nowave", "0") != "1":
 			Engine.time_scale = float(args.get("speed", "3"))
 			LevelMain.I._call_wave()
 		elif LevelMain.I.state == "playing" and LevelMain.I._spawning_done() and randf() < 0.01:
@@ -360,14 +375,34 @@ func _desired_type(L: LevelMain) -> String:
 var _last_lives := 999
 
 func _ai_build(L: LevelMain, want: String) -> void:
+	var free := []
 	for i in L.plots.size():
 		if not L.towers.has(i):
-			L._select_plot(i)
-			L._on_radial_chosen("build_" + want)
-			return
+			free.append(i)
+	if free.is_empty():
+		return
+	# a beginner taps whichever empty plot catches the eye; the expert fills plots in order
+	var pick: int = free[randi() % free.size()] if _casual() else free[0]
+	L._select_plot(pick)
+	L._on_radial_chosen("build_" + want)
+
+var _mastery_pick := {}
+
+func _mastery_for(tw: Tower) -> String:
+	if not _casual():
+		return BEST_MASTERY[tw.type]
+	if not _mastery_pick.has(tw):
+		var ms: Array = tw.data()["masteries"]
+		_mastery_pick[tw] = String((ms[randi() % ms.size()] as Dictionary)["id"])
+	return _mastery_pick[tw]
 
 var _menu: Node
 var _gt := 0.0
+
+## skill=casual imitates a first-time player: slow reactions, half-random tower picks,
+## random specialisations, no ability purchases, sparse spells, no hero micro, no early calls.
+func _casual() -> bool:
+	return args.get("skill", "expert") == "casual"
 
 func _smart_tick(delta: float) -> void:
 	var L := LevelMain.I
@@ -376,9 +411,11 @@ func _smart_tick(delta: float) -> void:
 	Engine.time_scale = float(args.get("speed", "6"))
 	_ai_cd -= delta
 	if _ai_cd <= 0.0:
-		_ai_cd = 0.35
+		_ai_cd = 2.5 if _casual() else 0.35
 		var limit := mini(L.plots.size(), int(args.get("base_towers", "5")) + int((L.wave_idx + 1) * float(args.get("tower_rate", "0.7"))))
 		var want := _desired_type(L)
+		if _casual() and randf() < 0.5:
+			want = ["archer", "barracks", "mage", "artillery"][randi() % 4]
 		var cost: int = DB.TOWERS[want]["levels"][0]["cost"]
 		# cheapest pending upgrade (towers below Lv3 first, then masteries)
 		var up_i := -1
@@ -396,11 +433,11 @@ func _smart_tick(delta: float) -> void:
 			for i in L.towers.keys():
 				var tw: Tower = L.towers[i]
 				if tw.level == 3 and tw.mastery == "":
-					var mc := int(DB.mastery_def(tw.type, BEST_MASTERY[tw.type])["cost"])
+					var mc := int(DB.mastery_def(tw.type, _mastery_for(tw))["cost"])
 					if mc < up_c:
 						up_c = mc
 						up_i = i
-			if up_i < 0:
+			if up_i < 0 and not _casual():
 				for i in L.towers.keys():
 					var tw: Tower = L.towers[i]
 					if tw.mastery != "" and tw.ability == "":
@@ -421,7 +458,7 @@ func _smart_tick(delta: float) -> void:
 			if buy_ability:
 				L._on_radial_chosen("ability")
 			else:
-				L._on_radial_chosen("upgrade" if tw2.level < 3 else "mastery_" + BEST_MASTERY[tw2.type])
+				L._on_radial_chosen("upgrade" if tw2.level < 3 else "mastery_" + _mastery_for(tw2))
 		elif can_build and (up_i < 0 or L.gold >= cost + up_c or (L.towers.size() < 4 + L.paths.size() * 2 and up_c > cost)):
 			_ai_build(L, want)
 		L._deselect()
@@ -444,17 +481,18 @@ func _smart_tick(delta: float) -> void:
 				if n > dn:
 					dn = n
 					dense = e
-			if dense and L.spell_cd["meteor"] <= 0.0 and dn >= 5:
+			var spells_ok := not _casual() or randf() < 0.3
+			if dense and L.spell_cd["meteor"] <= 0.0 and dn >= (8 if _casual() else 5) and spells_ok:
 				L.targeting = "meteor"
 				L._handle_targeting(dense.global_position + dense.vel * 0.6)
-			if lead and L.spell_cd["reinforce"] <= 0.0 and lead.dist / lead.path.length > 0.45:
+			if lead and L.spell_cd["reinforce"] <= 0.0 and lead.dist / lead.path.length > (0.7 if _casual() else 0.45) and spells_ok:
 				L.targeting = "reinforce"
 				L._handle_targeting(lead.global_position + lead.vel * 1.5)
-			if L.hero and L.hero.alive and lead and L.hero.target == null and randf() < 0.15:
+			if not _casual() and L.hero and L.hero.alive and lead and L.hero.target == null and randf() < 0.15:
 				L.hero.move_to(lead.global_position + lead.vel * 1.2)
 	if L.state == "ready":
 		L._call_wave()
-	elif L.state == "playing" and L._spawning_done() and L.enemies.is_empty() and args.get("early", "1") == "1":
+	elif L.state == "playing" and L._spawning_done() and L.enemies.is_empty() and args.get("early", "1") == "1" and not _casual():
 		L._call_wave()
 	if t > _next_report:
 		_next_report = t + 10.0
@@ -513,6 +551,16 @@ func _selftest() -> void:
 	Game._apply_config(cf)
 	ok = ok and Game.stars.size() == DB.LEVELS.size() and Game.stars[4] == 3 and Game.stars[5] == 0
 	print("SELFTEST old save stars=", Game.stars, " unlocked6=", Game.unlocked(5), " unlocked7=", Game.unlocked(6))
+	# playtest log code: gzip + base64 round trip
+	Game.playlog = [{"lv": 3, "r": "lost", "wv": 7, "lw": {"7": 12}, "tw": ["ar3", "ma2"]}]
+	var pcode := Game.playlog_code()
+	var pp := pcode.split("-", true, 2)
+	var raw := Marshalls.base64_to_raw(pp[2]).decompress_dynamic(-1, FileAccess.COMPRESSION_GZIP)
+	var parsed = JSON.parse_string(raw.get_string_from_utf8())
+	var pl_ok: bool = pp[0] == "RBP1" and pp[2].md5_text().substr(0, 6) == pp[1] and parsed is Dictionary and int(parsed["runs"][0]["wv"]) == 7
+	ok = ok and pl_ok
+	print("SELFTEST playlog code len=", pcode.length(), " ok=", pl_ok)
+	print("PLAYLOG_CODE ", pcode)
 	print("SELFTEST ", "PASS" if ok else "FAIL")
 	Game.reset_progress()
 	Game.stars = keep_stars

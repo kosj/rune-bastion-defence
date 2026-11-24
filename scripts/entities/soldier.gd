@@ -30,6 +30,9 @@ var _search_cd := 0.0
 var holy := 0.0       # paladin ability: extra magic damage share per hit
 var javelin := false  # lancer ability: ranged spear throws
 var _jav_cd := 1.0
+var celebrating := false
+var _react_t := 0.0   # playing a hit reaction: don't snap back to idle
+var _hit_cd := 0.0
 
 func setup_unit(model_name: String, scale: float, tint := Color.WHITE, weapon := "") -> void:
 	model = CharacterModel.new()
@@ -50,8 +53,10 @@ func aim_point() -> Vector3:
 	return global_position + Vector3(0, height * 0.55, 0)
 
 func _process(delta: float) -> void:
-	if not alive or delta <= 0.0:
+	if not alive or delta <= 0.0 or celebrating:
 		return
+	_react_t -= delta
+	_hit_cd -= delta
 	if lifetime > 0.0:
 		lifetime -= delta
 		if lifetime <= 0.0:
@@ -131,7 +136,7 @@ func _engage(delta: float) -> void:
 			_impact -= delta
 			if _impact <= 0.0 and is_instance_valid(target) and target.alive:
 				_on_hit(target)
-		elif model.current != "attack":
+		elif model.current != "attack" and _react_t <= 0.0:
 			model.play("idle")
 
 func _on_hit(e: Enemy) -> void:
@@ -175,7 +180,7 @@ func _go_home(delta: float) -> void:
 	if to.length() > 0.25:
 		_move_towards(dest, delta)
 	else:
-		if model.current != "idle":
+		if model.current != "idle" and _react_t <= 0.0:
 			model.play("idle")
 		if hp < max_hp:
 			hp = minf(max_hp, hp + regen * delta)
@@ -203,10 +208,28 @@ func _face(dir: Vector3, delta: float) -> void:
 func take_damage(a: float) -> void:
 	if not alive:
 		return
-	hp -= a * (1.0 - armor)
+	var taken := a * (1.0 - armor)
+	hp -= taken
 	model.hit_flash()
 	if hp <= 0.0:
 		die()
+		return
+	# visible flinch on a solid blow, between our own swings
+	if _hit_cd <= 0.0 and _impact <= 0.0 and taken >= max_hp * 0.08 and model.has("hit"):
+		_hit_cd = 1.6
+		_react_t = 0.5
+		model.play("hit", 2.2, 0.05, true)
+
+## Victory pose: stop fighting and cheer (idle if the model has no cheer clip).
+func celebrate() -> void:
+	if not alive:
+		return
+	celebrating = true
+	_release()
+	if model.has("cheer"):
+		model.play("cheer", randf_range(0.9, 1.1), 0.25, true)
+	else:
+		model.play("idle", 1.0, 0.2)
 
 func stun(t: float) -> void:
 	stun_t = maxf(stun_t, t)

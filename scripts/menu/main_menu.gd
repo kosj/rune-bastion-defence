@@ -1039,6 +1039,11 @@ func _open_settings() -> void:
 		_open_save_code(false))
 	sv.add_child(im)
 	right.add_child(sv)
+	var pl := UI.button("플레이 기록 보내기 (밸런스 피드백)", 17, false, Vector2(400, 46), "purple")
+	pl.pressed.connect(func():
+		shade.queue_free()
+		_open_playlog())
+	right.add_child(pl)
 	# installable web app (PWA): Chrome/Edge/Android hand us their install prompt; iOS needs Safari's share menu
 	if OS.has_feature("web") and not bool(JavaScriptBridge.eval("!!(window.rbStandalone && window.rbStandalone())", true)):
 		if bool(JavaScriptBridge.eval("!!(window.rbCanInstall && window.rbCanInstall())", true)):
@@ -1172,6 +1177,54 @@ func _open_save_code(export: bool) -> void:
 		shade.queue_free()
 		_open_settings())
 	row.add_child(back)
+
+## Playtest feedback: the recent-run log as one code to paste into a chat.
+func _open_playlog() -> void:
+	var o := _overlay("플레이 기록", "blue")
+	var shade: Control = o[0]
+	var vb: VBoxContainer = o[1]
+	var runs := Game.playlog.size()
+	var won := 0
+	for r in Game.playlog:
+		if r is Dictionary and r.get("r", "") == "won":
+			won += 1
+	var head := UI.label(tr("기록된 판 %d (승리 %d)") % [runs, won], 21, UI.GOLD, 4, "ui_black")
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(head)
+	var info := UI.label("최근 판의 결과(도달 웨이브, 잃은 생명, 새어 나간 적, 지은 타워)를 코드로 묶었습니다. 복사해서 대화창에 붙여 넣으면 어디서 어려웠는지 분석해 난이도를 조정합니다. 개인 정보는 들어 있지 않습니다.", 16, UI.TEXT, 3)
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.custom_minimum_size = Vector2(560, 0)
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(info)
+	var code := Game.playlog_code() if runs > 0 else ""
+	var te := TextEdit.new()
+	te.custom_minimum_size = Vector2(560, 120)
+	te.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	te.add_theme_font_size_override("font_size", 12)
+	te.text = code if runs > 0 else tr("아직 기록이 없습니다. 몇 판 플레이한 뒤 다시 열어 주세요.")
+	te.editable = false
+	vb.add_child(te)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	vb.add_child(row)
+	if runs > 0:
+		DisplayServer.clipboard_set(code)
+		var cp := UI.button("복사", 19, true, Vector2(170, 52), "green")
+		cp.pressed.connect(func():
+			DisplayServer.clipboard_set(code)
+			Audio.play("click", -4.0)
+			cp.text = tr("복사했습니다"))
+		row.add_child(cp)
+	var back := UI.button("닫기", 19, false, Vector2(150, 52), "gray")
+	back.pressed.connect(func():
+		shade.queue_free()
+		_open_settings())
+	row.add_child(back)
+
+func _test_playlog() -> void:
+	Game.playlog = [{"lv": 2, "d": 0, "e": false, "h": "kael", "r": "lost", "s": 0, "wv": 9, "nw": 12, "li": 0, "ml": 20, "t": 512, "k": 230, "g": 40, "tw": ["ar3", "ba2", "ma3-arcane"], "lw": {"7": 6, "9": 14}, "lt": {"wolf": 9, "orc": 11}, "sp": 5, "hl": 4, "ts": 0}]
+	_open_playlog()
 
 # screenshot hooks for tools/test_runner (open=_test_card / _test_endless)
 func _test_card() -> void:
