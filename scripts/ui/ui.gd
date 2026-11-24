@@ -89,6 +89,22 @@ static func ink(text: String, size := 20, color := INK, font := "ui") -> Label:
 	var l := label(text, size, color, 0, font)
 	return l
 
+## Breaks a label's text only at spaces (Hangul would otherwise split mid-word), for a fixed width.
+static func wrap_words(l: Label, width: float) -> void:
+	var f := l.get_theme_font("font")
+	var fs := l.get_theme_font_size("font_size")
+	var out := ""
+	var line := ""
+	for w in l.text.split(" ", false):
+		var cand: String = w if line == "" else line + " " + w
+		if line != "" and f.get_string_size(cand, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > width:
+			out += line + "\n"
+			line = w
+		else:
+			line = cand
+	l.text = out + line
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+
 ## Gold-gradient title text with a dark outline and drop shadow (Kingdom-Rush style headings).
 static func title(text: String, size := 44, font := "title_kr", outline := 10) -> Label:
 	var l := label(text, size, Color.WHITE, outline, font)

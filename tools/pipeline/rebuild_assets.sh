@@ -44,8 +44,9 @@ mc 256 $C/wolf.glb 1024 run=$A5/wolf_run.glb death=$A5/wolf_death.glb
 mc 256 $C/archer_unit.glb 1024 idle=$D2/archer_anim_a.glb attack=$D2/archer_anim_b.glb
 mc 256 $C/mage_unit.glb 1024 idle=$D2/mage_idle.glb attack=$D2/mage_cast.glb
 mc 256 $C/sapper.glb 1024 run=$D3/sapper_run.glb attack=$D3/sapper_attack.glb death=$D3/sapper_death.glb hit=$A5/sapper_hit.glb
-mc 256 $C/ogre.glb 1024 run=$D3/ogre_run.glb attack=$D3/ogre_attack.glb death=$D3/ogre_death.glb roar=$D3/ogre_roar.glb
+mc 256 $C/ogre.glb 1024 run=$D3/ogre_run.glb attack=$D3/ogre_attack.glb death=$D3/ogre_death.glb roar=$D3/ogre_roar.glb taunt=$RAW/varco/anim_v6/ogre_taunt.glb
 mc 512 $C/sera.glb 1024 idle=$D3/sera_idle.glb run=$D3/sera_run.glb attack=$D3/sera_attack.glb skill=$D3/sera_skill.glb death=$D3/sera_death.glb cheer=$D3/sera_cheer.glb hit=$A5/sera_hit.glb
 mc 256 $C/skeleton_knight.glb 1024 run=$A4/skeleton_knight_run.glb attack=$A4/skeleton_knight_attack.glb death=$A4/skeleton_knight_death.glb hit=$A5/skeleton_knight_hit.glb rise=$A5/skeleton_knight_rise_supine.glb
 mc 512 $C/lich.glb 1024 run=$A4/lich_walk.glb attack=$A4/lich_attack.glb death=$A4/lich_death.glb roar=$A4/lich_summon.glb taunt=$A5/lich_taunt.glb cast=$A5/lich_cast.glb
+mc 512 $C/ranger.glb 1024 idle=$D2/archer_anim_a.glb run=$RAW/varco/anim_v6/ranger_run.glb attack=$D2/archer_anim_b.glb skill=$RAW/varco/anim_v6/ranger_skill.glb death=$RAW/varco/anim_v6/ranger_death.glb cheer=$RAW/varco/anim_v6/ranger_cheer.glb hit=$RAW/varco/anim_v6/ranger_hit.glb
 echo ALL_DONE

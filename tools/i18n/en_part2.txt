@@ -220,3 +220,49 @@ Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 �
 ✓ 철인 배지 획득	✓ Iron badge earned
 생명 3 · 주문 없음 · 골드 +40%	3 lives · no spells · gold +40%
 별 3개를 얻으면 철인 도전이 열립니다	Earn 3 stars to unlock the Iron Challenge
+보스 - 해골을 끝없이 불러내고, 체력 50%에서 해골 기사 군단을 소환	Boss - endlessly raises skeletons; at 50% health calls up a legion of skeleton knights
+산을 부수는 자	Breaker of Mountains
+오우거 왕 고르막	Gormak the Ogre King
+오우거 친위대가 몰려옵니다	The ogre royal guard charges in
+최종 보스 - 내려찍기로 병사 기절, 전투 함성으로 주변 적 가속, 체력 50%에서 오우거 친위대 소환	Final boss - slams stun soldiers, war cries hasten nearby enemies, at 50% health summons the ogre royal guard
+고블린 무리가 그린베일 고개로 몰려옵니다! 왕국의 첫 관문을 지켜야 합니다.	Goblins are swarming toward Greenvale Pass! We must hold the kingdom's first gate.
+걱정 마세요, 브란 대장님. 한 놈도 성문에 닿지 못하게 하겠습니다.	Don't worry, Captain Bran. Not one of them will reach the gate.
+적이 강을 사이에 두고 두 갈래로 건너옵니다. 하늘에서는 가고일까지 내려온다는 보고입니다.	They're crossing the river on two roads, and scouts report gargoyles coming down from the sky.
+다리 두 곳을 모두 지켜야겠군요. 궁수를 넉넉히 세우죠.	Then we guard both bridges. Plenty of archers.
+서리바람 고개의 눈보라 속에서 늑대 울음이 들립니다.	Wolves are howling in the blizzard over Frostwind Pass.
+늑대는 빠릅니다. 병영으로 길을 막고 서리 마법으로 발을 묶어요.	Wolves are fast. Block the road with barracks and pin them with frost magic.
+달빛 숲이 이상하게 조용하네요...	The Moonlit Wood is strangely quiet...
+폭탄병이 숲길에 숨어들었습니다! 병사들과 붙기 전에 처리하십시오.	Sappers have slipped onto the forest paths! Take them down before they reach our soldiers.
+작은 것들! 그롬이 너희 성벽을 돌가루로 만들어 주마!	Little things! Grom will grind your walls to dust!
+트롤 군주 그롬... 이 협곡에서 끝을 내겠습니다.	Grom the Troll Lord... it ends in this gorge.
+트롤은 쓰러졌지만, 검은 성채에서 망자들이 일어나고 있습니다.	The troll has fallen, but the dead are rising at the Black Citadel.
+누군가 죽은 자를 깨우고 있어요. 그 배후를 찾아야 합니다.	Someone is waking the dead. We have to find who.
+폭포 아래로 해골 기사들이 행군합니다. 쓰러뜨려도 다시 일어난다더군요.	Skeleton knights are marching below the falls. They say they get back up after you cut them down.
+마법이 잘 통할 거예요. 두 번 쓰러뜨리면 됩니다.	Magic will work on them. We just knock them down twice.
+산 자들이여, 나의 신전에 잘 왔다. 곧 너희도 내 군대의 일부가 되리라.	Welcome to my temple, living ones. Soon you will march in my army.
+모르가스, 당신의 군대는 여기서 끝납니다!	Morgath, your army ends here!
+큰일입니다! 리치가 쓰러진 틈을 타 오우거 군대가 배를 타고 남쪽 항구에 상륙하고 있습니다!	Trouble! With the lich gone, an ogre army is landing by ship at the southern harbor!
+항구가 뚫리면 왕도까지 막을 곳이 없어요. 여기서 막아야 합니다.	If the harbor falls, nothing stands between them and the capital. We stop them here.
+리치는 약했다. 이 땅의 왕좌는 이제 고르막의 것이다!	The lich was weak. This land's throne belongs to Gormak now!
+왕도의 마지막 방어선입니다. 모든 병력을 성문 앞에 모았습니다!	This is the capital's last line. Every soldier we have is at the gate!
+왕국을 지킬 마지막 싸움입니다. 끝까지 버팁시다!	The last battle for the kingdom. We hold to the end!
+오우거 왕이 쓰러졌습니다! 왕국이... 살아남았습니다!	The Ogre King has fallen! The kingdom... survives!
+모두가 함께 싸운 덕분이에요. 그래도 성벽은 계속 지켜야겠죠.	We won because we fought together. Still, someone has to keep watching the walls.
+무한 모드의 고대 열주 터에서 남은 무리가 계속 몰려온다고 합니다. 언제든 다시 불러 주십시오!	Stragglers keep coming at the old colonnade (Endless mode). Call on us any time!
+경비대장 브란	Captain Bran
+왕도의 수호자	Defender of the Capital
+오우거 왕 고르막 처치	Defeat Gormak the Ogre King
+해안의 고대 신전에서 모든 망자의 근원, 리치 군주 모르가스가 깨어났습니다. 망자의 군대를 끝내야 합니다!	In the ancient temple on the coast, Morgath the Lich Lord, source of all the dead, has awakened. End the army of the dead!
+폭풍 항구	Storm Harbor
+바다에서 온 침공	Invasion from the sea
+리치가 쓰러진 틈을 타 오우거 군대가 배를 타고 남쪽 항구로 상륙합니다. 항구의 다리를 지키세요.	With the lich gone, an ogre army lands at the southern harbor by ship. Hold the harbor bridge.
+왕도 최후의 방어선	The Capital's Last Stand
+오우거 왕의 진격	The Ogre King marches
+오우거 왕 고르막이 세 갈래 길로 왕도에 진격합니다. 왕국의 운명을 건 마지막 결전!	Gormak the Ogre King marches on the capital by three roads. The final battle for the kingdom!
+탭하여 계속  ▶	Tap to continue  ▶
+건너뛰기  ▶▶	Skip  ▶▶
+길가의 금빛 ‘!’를 탭하면 숨은 보급품(골드)을 얻습니다	Tap the gold ‘!’ by the road to find a hidden supply cache (gold)
+금빛 ‘!’가 뜬 바위를 탭하면 길 위로 굴러 떨어져 적을 덮칩니다	Tap a boulder with a gold ‘!’ to roll it down onto the enemies on the road
+금빛 ‘!’가 뜬 제단을 탭하면 주변 적을 얼려 느리게 만듭니다	Tap an altar with a gold ‘!’ to freeze and slow the enemies around it
+맵 장치	Map device
+숨은 보급품 +%d	Hidden supplies +%d

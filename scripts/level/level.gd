@@ -115,6 +115,7 @@ func _ready() -> void:
 	_place_landmarks()
 	_place_plots()
 	_place_vignette(bounds)
+	_place_events(bounds)
 	_decorate(def["theme"])
 	terrain.build_grass(2600 if Game.high_quality else 1100)
 	_make_range_ring()
@@ -154,12 +155,26 @@ func _ready() -> void:
 	var first := not Game.testing and not Game.endless and int(Game.stats.get(intro_key, 0)) == 0
 	if first:
 		Game.stat(intro_key)
-	cine.level_intro(first)
+	var story: Array = DB.STORY.get(def["id"], [])
+	if first and not story.is_empty():
+		# first visit: a short scene in front of the enemy portal, then the road fly-over
+		var s0: Vector2 = (paths[0] as LanePath).sample(2.0)
+		cam_rig.zoom = 21.0
+		cam_rig.target = Vector3(s0.x, 0, s0.y)
+		cam_rig._pos = cam_rig.target
+		cine.story(story, func(): cine.level_intro(true), true)
+	else:
+		cine.level_intro(first)
 	if Game.challenge:
 		hud.show_banner(def["name"], "철인 도전 · 생명 3 · 주문 없음", Color(1.0, 0.55, 0.4))
 		for sid in hud.spell_btns:
 			((hud.spell_btns[sid] as Dictionary)["button"] as Control).visible = false
 	Audio.play_music(battle_music())
+	# first time a kind of map event shows up: say what the gold "!" does
+	if not events.is_empty() and not Game.testing:
+		var kind0: String = events[0]["kind"]
+		if int(Game.stats.get("evt_hint_" + kind0, 0)) == 0:
+			_evt_hint = kind0  # shown a few seconds into the first wave, never over a cut-scene
 	if level_idx == 0 and not Game.seen_tutorial:
 		tutorial_step = 0
 		get_tree().create_timer(2.5).timeout.connect(func(): if tutorial_step == 0: hud.show_hint("빈 건설 부지(돌 울타리)를 탭해서 타워를 지으세요.\n한 번 탭하면 미리보기, 한 번 더 탭하면 건설!"))
@@ -372,6 +387,198 @@ func _place_landmarks() -> void:
 					break
 
 const PORTAL_HOLE := Vector3(0.0, 2.25, 0.55)
+
+# ------------------------------------------------------------------ map events
+## Tappable set pieces beside the road: a boulder to roll onto the enemies, an altar whose
+## pulse freezes the crowd around it, a hidden supply cache. A gold "!" shows when one is ready.
+const EVENTS := {"greenvale": ["cache"], "twinfords": ["cache"], "frostwind": ["rockfall"], "moonwood": ["altar"],
+	"trollgorge": ["rockfall", "rockfall"], "citadel": ["altar"], "falls": ["rockfall", "altar"], "temple": ["altar"],
+	"harbor": ["cache", "rockfall"], "capital": ["altar", "rockfall"]}
+const EVENT_CD := {"rockfall": 50.0, "altar": 40.0}
+var events: Array = []
+
+func _event_spot(lp: LanePath, along: float, bounds: Rect2, plot_r := 3.8) -> Vector2:
+	var inner := bounds.grow(-2.5)
+	for da in [0.0, 3.0, -3.0, 6.0, -6.0, 9.0, -9.0]:
+		var at := clampf(along + da, 2.0, lp.length - 4.0)
+		var q := lp.sample(at)
+		var t := lp.tangent(at)
+		var side := Vector2(-t.y, t.x)
+		for dist in [4.0, 4.8, 5.6, 6.4]:
+			for sg in [1.0, -1.0]:
+				var p: Vector2 = q + side * dist * sg
+				if not inner.has_point(p) or terrain.in_river(p.x, p.y) or terrain.path_dist(p.x, p.y) < 3.2:
+					continue
+				if terrain.height_at(p.x, p.y) > 2.5:
+					continue
+				var ok := true
+				for pl in plots:
+					if (pl as Vector2).distance_to(p) < plot_r:
+						ok = false
+						break
+				for k in terrain.keepout:
+					if ok and Vector2(k.x, k.y).distance_to(p) < k.z + 1.2:
+						ok = false
+				if ok:
+					return p
+	return Vector2.INF
+
+func _place_events(bounds: Rect2) -> void:
+	var kinds: Array = EVENTS.get(def["id"], [])
+	for k in kinds.size():
+		var lp: LanePath = paths[k % paths.size()]
+		var along := lp.length * (0.32 if k % 2 == 0 else 0.6)
+		var spot := _event_spot(lp, along, bounds)
+		if spot == Vector2.INF:
+			spot = _event_spot(lp, along, bounds, 3.0)
+		if spot == Vector2.INF:
+			continue
+		terrain.keepout.append(Vector3(spot.x, spot.y, 2.4))
+		var road := lp.sample(lp.closest(spot).y)
+		var kind: String = kinds[k]
+		var pos := Vector3(spot.x, terrain.height_at(spot.x, spot.y), spot.y)
+		var ev := {"kind": kind, "pos": pos, "road": Vector3(road.x, terrain.walk_height(road.x, road.y), road.y), "cd": 0.0, "used": false}
+		_event_visual(ev)
+		var mk := Label3D.new()
+		mk.text = "!"
+		mk.font = Assets.font("ui_black")
+		mk.font_size = 96
+		mk.outline_size = 22
+		mk.modulate = Color(1.0, 0.85, 0.3)
+		mk.outline_modulate = Color(0.25, 0.12, 0.02)
+		mk.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		mk.no_depth_test = true
+		mk.pixel_size = 0.012
+		world.add_child(mk)
+		mk.global_position = pos + Vector3(0, 3.0, 0)
+		var bob := mk.create_tween().set_loops()
+		bob.tween_property(mk, "position:y", pos.y + 3.4, 0.6).set_trans(Tween.TRANS_SINE)
+		bob.tween_property(mk, "position:y", pos.y + 3.0, 0.6).set_trans(Tween.TRANS_SINE)
+		ev["marker"] = mk
+		events.append(ev)
+
+func _event_visual(ev: Dictionary) -> void:
+	var pos: Vector3 = ev["pos"]
+	var n: Node3D
+	match String(ev["kind"]):
+		"rockfall":
+			n = Assets.instance("rocks_v")
+			n.scale = Vector3(1.35, 1.2, 1.35)
+		"altar":
+			n = Assets.instance("crystals")
+			n.scale = Vector3.ONE * 1.3
+			if not ev.has("disc"):
+				ev["disc"] = _event_disc(pos + Vector3(0, 0.07, 0))
+		_:
+			n = Assets.instance("barrels")
+			n.scale = Vector3.ONE * 1.05
+	world.add_child(n)
+	n.global_position = pos
+	n.rotation.y = randf() * TAU
+	_theme_overlay(n)
+	ev["node"] = n
+
+func _event_disc(p: Vector3) -> MeshInstance3D:
+	_rune_disc(p, 3.2, Color(0.4, 0.95, 1.0, 0.8))
+	return world.get_child(world.get_child_count() - 1) as MeshInstance3D
+
+func _tap_event(sp: Vector2) -> bool:
+	for ev in events:
+		if ev["used"] or float(ev["cd"]) > 0.0:
+			continue
+		var p: Vector3 = ev["pos"] + Vector3(0, 1.4, 0)
+		if cam_rig.cam.is_position_behind(p):
+			continue
+		if cam_rig.cam.unproject_position(p).distance_to(sp) < 54.0:
+			_trigger_event(ev)
+			return true
+	return false
+
+func _trigger_event(ev: Dictionary) -> void:
+	var kind: String = ev["kind"]
+	var pos: Vector3 = ev["pos"]
+	(ev["marker"] as Node3D).visible = false
+	Game.stat("events")
+	match kind:
+		"cache":
+			ev["used"] = true
+			var g := 50 + level_idx * 10
+			add_gold(g, pos + Vector3(0, 1.0, 0))
+			fx.coin_burst(pos + Vector3(0, 1.0, 0), 6)
+			fx.magic_burst(pos + Vector3(0, 1.0, 0), Color(1.0, 0.85, 0.4), 1.0)
+			overlay.float_text(pos + Vector3(0, 2.2, 0), tr("숨은 보급품 +%d") % g, UI.GOLD, 1.2)
+			Audio.play("upgrade", -2.0)
+			var nd: Node3D = ev["node"]
+			var tw := nd.create_tween()
+			tw.tween_property(nd, "scale", Vector3.ONE * 0.01, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+			tw.tween_callback(nd.queue_free)
+		"rockfall":
+			ev["cd"] = EVENT_CD["rockfall"]
+			var rock: Node3D = ev["node"]
+			var road: Vector3 = ev["road"]
+			Audio.play("slam", -4.0, 0.1)
+			var tw2 := rock.create_tween()
+			tw2.set_parallel(true)
+			tw2.tween_property(rock, "global_position", road + Vector3(0, 0.4, 0), 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+			tw2.tween_property(rock, "rotation:x", rock.rotation.x + TAU * 1.2, 0.6)
+			tw2.chain().tween_callback(func(): _rock_impact(road, rock))
+		"altar":
+			ev["cd"] = EVENT_CD["altar"]
+			fx.frost_nova(pos, 6.5)
+			fx.magic_burst(pos + Vector3(0, 1.2, 0), Color(0.5, 0.9, 1.0), 1.6)
+			fx.shockwave(pos, 6.5, Color(0.5, 0.9, 1.0))
+			Audio.play("frost", 0.0, 0.05)
+			for e: Enemy in enemies:
+				if e.alive and e.global_position.distance_to(pos) < 6.5:
+					e.slow(0.45, 4.0)
+			if ev.has("disc"):
+				(ev["disc"] as MeshInstance3D).visible = false
+
+func _rock_impact(at: Vector3, rock: Node3D) -> void:
+	fx.explosion(at, 1.1)
+	fx.dust(at, 1.6)
+	cam_rig.shake(0.6)
+	Audio.play("boom", 0.0, 0.1, 2)
+	var dmg := 160.0 * hp_mult
+	for e: Enemy in enemies.duplicate():
+		if e.alive and not e.flying and e.global_position.distance_to(at) < 2.8:
+			e.damage(dmg, "physical", true, 0.5)
+			if e.alive:
+				e.stun(1.2)
+	var tw := rock.create_tween()
+	tw.tween_interval(0.8)
+	tw.tween_property(rock, "scale", Vector3.ONE * 0.01, 0.5)
+	tw.tween_callback(rock.queue_free)
+
+var _evt_hint := ""
+var _evt_hint_t := 0.0
+
+## Recharge timers; a recharged boulder rises again on its ledge.
+func _update_events(delta: float) -> void:
+	if _evt_hint != "" and state == "playing" and cine.active == "":
+		_evt_hint_t += delta
+		if _evt_hint_t > 4.0:
+			Game.stat("evt_hint_" + _evt_hint)
+			var tip: String = {"cache": "길가의 금빛 ‘!’를 탭하면 숨은 보급품(골드)을 얻습니다",
+				"rockfall": "금빛 ‘!’가 뜬 바위를 탭하면 길 위로 굴러 떨어져 적을 덮칩니다",
+				"altar": "금빛 ‘!’가 뜬 제단을 탭하면 주변 적을 얼려 느리게 만듭니다"}[_evt_hint]
+			hud.toast(tr("맵 장치"), tr(tip), "ic_map")
+			_evt_hint = ""
+	for ev in events:
+		if ev["used"] or float(ev["cd"]) <= 0.0:
+			continue
+		ev["cd"] = float(ev["cd"]) - delta
+		if float(ev["cd"]) <= 0.0:
+			if ev["kind"] == "rockfall":
+				_event_visual(ev)
+				var nd: Node3D = ev["node"]
+				var s := nd.scale
+				nd.scale = s * 0.01
+				nd.create_tween().tween_property(nd, "scale", s, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				fx.dust(ev["pos"], 0.8)
+			elif ev.has("disc"):
+				(ev["disc"] as MeshInstance3D).visible = true
+			(ev["marker"] as Node3D).visible = true
 
 # ------------------------------------------------------------------ set pieces
 ## Each region gets one composed scene in the clearest open ground beside the road, so maps
@@ -735,6 +942,7 @@ func _process(delta: float) -> void:
 		_update_waves(delta)
 		for k in spell_cd:
 			spell_cd[k] = maxf(spell_cd[k] - delta, 0.0)
+		_update_events(delta)
 	_update_hud()
 
 func _update_spawns(delta: float) -> void:
@@ -913,6 +1121,8 @@ func on_enemy_killed(e: Enemy) -> void:
 		Game.stat("boss_kills")
 		if e.type == "lich":
 			Game.stat("lich_kills")
+		if e.type == "ogre_king":
+			Game.stat("ogre_king_kills")
 		cine.boss_down(e)
 		Audio.play_music(battle_music(), 2.5)
 	Audio.play("coin", -10.0, 0.1)
@@ -956,6 +1166,8 @@ func _on_tap(sp: Vector2) -> void:
 	var gp := _refine_ground(sp)
 	if targeting != "":
 		_handle_targeting(gp)
+		return
+	if _tap_event(sp):
 		return
 	# hero pick (screen space)
 	if hero and hero.alive and not cam_rig.cam.is_position_behind(hero.global_position):
@@ -1341,8 +1553,8 @@ func _show_enemy_card(type: String) -> void:
 	vb.add_theme_constant_override("separation", 0)
 	vb.add_child(UI.ink("새로운 적!", 16, Color(0.7, 0.16, 0.08), "ui_black"))
 	vb.add_child(UI.ink(e["name"], 24, UI.INK, "title_kr"))
-	var desc := UI.ink(e["desc"], 16, UI.INK_SOFT)
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var desc := UI.ink(tr(e["desc"]), 16, UI.INK_SOFT)
+	UI.wrap_words(desc, 236.0)
 	desc.custom_minimum_size.x = 230
 	vb.add_child(desc)
 	hb.add_child(vb)
@@ -1521,7 +1733,11 @@ func _victory() -> void:
 	Audio.play("victory", 0.0, 0.0)
 	Audio.play_music("menu", 3.0)
 	_clear_cards()
-	get_tree().create_timer(1.6).timeout.connect(func(): _victory_modal(stars, prev_stars))
+	if level_idx == DB.LEVELS.size() - 1 and prev_stars == 0 and not Game.endless and not Game.testing:
+		# first time the campaign is won: the epilogue plays before the results
+		get_tree().create_timer(1.8).timeout.connect(func(): cine.story(DB.STORY["epilogue"], func(): _victory_modal(stars, prev_stars)))
+	else:
+		get_tree().create_timer(1.6).timeout.connect(func(): _victory_modal(stars, prev_stars))
 
 ## Everyone still standing cheers; fireworks go up over the gate.
 func _celebrate() -> void:

@@ -485,7 +485,7 @@ var _toasts := 0
 
 ## Small slide-in notification (achievements).
 func toast(title: String, sub: String, icon: String) -> void:
-	var p := UI.framed("parch", 2)
+	var p := UI.framed("parch", 10)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
@@ -494,21 +494,24 @@ func toast(title: String, sub: String, icon: String) -> void:
 	hb.add_child(UI.icon(Assets.tex(icon), 52))
 	var vb := VBoxContainer.new()
 	vb.add_child(UI.ink(title, 21, UI.INK, "ui_black"))
-	vb.add_child(UI.ink(sub, 16, UI.INK_SOFT))
+	var sl := UI.ink(sub, 16, UI.INK_SOFT)
+	UI.wrap_words(sl, 400.0)
+	vb.add_child(sl)
 	hb.add_child(vb)
 	root.add_child(p)
 	p.anchor_left = 0.5
 	p.anchor_right = 0.5
 	p.offset_left = -200
 	p.offset_right = 200
-	var y := 150.0 + _toasts * 86.0
+	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	var y := 150.0 + _toasts * 98.0
 	_toasts += 1
 	p.offset_top = y - 30
 	p.modulate.a = 0.0
 	var tw := p.create_tween()
 	tw.tween_property(p, "modulate:a", 1.0, 0.25)
 	tw.parallel().tween_property(p, "offset_top", y, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(3.2)
+	tw.tween_interval(3.2 if sl.text.find("\n") < 0 else 5.0)
 	tw.tween_property(p, "modulate:a", 0.0, 0.4)
 	tw.tween_callback(func():
 		_toasts = maxi(_toasts - 1, 0)

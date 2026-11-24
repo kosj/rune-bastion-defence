@@ -184,6 +184,7 @@ func level_intro(full: bool) -> void:
 		return
 	var p: LanePath = lv.paths[0]
 	_begin("intro", func(): _end_intro(home))
+	_saved_target = home
 	cr.zoom = 21.0
 	cr.target = _path_point(p, 1.5)
 	cr._pos = cr.target
@@ -268,6 +269,137 @@ func _drop_card() -> void:
 		var tw := _rt()
 		tw.tween_property(c, "modulate:a", 0.0, 0.35)
 		tw.tween_callback(c.queue_free)
+
+# ------------------------------------------------------------------ story
+
+var _story_lines: Array = []
+var _story_i := -1
+var _story_then := Callable()
+var _story_chain := false
+var _story_panel: Control
+var _story_text: Label
+var _story_tw: Tween
+var _typing := false
+
+## Short dialogue: portrait + name + typed line. Tap shows the whole line, then the next one;
+## the skip button ends it. With chain=true the letterbox stays up for a following cut.
+func story(lines: Array, then: Callable, chain := false) -> void:
+	if lines.is_empty():
+		then.call()
+		return
+	_story_lines = lines
+	_story_i = -1
+	_story_then = then
+	_story_chain = chain
+	_begin("story", Callable())
+	_story_next()
+
+func _speaker(id: String) -> Array:
+	if id == "hero":
+		var h: Dictionary = DB.hero_def()
+		return [h["name"], h["portrait"], false]
+	if id == "captain":
+		return [DB.CAPTAIN["name"], DB.CAPTAIN["portrait"], false]
+	if DB.ENEMIES.has(id):
+		return [DB.ENEMIES[id]["name"], "portrait_" + id, true]
+	return [id, "", false]
+
+func _story_next() -> void:
+	if _typing and _story_text:
+		if _story_tw and _story_tw.is_valid():
+			_story_tw.kill()
+		_story_text.visible_ratio = 1.0
+		_typing = false
+		_skip = func(): _story_next()
+		return
+	_story_i += 1
+	if _story_i >= _story_lines.size():
+		_end_story()
+		return
+	var line: Array = _story_lines[_story_i]
+	var sp := _speaker(String(line[0]))
+	if _story_panel and is_instance_valid(_story_panel):
+		_story_panel.queue_free()
+	var panel := UI.framed("parch", 14)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_top = 1.0 - BAR
+	panel.anchor_bottom = 1.0 - BAR
+	panel.offset_left = -400
+	panel.offset_right = 400
+	panel.offset_bottom = -14
+	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 16)
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(hb)
+	var por := UI.icon(Assets.tex(sp[1]), 118)
+	por.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var enemy: bool = sp[2]
+	vb.add_child(UI.ink(tr(sp[0]), 22, Color(0.62, 0.14, 0.08) if enemy else Color(0.18, 0.3, 0.55), "ui_black"))
+	_story_text = UI.ink(tr(String(line[1])), 21, UI.INK)
+	UI.wrap_words(_story_text, 610.0)
+	_story_text.custom_minimum_size = Vector2(610, 64)
+	vb.add_child(_story_text)
+	var more := UI.ink("탭하여 계속  ▶", 14, UI.INK_SOFT)
+	more.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	vb.add_child(more)
+	if enemy:
+		hb.add_child(vb)
+		hb.add_child(por)
+	else:
+		hb.add_child(por)
+		hb.add_child(vb)
+	root.add_child(panel)
+	root.move_child(panel, _catch.get_index())
+	_story_panel = panel
+	if _story_i == 0:
+		var sk := UI.button("건너뛰기  ▶▶", 17, false, Vector2(170, 46), "gray")
+		sk.anchor_left = 1.0
+		sk.anchor_right = 1.0
+		sk.offset_left = -190
+		sk.offset_right = -20
+		sk.offset_top = 16
+		sk.name = "StorySkip"
+		sk.pressed.connect(func():
+			_story_i = _story_lines.size()
+			_typing = false
+			_end_story())
+		root.add_child(sk)
+	panel.modulate.a = 0.0
+	var ft := _rt()
+	ft.tween_property(panel, "modulate:a", 1.0, 0.2)
+	_story_text.visible_ratio = 0.0
+	_typing = true
+	_story_tw = _rt()
+	_story_tw.tween_property(_story_text, "visible_ratio", 1.0, clampf(_story_text.text.length() * 0.03, 0.4, 2.6))
+	_story_tw.tween_callback(func(): _typing = false)
+	Audio.play("click", -10.0, 0.05)
+	_skip = func(): _story_next()
+
+func _end_story() -> void:
+	if active != "story":
+		return
+	if _story_panel and is_instance_valid(_story_panel):
+		_story_panel.queue_free()
+	_story_panel = null
+	var sk := root.get_node_or_null("StorySkip")
+	if sk:
+		sk.queue_free()
+	var then := _story_then
+	_story_then = Callable()
+	if _story_chain:
+		# the next cut keeps the bars and the hidden HUD
+		active = ""
+		_skip = Callable()
+	else:
+		_finish()
+	if then.is_valid():
+		then.call()
 
 # ------------------------------------------------------------------ bosses
 

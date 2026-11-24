@@ -41,7 +41,11 @@ func _ready() -> void:
 				Game.stars = [3, 3, 3, 2, 3, 2, 1, 0]
 				Game.hero_xp = {"kael": 3000.0, "sera": 900.0}
 			if args.get("progress_max", "0") == "1":
-				Game.stars = [3, 3, 3, 3, 3, 3, 3, 2]
+				Game.stars = [3, 3, 3, 3, 3, 3, 3, 3, 3, 2]
+			if args.has("stars_csv"):
+				Game.stars = Array((args["stars_csv"] as String).split(",")).map(func(x): return int(x))
+			while Game.stars.size() < DB.LEVELS.size():
+				Game.stars.append(0)
 			Game.seen_enemies = {"goblin": true, "wolf": true, "shaman": true, "orc": true, "sapper": true, "gargoyle": true}
 			Game.stats = {"kills": 812, "wins": 4, "towers": 41, "masteries": 5, "meteors": 12, "gold": 9000, "endless_wave": 0}
 			if args.get("progress_max", "0") == "1":
@@ -97,6 +101,41 @@ func _process(delta: float) -> void:
 				L._on_radial_preview("build_mage")
 				L.hud.radial._on_press("build_mage")
 				break
+	if args.has("taps") and LevelMain.I and LevelMain.I.cine:
+		# simulated taps on a running cut-scene (story advance / skip)
+		var due: Array = get_meta("taps_left", Array((args["taps"] as String).split(",")).map(func(x): return float(x)))
+		if not due.is_empty() and t >= float(due[0]):
+			due.pop_front()
+			var cn = LevelMain.I.cine
+			if cn._skip.is_valid():
+				cn._skip.call()
+		set_meta("taps_left", due)
+	if args.get("print_events", "0") == "1" and t > 1.0 and not has_meta("pe") and LevelMain.I:
+		set_meta("pe", true)
+		print("EVENTS %s %d/%d" % [LevelMain.I.def["id"], LevelMain.I.events.size(), (LevelMain.EVENTS.get(LevelMain.I.def["id"], []) as Array).size()])
+		get_tree().quit()
+	if args.has("evt_at") and t >= float(args["evt_at"]) and not has_meta("evt_done") and LevelMain.I and not LevelMain.I.events.is_empty():
+		# review a map event: frame it, put a few enemies on the road beside it
+		set_meta("evt_done", true)
+		var L4 := LevelMain.I
+		var ev: Dictionary = L4.events[int(args.get("evt", "0")) % L4.events.size()]
+		var ep: Vector3 = ev["pos"]
+		var rd: Vector3 = ev["road"]
+		L4.cam_rig.focus((ep + rd) * 0.5, float(args.get("zoom", "15")))
+		for lp4 in L4.paths:
+			var al: float = lp4.closest(Vector2(rd.x, rd.z)).y
+			if lp4.sample(al).distance_to(Vector2(rd.x, rd.z)) < 1.5:
+				for k in int(args.get("n", "5")):
+					L4.spawn_enemy_at(args.get("enemy", "orc"), lp4, clampf(al - 2.0 + k * 0.9, 1.0, lp4.length - 1.0))
+				break
+	if args.has("evt_fire") and t >= float(args["evt_fire"]) and not has_meta("evt_fired") and LevelMain.I and not LevelMain.I.events.is_empty():
+		set_meta("evt_fired", true)
+		LevelMain.I._trigger_event(LevelMain.I.events[int(args.get("evt", "0")) % LevelMain.I.events.size()])
+	if args.has("skip_at") and t >= float(args["skip_at"]) and not has_meta("skip_done") and LevelMain.I:
+		set_meta("skip_done", true)
+		var sk = LevelMain.I.cine.root.get_node_or_null("StorySkip")
+		if sk:
+			sk.emit_signal("pressed")
 	if args.has("ui_at") and t >= float(args["ui_at"]) and not has_meta("ui_done") and LevelMain.I:
 		# put the level UI into a given state for review screenshots
 		set_meta("ui_done", true)
@@ -265,7 +304,7 @@ func _process(delta: float) -> void:
 			if not has_meta("end"):
 				set_meta("end", t)
 				print("RESULT ", LevelMain.I.state, " lives=", LevelMain.I.lives, " stars=", Game.stars)
-			elif t - float(get_meta("end")) > 3.0:
+			elif t - float(get_meta("end")) > float(args.get("end_wait", "3")):
 				if args.has("final_shot"):
 					_shot()
 				get_tree().quit()

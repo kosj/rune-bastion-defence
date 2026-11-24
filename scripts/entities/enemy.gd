@@ -314,7 +314,8 @@ func _enrage() -> void:
 	lv.cam_rig.shake(1.0)
 	var kind: String = d.get("enrage_summon", "goblin")
 	var undead := kind.begins_with("skeleton")
-	lv.hud.show_banner("보스 격노!", "해골 기사 군단이 일어납니다" if undead else "고블린 증원이 몰려옵니다", Color(1.0, 0.35, 0.25))
+	var sub := "해골 기사 군단이 일어납니다" if undead else "고블린 증원이 몰려옵니다"
+	lv.hud.show_banner("보스 격노!", String(d.get("enrage_text", sub)), Color(1.0, 0.35, 0.25))
 	Audio.play("boss_roar", 3.0, 0.0)
 	Game.vibrate(160)
 	if model.has("cast"):
@@ -323,7 +324,7 @@ func _enrage() -> void:
 	elif model.has("roar"):
 		model.play("roar", 1.4, 0.1, true)
 		stun_t = 1.6
-	var n := 3 if undead else 6
+	var n := int(d.get("enrage_n", 3 if undead else 6))
 	for i in n:
 		lv.spawn_enemy_at(kind, path, maxf(dist - 2.5 - i * 1.4, 0.5))
 	if undead:

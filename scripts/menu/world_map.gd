@@ -5,10 +5,11 @@ extends Control
 
 const MAP_SIZE := Vector2(1536, 864)
 # flag positions in map UV (picked on the painted map: meadow road, river bridge, snow gate,
-# moon-forest shrine, troll canyon, the black fortress, the east-coast falls, the sea temple ruins),
+# moon-forest shrine, troll canyon, the black fortress, the east-coast falls, the sea temple ruins,
+# the south harbour and the royal capital),
 # plus the old hill-top colonnade in the north-west for endless mode
 const NODES := [Vector2(0.30, 0.625), Vector2(0.335, 0.435), Vector2(0.462, 0.17), Vector2(0.645, 0.45), Vector2(0.872, 0.315),
-	Vector2(0.785, 0.16), Vector2(0.925, 0.555), Vector2(0.805, 0.735)]
+	Vector2(0.785, 0.16), Vector2(0.925, 0.555), Vector2(0.805, 0.735), Vector2(0.37, 0.835), Vector2(0.165, 0.42)]
 const ENDLESS := Vector2(0.115, 0.15)
 const ROADS := [
 	[Vector2(0.30, 0.625), Vector2(0.293, 0.53), Vector2(0.335, 0.435)],
@@ -18,6 +19,9 @@ const ROADS := [
 	[Vector2(0.872, 0.315), Vector2(0.85, 0.25), Vector2(0.815, 0.2), Vector2(0.785, 0.16)],
 	[Vector2(0.785, 0.16), Vector2(0.84, 0.115), Vector2(0.915, 0.15), Vector2(0.952, 0.26), Vector2(0.955, 0.4), Vector2(0.925, 0.555)],
 	[Vector2(0.925, 0.555), Vector2(0.90, 0.63), Vector2(0.85, 0.69), Vector2(0.805, 0.735)],
+	# by sea from the temple to the south harbour, then north through the town to the capital
+	[Vector2(0.805, 0.735), Vector2(0.74, 0.83), Vector2(0.62, 0.90), Vector2(0.47, 0.925), Vector2(0.40, 0.895), Vector2(0.37, 0.835)],
+	[Vector2(0.37, 0.835), Vector2(0.31, 0.80), Vector2(0.245, 0.745), Vector2(0.205, 0.665), Vector2(0.215, 0.58), Vector2(0.195, 0.51), Vector2(0.165, 0.42)],
 ]
 
 var menu: Node  # main menu (opens the hero / bestiary / upgrade overlays)
