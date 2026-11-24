@@ -28,6 +28,7 @@ const FRAMES := {
 
 static var _tex_cache := {}
 static var _title_shader: Shader
+static var _medal_shader: Shader
 static var _theme: Theme
 
 static func kit(name: String) -> Texture2D:
@@ -88,6 +89,54 @@ static func label(text: String, size := 22, color := TEXT, outline := 6, font :=
 static func ink(text: String, size := 20, color := INK, font := "ui") -> Label:
 	var l := label(text, size, color, 0, font)
 	return l
+
+## A character portrait shown inside a round medallion: the picture is zoomed to the head
+## and shoulders and clipped to a soft-edged circle, so a figure never spills over the frame
+## or shows the square edge of its render. Put it inside a round slot of the same size.
+static func portrait(tex: Texture2D, sz: float, zoom := 1.45, focus := Vector2(0.5, 0.35)) -> TextureRect:
+	return _portrait_rect(tex, sz, zoom, focus, true)
+
+## A free-standing bust (cards, dialogue, enemy lists): zoomed in, and the bottom of the
+## picture fades out instead of ending in a hard line.
+static func bust(tex: Texture2D, sz: float, zoom := 1.25, focus := Vector2(0.5, 0.42)) -> TextureRect:
+	return _portrait_rect(tex, sz, zoom, focus, false)
+
+static func _portrait_rect(tex: Texture2D, sz: float, zoom: float, focus: Vector2, round: bool) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = tex
+	t.custom_minimum_size = Vector2(sz, sz)
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_SCALE
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if _medal_shader == null:
+		_medal_shader = Shader.new()
+		_medal_shader.code = """shader_type canvas_item;
+uniform float zoom = 1.35;
+uniform vec2 focus = vec2(0.5, 0.36);
+uniform bool round = true;
+varying vec4 tint;
+void vertex() {
+	tint = COLOR;
+}
+void fragment() {
+	vec2 uv = (UV - vec2(0.5)) / zoom + focus;
+	vec4 c = texture(TEXTURE, clamp(uv, vec2(0.0), vec2(1.0)));
+	vec2 inb = step(vec2(0.0), uv) * step(uv, vec2(1.0));
+	c.a *= inb.x * inb.y;
+	if (round) {
+		c.a *= 1.0 - smoothstep(0.93, 1.0, length(UV - vec2(0.5)) * 2.0);
+	} else {
+		c.a *= 1.0 - smoothstep(0.8, 1.0, UV.y);
+	}
+	COLOR = c * tint;
+}"""
+	var m := ShaderMaterial.new()
+	m.shader = _medal_shader
+	m.set_shader_parameter("zoom", zoom)
+	m.set_shader_parameter("focus", focus)
+	m.set_shader_parameter("round", round)
+	t.material = m
+	return t
 
 ## Breaks a label's text only at spaces (Hangul would otherwise split mid-word), for a fixed width.
 static func wrap_words(l: Label, width: float) -> void:

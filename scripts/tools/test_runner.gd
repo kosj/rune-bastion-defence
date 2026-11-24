@@ -56,6 +56,17 @@ func _ready() -> void:
 		_shots_at = [3.0, 6.0]
 		if args.has("open"):
 			get_tree().create_timer(4.0).timeout.connect(func(): _menu.call(args["open"]))
+		if args.has("map_card"):
+			# open a region briefing card on the world map (endless card for "e")
+			get_tree().create_timer(4.6).timeout.connect(func():
+				var wm = _menu.get("_select")
+				if wm:
+					if args["map_card"] == "e":
+						wm._open_endless_card()
+					else:
+						wm._open_card(int(args["map_card"])))
+		if args.has("shot_times"):
+			_shots_at = Array((args["shot_times"] as String).split(",")).map(func(x): return float(x))
 		return
 	Game.current_level = int(args.get("level", "0"))
 	if args.get("intro", "1") == "0":

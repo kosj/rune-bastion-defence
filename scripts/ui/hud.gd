@@ -152,8 +152,11 @@ func _build_bottom() -> void:
 	bl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(bl)
 	# hero portrait medallion
-	hero_b = UI.icon_button(Assets.tex(DB.hero_def()["portrait"]), 98, UI.NAVY, 49, "brown")
-	hero_b.add_theme_constant_override("icon_max_width", 80)
+	hero_b = UI.icon_button(null, 98, UI.NAVY, 49, "brown")
+	var hp_por := UI.portrait(Assets.tex(DB.hero_def()["portrait"]), 80)
+	hp_por.position = Vector2(9, 9)
+	hp_por.size = Vector2(80, 80)
+	hero_b.add_child(hp_por)
 	hero_b.position = Vector2(0, 2)
 	hero_b.pressed.connect(func(): hero_pressed.emit())
 	bl.add_child(hero_b)
@@ -423,7 +426,7 @@ func set_wave_preview(per_path: Array) -> void:
 			cell.add_theme_constant_override("separation", -6)
 			cell.custom_minimum_size = Vector2(40, 0)
 			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var ic := UI.icon(Assets.tex("portrait_" + k), 32)
+			var ic := UI.bust(Assets.tex("portrait_" + k), 34, 1.55, Vector2(0.5, 0.34))
 			cell.add_child(ic)
 			var l := UI.label("x%d" % counts[k], 15, UI.GOLD, 4, "ui_black")
 			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

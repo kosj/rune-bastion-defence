@@ -334,7 +334,7 @@ func _story_next() -> void:
 	hb.add_theme_constant_override("separation", 16)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(hb)
-	var por := UI.icon(Assets.tex(sp[1]), 118)
+	var por := UI.bust(Assets.tex(sp[1]), 118, 1.3)
 	por.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 4)
@@ -478,7 +478,7 @@ func _boss_card(e: Enemy) -> void:
 	hb.alignment = BoxContainer.ALIGNMENT_CENTER
 	hb.add_theme_constant_override("separation", 22)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var por := UI.icon(Assets.tex("portrait_" + e.type), 140)
+	var por := UI.bust(Assets.tex("portrait_" + e.type), 150, 1.15)
 	hb.add_child(por)
 	var vb := VBoxContainer.new()
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER

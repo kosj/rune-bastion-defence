@@ -386,12 +386,10 @@ func _open_heroes() -> void:
 		var psz := 104 if not compact else 78
 		slot.custom_minimum_size = Vector2(psz, psz)
 		slot.add_theme_stylebox_override("panel", UI.hd("slot_%s_normal" % ("red" if chosen else "navy"), Vector4(48, 48, 48, 48), Vector4(3, 3, 3, 3)))
-		var por := UI.icon(Assets.tex(h["portrait"]), psz)
-		por.set_anchors_preset(Control.PRESET_FULL_RECT)
-		por.offset_left = psz * 0.1
-		por.offset_top = psz * 0.08
-		por.offset_right = -psz * 0.1
-		por.offset_bottom = -psz * 0.1
+		var inner := psz * 0.84
+		var por := UI.portrait(Assets.tex(h["portrait"]), inner)
+		por.position = Vector2.ONE * (psz - inner) * 0.5
+		por.size = Vector2(inner, inner)
 		if not unlocked:
 			por.modulate = Color(0.25, 0.25, 0.3)
 		slot.add_child(por)
@@ -482,7 +480,7 @@ func _open_talents(id: String) -> void:
 	var compact := get_viewport().get_visible_rect().size.y < 600.0
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 12)
-	head.add_child(UI.icon(Assets.tex(h["portrait"]), 64 if not compact else 52))
+	head.add_child(UI.bust(Assets.tex(h["portrait"]), 70 if not compact else 56, 1.4, Vector2(0.5, 0.38)))
 	var hv := VBoxContainer.new()
 	hv.add_theme_constant_override("separation", 2)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -625,7 +623,7 @@ func _open_bestiary(tab := "enemy") -> void:
 		var e: Dictionary = DB.ENEMIES[t]
 		var top := HBoxContainer.new()
 		top.add_theme_constant_override("separation", 10)
-		top.add_child(UI.icon(Assets.tex("portrait_" + t), 88 if not compact else 70))
+		top.add_child(UI.bust(Assets.tex("portrait_" + t), 96 if not compact else 76, 1.25))
 		var nv := VBoxContainer.new()
 		nv.add_child(UI.ink(e["name"], 25, UI.INK, "title_kr"))
 		var tags := []
@@ -659,8 +657,13 @@ func _open_bestiary(tab := "enemy") -> void:
 	var cell := 78 if not compact else 62
 	for t in DB.ENEMIES:
 		var seen: bool = Game.seen_enemies.has(t)
-		var b := UI.icon_button(Assets.tex("portrait_" + t), cell, UI.NAVY, 14, "navy")
-		b.add_theme_constant_override("icon_max_width", int(cell * 0.78))
+		var b := UI.icon_button(null, cell, UI.NAVY, 14, "navy")
+		if seen:
+			var inner := cell * 0.8
+			var por := UI.portrait(Assets.tex("portrait_" + t), inner, 1.3, Vector2(0.5, 0.4))
+			por.position = Vector2.ONE * (cell - inner) * 0.5
+			por.size = Vector2(inner, inner)
+			b.add_child(por)
 		if not seen:
 			b.icon = Assets.tex("lock")
 			b.add_theme_constant_override("icon_max_width", int(cell * 0.42))

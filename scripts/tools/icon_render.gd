@@ -82,12 +82,10 @@ func _run() -> void:
 			var aabb := _aabb(m)
 			var h := aabb.size.y
 			var c := aabb.get_center()
-			cam.position = c + Vector3(0.55, 0.6, 1.3).normalized() * (maxf(h, aabb.size.x) * 2.15)
-			cam.look_at(c, Vector3.UP)
-			await _shot("tower_%s_%d" % [t, lv])
+			await _fit_portrait("tower_%s_%d" % [t, lv], c, maxf(h, aabb.size.x) * 2.15, true, Vector3(0.55, 0.6, 1.3))
 	# characters
 	var chars := {"footman": [1.7, "w_sword", "idle"], "ogre_king": [3.0, "", "roar"], "ranger": [1.85, "", "idle"], "sera": [1.8, "", "idle"], "sapper": [1.3, "", "run"], "ogre": [3.0, "", "roar"], "hero": [1.95, "w_sword", "idle"], "goblin": [1.25, "w_dagger", "run"], "shaman": [1.35, "", "run"],
-		"orc": [2.2, "w_axe", "run"], "warchief": [2.8, "w_axe", "run"], "troll": [4.2, "w_club", "roar"], "wolf": [1.5, "", ""], "gargoyle": [1.6, "", ""],
+		"orc": [2.2, "w_axe", "run"], "warchief": [2.8, "w_axe", "run"], "troll": [4.2, "w_club", "idle", 25.0], "wolf": [1.5, "", ""], "gargoyle": [1.6, "", ""],
 		"skeleton": [1.45, "w_dagger", "attack", 0.0, 0.15], "skeleton_knight": [2.1, "", "attack", 0.0, 0.4], "lich": [3.7, "", "run", 0.0, 0.3]}
 	for k in chars:
 		if not only.is_empty() and not only.has(k):
@@ -122,13 +120,68 @@ func _run() -> void:
 		var top := aabb.end.y
 		var c := Vector3(aabb.get_center().x, top - aabb.size.y * 0.3, aabb.get_center().z)
 		var dist := aabb.size.y * 1.25
-		if k in ["wolf", "gargoyle"]:
+		var whole: bool = k in ["wolf", "gargoyle"]
+		if whole:
 			c = aabb.get_center()
 			dist = maxf(aabb.size.x, aabb.size.z) * 1.6
-		cam.position = c + Vector3(0.35, 0.12, 1.0).normalized() * dist
-		cam.look_at(c, Vector3.UP)
-		await _shot("portrait_" + k)
+		await _fit_portrait("portrait_" + k, c, dist, whole)
 	get_tree().quit()
+
+## Frames a portrait from what actually rendered (skinned/animated meshes make the AABB a
+## poor guide): the head sits a little under the top edge, the figure is centred, nothing
+## is cut at the top or sides, and a bust that runs off the bottom fades out softly
+## instead of ending in a hard line.
+func _fit_portrait(name: String, c: Vector3, dist: float, whole: bool, view_dir := Vector3(0.35, 0.12, 1.0)) -> void:
+	const N := 256.0
+	const TOP := 16.0
+	const SIDE := 10.0
+	var dirv := view_dir.normalized()
+	var img: Image
+	for it in 10:
+		cam.position = c + dirv * dist
+		cam.look_at(c, Vector3.UP)
+		await RenderingServer.frame_post_draw
+		await RenderingServer.frame_post_draw
+		img = vp.get_texture().get_image()
+		var r := img.get_used_rect()
+		if r.size.x == 0:
+			break
+		var wpp := 2.0 * tan(deg_to_rad(cam.fov * 0.5)) * dist / N
+		var right := cam.global_transform.basis.x
+		var up := cam.global_transform.basis.y
+		var cut_side := r.position.x < SIDE * 0.5 or r.end.x > N - SIDE * 0.5
+		var cut_top := r.position.y < 2
+		var cut_bottom := whole and r.end.y > N - 3
+		var dx := (r.position.x + r.end.x) * 0.5 - N * 0.5
+		var dy := float(r.position.y) - TOP
+		if whole:
+			dy = (r.position.y + r.end.y) * 0.5 - N * 0.5
+		var fill := (N - 2.0 * TOP) / float(maxi(r.size.x, r.size.y))
+		var done := absf(dx) < 4.0 and absf(dy) < 4.0 and not cut_side and not cut_top and not cut_bottom
+		if whole and done and fill > 1.05:
+			# a whole object that came out small: move in until it fills the frame
+			dist /= minf(fill, 1.3)
+			continue
+		if done:
+			break
+		c += right * dx * wpp * 0.9
+		c -= up * dy * wpp * 0.9
+		if cut_side or cut_bottom or (cut_top and whole):
+			dist *= 1.14
+		elif cut_top:
+			c += up * 30.0 * wpp
+	var used := img.get_used_rect()
+	if not whole and used.end.y >= int(N) - 2:
+		# soft fade over the lowest fifth instead of a hard crop line
+		for y in range(int(N * 0.78), int(N)):
+			var f := 1.0 - smoothstep(N * 0.78, N - 1.0, float(y))
+			for x in int(N):
+				var px := img.get_pixel(x, y)
+				if px.a > 0.0:
+					px.a *= f
+					img.set_pixel(x, y, px)
+	img.save_png(ProjectSettings.globalize_path(OUT + name + ".png"))
+	print("ICON ", name, " rect=", img.get_used_rect())
 
 func _aabb(n: Node) -> AABB:
 	var first := true

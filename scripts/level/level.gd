@@ -1548,7 +1548,7 @@ func _show_enemy_card(type: String) -> void:
 	var p := UI.framed("parch", 4)
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
-	hb.add_child(UI.icon(Assets.tex("portrait_" + type), 80))
+	hb.add_child(UI.bust(Assets.tex("portrait_" + type), 84, 1.3))
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 0)
 	vb.add_child(UI.ink("새로운 적!", 16, Color(0.7, 0.16, 0.08), "ui_black"))

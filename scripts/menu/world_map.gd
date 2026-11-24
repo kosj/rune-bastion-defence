@@ -74,24 +74,74 @@ func _ready() -> void:
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, 0.35)
 
-## Cover-fit, but on very wide phones crop mostly the sea at the bottom so the snowy pass
-## (flag 3, near the top edge) stays on screen.
+## Cover-fit, except that every flag (with its pin above and name below) must stay on
+## screen: on squarer screens (tablets, 4:3) a plain cover would cut the flags at the
+## left and right edges, and on very wide phones the harbour flag at the bottom. The map
+## is then shrunk just enough, and the strips this leaves are filled with a darkened
+## mirror of the map's edge (see _layout).
+const FLAG_SPAN_X := Vector2(0.115 - 0.06, 0.925 + 0.055)
+const FLAG_SPAN_Y := Vector2(0.15 - 0.13, 0.835 + 0.075)
+
 func _map_rect() -> Rect2:
 	var vs := size
-	var s := maxf(vs.x / MAP_SIZE.x, vs.y / MAP_SIZE.y)
-	var off := (vs - MAP_SIZE * s)
-	off.x *= 0.5
-	off.y *= 0.15
-	return Rect2(off, MAP_SIZE * s)
+	var cover := maxf(vs.x / MAP_SIZE.x, vs.y / MAP_SIZE.y)
+	var contain := minf(vs.x / MAP_SIZE.x, vs.y / MAP_SIZE.y)
+	var fit_x := vs.x / (MAP_SIZE.x * (FLAG_SPAN_X.y - FLAG_SPAN_X.x))
+	var fit_y := vs.y / (MAP_SIZE.y * (FLAG_SPAN_Y.y - FLAG_SPAN_Y.x))
+	var s := maxf(minf(cover, minf(fit_x, fit_y)), contain)
+	var ms := MAP_SIZE * s
+	var off := Vector2.ZERO
+	for ax in 2:
+		var span: Vector2 = FLAG_SPAN_X if ax == 0 else FLAG_SPAN_Y
+		if ms[ax] > vs[ax]:
+			# larger than the screen on this axis: centre the flags, never uncover an edge
+			off[ax] = clampf(vs[ax] * 0.5 - (span.x + span.y) * 0.5 * ms[ax], vs[ax] - ms[ax], 0.0)
+		else:
+			off[ax] = (vs[ax] - ms[ax]) * 0.5
+	return Rect2(off, ms)
 
 func uv_to_screen(uv: Vector2) -> Vector2:
 	var r := _map_rect()
 	return r.position + uv * r.size
 
+var _bands: Array = []
+
 func _layout() -> void:
 	var r := _map_rect()
 	_map.position = r.position
 	_map.size = r.size
+	for b in _bands:
+		b.queue_free()
+	_bands.clear()
+	var s := r.size.x / MAP_SIZE.x
+	var gaps := [r.position.y, size.y - r.end.y, r.position.x, size.x - r.end.x]
+	for side in 4:
+		var g: float = gaps[side]
+		if g < 1.0:
+			continue
+		var at := AtlasTexture.new()
+		at.atlas = _map.texture
+		var band := TextureRect.new()
+		band.texture = at
+		band.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		band.stretch_mode = TextureRect.STRETCH_SCALE
+		band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		band.modulate = Color(0.45, 0.45, 0.52)
+		if side < 2:
+			var th := minf(g / s, MAP_SIZE.y * 0.5)
+			at.region = Rect2(0, 0 if side == 0 else MAP_SIZE.y - th, MAP_SIZE.x, th)
+			band.flip_v = true
+			band.position = Vector2(r.position.x, 0.0 if side == 0 else r.end.y)
+			band.size = Vector2(r.size.x, g)
+		else:
+			var tw := minf(g / s, MAP_SIZE.x * 0.5)
+			at.region = Rect2(0 if side == 2 else MAP_SIZE.x - tw, 0, tw, MAP_SIZE.y)
+			band.flip_h = true
+			band.position = Vector2(0.0 if side == 2 else r.end.x, r.position.y)
+			band.size = Vector2(g, r.size.y)
+		add_child(band)
+		move_child(band, _map.get_index())
+		_bands.append(band)
 	_rebuild_flags()
 
 func _process(delta: float) -> void:
@@ -334,6 +384,8 @@ func _open_card(i: int) -> void:
 	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	thumb_p.add_child(img)
+	# keep the 16:9 box: stretched to the info column's height it would crop the picture
+	thumb_p.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	row.add_child(thumb_p)
 	var info := VBoxContainer.new()
 	info.add_theme_constant_override("separation", 6)
@@ -361,7 +413,7 @@ func _open_card(i: int) -> void:
 	er.add_theme_constant_override("separation", 4)
 	er.add_child(UI.ink("등장 적 ", 16, UI.INK_SOFT, "ui_black"))
 	for tname in types:
-		var ic := UI.icon(Assets.tex("portrait_" + tname), 34)
+		var ic := UI.bust(Assets.tex("portrait_" + tname), 36, 1.55, Vector2(0.5, 0.34))
 		if not Game.seen_enemies.get(tname, false):
 			ic.modulate = Color(0.05, 0.05, 0.08, 0.85)
 		er.add_child(ic)
@@ -437,6 +489,8 @@ func _open_endless_card() -> void:
 	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	thumb_p.add_child(img)
+	# keep the 16:9 box: stretched to the info column's height it would crop the picture
+	thumb_p.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	row.add_child(thumb_p)
 	var info := VBoxContainer.new()
 	info.add_theme_constant_override("separation", 8)
