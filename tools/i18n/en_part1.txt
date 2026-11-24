@@ -1,0 +1,175 @@
+올바른 저장 코드가 아닙니다.	That is not a valid save code.
+코드가 손상되었습니다. 전체를 다시 복사해 주세요.	The code is damaged. Please copy the whole code again.
+저장 데이터를 읽을 수 없습니다.	The save data could not be read.
+궁수 탑	Archer Tower
+궁수	Archer
+저렴하고 빠른 단일 공격. 공중 적 공격 가능.	Cheap, fast single-target shots. Can hit flying enemies.
+레인저 길드	Ranger Guild
+화살 3발을 서로 다른 적에게 동시 발사 (군중·공중 대응)	Fires 3 arrows at different enemies at once (crowds & fliers)
+독 화살	Poison Arrows
+화살이 3초 동안 적을 중독시킵니다 (초당 9, 방어 무시)	Arrows poison enemies for 3 s (9/s, ignores armor)
+명사수 망루	Marksman Lookout
+초장거리 저격. 방어력 50% 관통, 30% 확률 3배 치명타	Extreme-range sniping. Ignores 50% armor, 30% chance of a 3x crit
+처형 사격	Execution Shot
+체력 25% 이하인 적을 즉시 처치합니다 (보스 제외)	Instantly slays enemies below 25% health (not bosses)
+병영	Barracks
+병사 3명이 길을 막는다. 포병과 함께 쓰면 강력.	3 soldiers block the road. Deadly next to artillery.
+성기사단	Paladin Order
+강철 성기사 3명. 높은 방어력과 자가 치유	3 steel paladins. Heavy armor and self-healing
+신성한 일격	Holy Strike
+병사의 공격에 50% 마법 피해가 더해집니다 (해골 기사 특효)	Soldier hits deal +50% magic damage (great vs. skeleton knights)
+창기병 경비대	Lancer Guard
+정예 창병 4명. 높은 공격력	4 elite lancers. High damage
+투창 세례	Javelin Volley
+병사가 3초마다 사거리 6 안의 적에게 투창을 던집니다 (공중 포함, 18-28)	Every 3 s each soldier throws a javelin at an enemy within 6 m (air too, 18-28)
+마법사 탑	Mage Tower
+마법	Mage
+방어력을 무시하는 강한 마법 피해. 중장갑 킬러.	Heavy magic damage that ignores armor. Bane of armored foes.
+비전 성소	Arcane Sanctum
+적 4명에게 튕기는 연쇄 번개	Chain lightning that jumps across 4 enemies
+차원 이동	Rift Shift
+6초마다 번개에 맞은 적 하나를 길 뒤쪽으로 8m 되돌립니다 (보스 제외)	Every 6 s sends one struck enemy 8 m back down the road (not bosses)
+서리 첨탑	Frost Spire
+주변 적을 50% 둔화시키는 냉기 폭발	Frost blasts that slow nearby enemies by 50%
+절대 영도	Absolute Zero
+냉기 폭발에 맞은 적이 20% 확률로 1.5초 동안 얼어붙습니다	Enemies hit by a frost blast have a 20% chance to freeze for 1.5 s
+포병 요새	Artillery Fort
+포병	Artillery
+느리지만 넓은 광역 폭발. 지상 전용.	Slow but wide explosions. Ground targets only.
+드워프 대포	Dwarven Bombard
+거대한 폭발과 불타는 화염 지대	Huge blasts that leave burning ground
+충격 포탄	Shock Shells
+폭발에 휘말린 지상 적을 0.8초 기절시킵니다 (보스 제외)	Stuns ground enemies caught in the blast for 0.8 s (not bosses)
+집속 박격포	Cluster Mortar
+착탄 후 소형 폭탄 4개가 추가 폭발	4 bomblets burst after impact
+네이팜 탄두	Napalm Warheads
+소형 폭탄이 불길을 남겨 적을 3초 동안 태웁니다 (초당 10)	Bomblets leave flames that burn enemies for 3 s (10/s)
+고블린 약탈자	Goblin Raider
+약하지만 떼로 몰려온다 → 포병	Weak but comes in swarms → artillery
+다이어 울프	Dire Wolf
+매우 빠름 → 병영으로 막고 서리로 둔화	Very fast → block with barracks, slow with frost
+고블린 주술사	Goblin Shaman
+주변 적 치유, 마법 저항 → 궁수·포병	Heals nearby enemies, resists magic → archers & artillery
+고블린 폭탄병	Goblin Sapper
+병사에게 막히면 자폭! → 원거리로 먼저 처치	Blows up when blocked by soldiers! → kill it at range first
+오크 돌격병	Orc Raider
+중장갑 (물리 50% 감소) → 마법	Heavy armor (-50% physical) → magic
+오크 족장	Orc Warchief
+전투 함성으로 주변 적 가속 → 최우선 처치	War cry speeds up nearby enemies → kill it first
+가고일	Gargoyle
+비행 - 병영·포병 무시 → 궁수	Flying - ignores barracks & artillery → archers
+바위 오우거	Rock Ogre
+거대한 체력, 내려찍기로 병사 기절	Huge health; ground slams stun soldiers
+트롤 군주 그롬	Grom the Troll Lord
+보스 - 체력 50%에서 격노하여 고블린 소환	Boss - enrages at 50% health and calls goblins
+해골 병사	Skeleton
+리치가 일으킨 해골 무리 → 포병·마법	Skeletons raised by the lich → artillery & magic
+해골 기사	Skeleton Knight
+중장갑, 쓰러져도 한 번 다시 일어남 → 마법(추가 피해)으로 두 번 처치	Heavy armor and rises once after falling → kill it twice with magic (bonus damage)
+리치 군주 모르가스	Morgath the Lich Lord
+최종 보스 - 해골을 끝없이 불러내고, 체력 50%에서 해골 기사 군단을 소환	Final boss - endlessly raises skeletons; at 50% health summons a skeleton-knight host
+엠버 기사 카엘	Kael, Ember Knight
+불꽃의 검사	Flame Swordsman
+불꽃 검무	Flame Dance
+근접 탱커. 적을 몸으로 막아 세우고, 주변을 불태우는 검무로 무리를 쓸어버립니다.	Melee tank. Holds enemies in place and sweeps crowds away with a blazing sword dance.
+별빛 마법사 세라	Sera, Starlight Mage
+별의 대마법사	Archmage of the Stars
+별빛 폭풍	Starstorm
+원거리 마법 딜러. 공중 적도 공격하고 방어력을 무시하는 마법탄을 쏩니다. 별빛 폭풍은 넓은 범위를 강타하고 둔화시킵니다.	Ranged magic damage. Her armor-piercing bolts hit fliers too; Starstorm pounds a wide area and slows it.
+강인함	Toughness
+최대 체력 +12% / 단계	Max health +12% per rank
+무기 숙련	Weapon Mastery
+공격력 +10% / 단계	Damage +10% per rank
+비전 집중	Arcane Focus
+스킬 피해 +15% · 범위 +5% / 단계	Skill damage +15% · area +5% per rank
+전투 감각	Battle Sense
+스킬 재사용 -10% · 부활 -1.5초 / 단계	Skill cooldown -10% · respawn -1.5 s per rank
+첫 승리	First Victory
+아무 지역이나 클리어	Clear any region
+철벽 수비	Iron Wall
+생명을 하나도 잃지 않고 클리어	Clear a region without losing a life
+학살자	Slayer
+적 500마리 처치	Defeat 500 enemies
+전설의 학살자	Legendary Slayer
+적 3,000마리 처치	Defeat 3,000 enemies
+건축가	Architect
+타워 60개 건설	Build 60 towers
+대가의 길	Path of Mastery
+타워 전문화 8회	Specialize towers 8 times
+트롤 사냥꾼	Troll Hunter
+트롤 왕 처치	Defeat the Troll King
+영웅의 길	Heroic Path
+영웅 난이도로 지역 클리어	Clear a region on Heroic
+별의 수호자	Star Keeper
+모든 지역 별 3개	3 stars in every region
+하늘의 분노	Wrath of the Sky
+유성 낙하 25회 사용	Cast Meteor Strike 25 times
+왕실 금고	Royal Treasury
+누적 골드 20,000 획득	Earn 20,000 gold in total
+별빛의 동료	Starlit Companion
+세라와 함께 지역 클리어	Clear a region with Sera
+끝없는 전쟁	Endless War
+무한 모드 15웨이브 도달	Reach wave 15 in Endless
+불멸의 성채	Undying Bastion
+무한 모드 30웨이브 도달	Reach wave 30 in Endless
+망자의 안식	Rest for the Dead
+리치 군주 모르가스 처치	Defeat Morgath the Lich Lord
+룬 장인	Rune Artisan
+타워 특수 능력 10회 습득	Learn 10 tower abilities
+유성 낙하	Meteor Strike
+지원군 소집	Call Reinforcements
+궁수 훈련	Archer Drills
+궁수 탑 공격력 +12%	Archer Tower damage +12%
+매의 눈	Hawk Eye
+궁수 탑 사거리 +10%	Archer Tower range +10%
+강철 갑옷	Steel Armor
+병사 체력 +20%	Soldier health +20%
+정예 훈련	Elite Training
+병사 공격력 +15%, 방어력 +10%	Soldier damage +15%, armor +10%
+비전 연구	Arcane Studies
+마법사 탑 공격력 +12%	Mage Tower damage +12%
+시간 왜곡	Time Warp
+마법사 탑 공격 속도 +10%	Mage Tower attack speed +10%
+고성능 화약	Fine Gunpowder
+포병 폭발 범위 +15%	Artillery blast radius +15%
+드워프 공학	Dwarven Engineering
+포병 공격력 +12%	Artillery damage +12%
+불타는 하늘	Burning Sky
+유성 피해 +30%, 쿨타임 -10초	Meteor damage +30%, cooldown -10 s
+왕국 민병대	Kingdom Militia
+지원군 3명, 체력 +30%	3 reinforcements, health +30%
+영웅의 가호	Hero's Blessing
+영웅 체력 +20%, 부활 -4초	Hero health +20%, respawn -4 s
+시작 골드 +60	Starting gold +60
+성벽 보강	Reinforced Walls
+생명 +5 (영웅 난이도 +2)	Lives +5 (+2 on Heroic)
+영웅의 수련	Hero Training
+영웅 경험치 획득 +30%	Hero experience +30%
+공병대	Salvage Corps
+타워 판매 환급 60% → 80%	Tower sell refund 60% → 80%
+룬 각인술	Rune Engraving
+타워 특수 능력 비용 -25%	Tower ability cost -25%
+그린베일 고개	Greenvale Pass
+왕국의 첫 관문	The kingdom's first gate
+고블린 무리가 평화로운 그린베일로 몰려옵니다.	Goblin hordes are pouring into peaceful Greenvale.
+쌍둥이 여울	Twin Fords
+두 갈래의 침공로	Two roads of invasion
+강을 건너 두 방향에서 적이 몰려옵니다. 하늘과 폭탄병을 조심하세요.	Enemies cross the river from two directions. Watch the skies and the sappers.
+서리바람 고개	Frostwind Pass
+얼어붙은 길	The frozen road
+눈보라 속 늑대 무리와 바위 오우거가 고개를 넘어옵니다.	Wolf packs and rock ogres come over the pass through the blizzard.
+달빛 숲	Moonwood
+밤의 습격	Night raid
+달빛 아래 두 갈래 숲길로 가고일과 폭탄병이 숨어듭니다.	Under the moon, gargoyles and sappers creep along two forest trails.
+트롤왕의 협곡	Troll King's Gorge
+트롤 군주의 진군	The troll lord marches
+황혼의 협곡. 트롤 군주 그롬이 직접 진군합니다.	A gorge at dusk. Grom the Troll Lord marches in person.
+검은 성채	The Black Citadel
+점령당한 트롤 요새	The fallen troll fortress
+트롤왕이 쓰러지자 망자의 군단이 그의 성채를 차지했습니다. 두 성문에서 해골 무리가 쏟아져 나옵니다.	With the Troll King fallen, an army of the dead has seized his citadel. Skeletons pour out of both gates.
+통곡의 폭포	Weeping Falls
+안개 낀 절벽길	The misty cliff road
+안개 자욱한 폭포 절벽을 따라 해골 기사단과 주술사가 몰려옵니다.	Skeleton knights and shamans march along the fog-shrouded cliffs of the falls.
+망자의 신전	Temple of the Dead
+리치 군주의 왕좌	Throne of the Lich Lord
+해안의 고대 신전에서 모든 망자의 근원, 리치 군주 모르가스가 깨어났습니다. 왕국의 운명을 건 최후의 결전!	In the ancient temple by the sea, Morgath the Lich Lord, source of all the dead, has awoken. The final battle for the kingdom!

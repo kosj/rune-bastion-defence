@@ -52,9 +52,15 @@ func _clear() -> void:
 
 func _run() -> void:
 	var view := OS.get_cmdline_user_args()
+	var only: Array = []
+	for a in view:
+		if a.begins_with("only="):
+			only = a.substr(5).split(",")
 	# towers
 	for t in ["archer", "barracks", "mage", "artillery"]:
 		for lv in [1, 2, 3]:
+			if not only.is_empty() and not only.has("towers"):
+				continue
 			await _clear()
 			var m := Node3D.new()
 			m.add_child(Assets.instance("%s_%d" % [t, lv]))
@@ -81,19 +87,36 @@ func _run() -> void:
 			await _shot("tower_%s_%d" % [t, lv])
 	# characters
 	var chars := {"sera": [1.8, "", "idle"], "sapper": [1.3, "", "run"], "ogre": [3.0, "", "roar"], "hero": [1.95, "w_sword", "idle"], "goblin": [1.25, "w_dagger", "run"], "shaman": [1.35, "", "run"],
-		"orc": [2.2, "w_axe", "run"], "warchief": [2.8, "w_axe", "run"], "troll": [4.2, "w_club", "roar"], "wolf": [1.5, "", ""], "gargoyle": [1.6, "", ""]}
+		"orc": [2.2, "w_axe", "run"], "warchief": [2.8, "w_axe", "run"], "troll": [4.2, "w_club", "roar"], "wolf": [1.5, "", ""], "gargoyle": [1.6, "", ""],
+		"skeleton": [1.45, "w_dagger", "attack", 0.0, 0.15], "skeleton_knight": [2.1, "", "attack", 0.0, 0.4], "lich": [3.7, "", "run", 0.0, 0.3]}
 	for k in chars:
+		if not only.is_empty() and not only.has(k):
+			continue
 		await _clear()
-		var model: String = {"shaman": "goblin", "warchief": "orc"}.get(k, k)
+		var model: String = {"shaman": "goblin", "warchief": "orc", "skeleton": "skeleton_knight"}.get(k, k)
 		var tint := Color.WHITE
 		if DB.ENEMIES.has(k):
 			tint = DB.ENEMIES[k].get("tint", Color.WHITE)
 		var cm := CharacterModel.new()
 		holder.add_child(cm)
 		cm.setup(model, chars[k][0], tint, chars[k][1])
+		var seek_t: float = chars[k][4] if chars[k].size() > 4 else 0.4
+		for a in view:
+			if a.begins_with("seek_" + k + "="):
+				seek_t = float(a.split("=")[1])
+			if a.begins_with("anim_" + k + "="):
+				chars[k][2] = a.split("=")[1]
+			if a.begins_with("yaw_" + k + "="):
+				cm.rotation_degrees.y = float(a.split("=")[1])
+		var yaw_set := false
+		for a in view:
+			if a.begins_with("yaw_" + k + "="):
+				yaw_set = true
+		if chars[k].size() > 3 and not yaw_set:
+			cm.rotation_degrees.y = chars[k][3]
 		if chars[k][2] != "":
 			cm.play(chars[k][2], 0.0001)
-			cm.anim.seek(0.4, true)
+			cm.anim.seek(seek_t, true)
 		await get_tree().process_frame
 		var aabb := _aabb(cm)
 		var top := aabb.end.y

@@ -28,9 +28,11 @@ func setup_hero(p: Vector3) -> void:
 	ranged = h.get("ranged", false)
 	shoot_range = float(h.get("range", 0.0))
 	setup_unit(h["model"], h["scale"], Color.WHITE, h["weapon"])
-	_base_hp = float(h["hp"]) * (1.2 if DB.up("hero") else 1.0)
-	_base_dmg = h["dmg"]
-	set_stats(_base_hp, h["dmg"].duplicate(), h["armor"], h["atk_rate"])
+	# star upgrade + persistent talents (rank points spent in the hero screen)
+	_base_hp = float(h["hp"]) * (1.2 if DB.up("hero") else 1.0) * DB.talent_mult(hid, "hp")
+	var dm := DB.talent_mult(hid, "dmg")
+	_base_dmg = [float(h["dmg"][0]) * dm, float(h["dmg"][1]) * dm]
+	set_stats(_base_hp, _base_dmg.duplicate(), h["armor"], h["atk_rate"])
 	hp = max_hp
 	move_speed = h["speed"]
 	regen = h["regen"]
@@ -53,6 +55,15 @@ func setup_hero(p: Vector3) -> void:
 	_sel_ring.position.y = 0.06
 	_sel_ring.visible = false
 	add_child(_sel_ring)
+
+func skill_cd_max() -> float:
+	return float(DB.hero_def()["skill_cd"]) * (2.0 - DB.talent_mult(hid, "cd"))
+
+func skill_radius() -> float:
+	return float(DB.hero_def()["skill_radius"]) * (1.0 + 0.05 * DB.talent(hid, "skill"))
+
+func skill_damage() -> float:
+	return float(DB.hero_def()["skill_dmg"]) * (1.0 + (level - 1) * 0.2) * DB.talent_mult(hid, "skill")
 
 func set_selected(v: bool) -> void:
 	_sel_ring.visible = v
@@ -108,7 +119,7 @@ func _process(delta: float) -> void:
 		else:
 			var n := 0
 			for e: Enemy in LevelMain.I.enemies:
-				if e.alive and not e.flying and e.global_position.distance_to(global_position) < DB.hero_def()["skill_radius"]:
+				if e.alive and not e.flying and e.global_position.distance_to(global_position) < skill_radius():
 					n += 1
 			if n >= 3 or (n >= 1 and target != null and target.boss):
 				cast_skill()
@@ -117,7 +128,7 @@ func _process(delta: float) -> void:
 
 ## Ranged hero: densest enemy group within reach -> [center, count].
 func _best_cluster() -> Array:
-	var r: float = DB.hero_def()["skill_radius"]
+	var r: float = skill_radius()
 	var best := Vector3.ZERO
 	var bn := 0
 	for e: Enemy in LevelMain.I.enemies:
@@ -182,7 +193,7 @@ func _engage(delta: float) -> void:
 func cast_skill() -> bool:
 	if not alive or skill_cd > 0.0:
 		return false
-	skill_cd = DB.hero_def()["skill_cd"]
+	skill_cd = skill_cd_max()
 	Audio.voice(hid + "_skill")
 	if ranged:
 		var c := _best_cluster()
@@ -194,7 +205,7 @@ func cast_skill() -> bool:
 			rotation.y = _yaw
 		model.play("skill", 1.4, 0.08, true)
 		_skill_t = 0.85
-		LevelMain.I.fx.rune_circle(_skill_at + Vector3(0, 0.08, 0), Color(0.5, 0.85, 1.0), DB.hero_def()["skill_radius"], 0.9)
+		LevelMain.I.fx.rune_circle(_skill_at + Vector3(0, 0.08, 0), Color(0.5, 0.85, 1.0), skill_radius(), 0.9)
 		LevelMain.I.fx.charge(aim_point() + Vector3(0, 0.6, 0), Color(0.6, 0.9, 1.0), 0.8)
 		Audio.play("frost", -2.0)
 		return true
@@ -207,8 +218,8 @@ func _skill_impact() -> void:
 	if ranged:
 		_star_storm()
 		return
-	var r: float = DB.hero_def()["skill_radius"]
-	var dmg_v: float = DB.hero_def()["skill_dmg"] * (1.0 + (level - 1) * 0.2)
+	var r: float = skill_radius()
+	var dmg_v: float = skill_damage()
 	LevelMain.I.fx.fire_ring(global_position, r)
 	LevelMain.I.cam_rig.shake(0.35)
 	for e: Enemy in LevelMain.I.enemies.duplicate():
@@ -220,8 +231,8 @@ func _skill_impact() -> void:
 ## Sera: a rain of starlight on the chosen spot — heavy magic damage and a slow.
 func _star_storm() -> void:
 	var h: Dictionary = DB.hero_def()
-	var r: float = h["skill_radius"]
-	var dmg_v: float = h["skill_dmg"] * (1.0 + (level - 1) * 0.2)
+	var r: float = skill_radius()
+	var dmg_v: float = skill_damage()
 	var fx := LevelMain.I.fx
 	for i in 7:
 		var off := Vector3(randf_range(-r, r) * 0.6, 0, randf_range(-r, r) * 0.6)
@@ -268,6 +279,6 @@ func die() -> void:
 		return
 	super.die()
 	Audio.voice(hid + "_death")
-	respawn_t = float(DB.hero_def()["respawn"]) - (4.0 if DB.up("hero") else 0.0)
+	respawn_t = float(DB.hero_def()["respawn"]) - (4.0 if DB.up("hero") else 0.0) - 1.5 * DB.talent(hid, "cd")
 	commanded = false
 	_sel_ring.visible = false

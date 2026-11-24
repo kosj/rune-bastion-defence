@@ -12,6 +12,7 @@ func _ready() -> void:
 	font = Assets.font("ui")
 
 func float_text(p: Vector3, txt: String, c: Color, s := 1.0) -> void:
+	txt = tr(txt)  # drawn with draw_string, so no automatic Control translation
 	texts.append({"pos": p, "text": txt, "color": c, "t": 0.0, "life": 1.1, "scale": s})
 
 func _process(delta: float) -> void:

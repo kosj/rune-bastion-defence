@@ -27,6 +27,9 @@ var _impact := 0.0
 var _idle_t := 0.0
 var _yaw := 0.0
 var _search_cd := 0.0
+var holy := 0.0       # paladin ability: extra magic damage share per hit
+var javelin := false  # lancer ability: ranged spear throws
+var _jav_cd := 1.0
 
 func setup_unit(model_name: String, scale: float, tint := Color.WHITE, weapon := "") -> void:
 	model = CharacterModel.new()
@@ -59,6 +62,11 @@ func _process(delta: float) -> void:
 		return
 	if target != null and (not is_instance_valid(target) or not target.alive):
 		target = null
+	if javelin:
+		_jav_cd -= delta
+		if _jav_cd <= 0.0:
+			_jav_cd = 0.4
+			_throw_javelin()
 	if heal_ps > 0.0 and hp < max_hp:
 		hp = minf(max_hp, hp + heal_ps * delta)
 	if target == null:
@@ -127,9 +135,30 @@ func _engage(delta: float) -> void:
 			model.play("idle")
 
 func _on_hit(e: Enemy) -> void:
-	e.damage(randf_range(dmg[0], dmg[1]), "physical")
+	var v := randf_range(dmg[0], dmg[1])
+	e.damage(v, "physical")
+	if holy > 0.0 and e.alive:
+		e.damage(v * holy, "magic", false)
+		LevelMain.I.fx.hit_spark(e.aim_point(), Color(1.0, 0.95, 0.55), 0.9)
 	LevelMain.I.fx.hit_spark(e.aim_point(), Color(1.0, 0.9, 0.6))
 	Audio.play("sword", -8.0, 0.15, 3)
+
+## Lancer ability: hurl a spear at the nearest enemy in reach (air included) every 3 s.
+func _throw_javelin() -> void:
+	var best: Enemy = null
+	var bd := 6.0
+	for e: Enemy in LevelMain.I.enemies:
+		if not e.alive or e == target:
+			continue
+		var dd := e.global_position.distance_to(global_position)
+		if dd < bd:
+			bd = dd
+			best = e
+	if best == null:
+		return
+	_jav_cd = 3.0
+	Projectile.arrow(aim_point() + Vector3(0, 0.4, 0), best, randf_range(18.0, 28.0), false, 0.0, "javelin")
+	Audio.play("bow", -9.0, 0.15, 2)
 
 func _release() -> void:
 	if target and is_instance_valid(target) and target.blocker == self:

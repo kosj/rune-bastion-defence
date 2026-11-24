@@ -3,9 +3,8 @@ extends Node
 
 const SAVE_PATH := "user://rune_bastion_save.cfg"
 
-const LEVEL_COUNT := 5
-var stars: Array = [0, 0, 0, 0, 0]
-var heroic: Array = [false, false, false, false, false]
+var stars: Array = []
+var heroic: Array = []
 var upgrades := {}
 var difficulty := 0  # 0 = normal, 1 = heroic (veteran)
 var hero_id := "kael"
@@ -23,6 +22,12 @@ var sfx_volume := 0.9
 var high_quality := true
 var seen_tutorial := false
 var is_mobile := false
+var hero_xp := {}        # lifetime battle experience per hero -> talent ranks
+var hero_talents := {}   # hero id -> {talent id: level}
+var ui_scale := 1.0
+var screen_shake := true
+var vibration := true
+var language := ""       # "" = follow the browser / OS language
 
 var _fade_layer: CanvasLayer
 var _fade_rect: ColorRect
@@ -32,7 +37,11 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	is_mobile = OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
 	high_quality = not is_mobile
+	reset_progress()
 	_load()
+	Lang.apply(language)
+	if OS.has_feature("web"):
+		print("[RB] gpu texture formats: etc2=%s astc=%s s3tc=%s" % [OS.has_feature("etc2"), OS.has_feature("astc"), OS.has_feature("s3tc")])
 	_fade_layer = CanvasLayer.new()
 	_fade_layer.layer = 100
 	add_child(_fade_layer)
@@ -54,6 +63,8 @@ func _fit_ui() -> void:
 	var small := minf(css.x, css.y) < 560.0
 	compact = small
 	win.content_scale_size = Vector2i(960, 540) if small else Vector2i(1280, 720)
+	# phones have little headroom below the 540-line layouts, so their range is narrower
+	win.content_scale_factor = clampf(ui_scale, 0.9, 1.1) if small else ui_scale
 
 var compact := false
 var autopause := true  # off in automated test runs
@@ -62,6 +73,41 @@ func apply_quality() -> void:
 	var vp := get_tree().root
 	vp.msaa_3d = Viewport.MSAA_4X if high_quality else Viewport.MSAA_DISABLED
 	vp.scaling_3d_scale = 1.0 if high_quality else 0.8
+	# automatic mesh LOD: on the low setting accept ~4 px of simplification error (phones, small screens)
+	vp.mesh_lod_threshold = 1.0 if high_quality else 4.0
+
+func set_ui_scale(v: float) -> void:
+	ui_scale = v
+	_fit_ui()
+	save()
+
+## Short haptic pulse (Android browsers / native mobile; silently ignored elsewhere).
+func vibrate(ms: int) -> void:
+	if vibration and is_mobile:
+		Input.vibrate_handheld(ms)
+
+## Fresh (empty) progress sized to the current region list.
+func reset_progress() -> void:
+	stars = []
+	heroic = []
+	for i in DB.LEVELS.size():
+		stars.append(0)
+		heroic.append(false)
+	upgrades = {}
+	seen_tutorial = false
+	seen_enemies = {}
+	stats = {}
+	achievements = {}
+	endless_best = {}
+	hero_id = "kael"
+	hero_xp = {}
+	hero_talents = {}
+
+## Lifetime hero experience (talent ranks). Returns true when the hero reached a new rank.
+func add_hero_xp(id: String, v: float) -> bool:
+	var before := DB.hero_rank(id)
+	hero_xp[id] = float(hero_xp.get(id, 0.0)) + v
+	return DB.hero_rank(id) > before
 
 func unlocked(level_idx: int) -> bool:
 	return level_idx == 0 or stars[level_idx - 1] > 0
@@ -149,22 +195,31 @@ func save() -> void:
 	cf.set_value("progress", "stats", stats)
 	cf.set_value("progress", "achievements", achievements)
 	cf.set_value("progress", "endless_best", endless_best)
+	cf.set_value("progress", "hero_xp", hero_xp)
+	cf.set_value("progress", "hero_talents", hero_talents)
 	cf.set_value("settings", "music", music_volume)
 	cf.set_value("settings", "sfx", sfx_volume)
 	cf.set_value("settings", "hq", high_quality)
+	cf.set_value("settings", "ui_scale", ui_scale)
+	cf.set_value("settings", "shake", screen_shake)
+	cf.set_value("settings", "vibration", vibration)
+	cf.set_value("settings", "language", language)
 	cf.save(SAVE_PATH)
 
 func _load() -> void:
 	var cf := ConfigFile.new()
 	if cf.load(SAVE_PATH) != OK:
 		return
+	_apply_config(cf)
+
+func _apply_config(cf: ConfigFile) -> void:
 	var s = cf.get_value("progress", "stars", stars)
 	if s is Array:
-		for i in mini(s.size(), LEVEL_COUNT):
-			stars[i] = int(s[i])
+		for i in mini(s.size(), stars.size()):
+			stars[i] = clampi(int(s[i]), 0, 3)
 	var h = cf.get_value("progress", "heroic", heroic)
 	if h is Array:
-		for i in mini(h.size(), LEVEL_COUNT):
+		for i in mini(h.size(), heroic.size()):
 			heroic[i] = bool(h[i])
 	var u = cf.get_value("progress", "upgrades", {})
 	if u is Dictionary:
@@ -173,7 +228,7 @@ func _load() -> void:
 	hero_id = str(cf.get_value("progress", "hero", "kael"))
 	if not DB.HEROES.has(hero_id):
 		hero_id = "kael"
-	for key in ["seen", "stats", "achievements", "endless_best"]:
+	for key in ["seen", "stats", "achievements", "endless_best", "hero_xp", "hero_talents"]:
 		var v = cf.get_value("progress", key, {})
 		if v is Dictionary:
 			match key:
@@ -181,6 +236,45 @@ func _load() -> void:
 				"stats": stats = v
 				"achievements": achievements = v
 				"endless_best": endless_best = v
-	music_volume = cf.get_value("settings", "music", music_volume)
-	sfx_volume = cf.get_value("settings", "sfx", sfx_volume)
-	high_quality = cf.get_value("settings", "hq", high_quality)
+				"hero_xp": hero_xp = v
+				"hero_talents": hero_talents = v
+	music_volume = float(cf.get_value("settings", "music", music_volume))
+	sfx_volume = float(cf.get_value("settings", "sfx", sfx_volume))
+	high_quality = bool(cf.get_value("settings", "hq", high_quality))
+	ui_scale = clampf(float(cf.get_value("settings", "ui_scale", ui_scale)), 0.8, 1.25)
+	screen_shake = bool(cf.get_value("settings", "shake", screen_shake))
+	vibration = bool(cf.get_value("settings", "vibration", vibration))
+	language = str(cf.get_value("settings", "language", language))
+
+# ---------------------------------------------------------------- save transfer codes
+
+const CODE_TAG := "RB1"
+
+## Whole save as a copy-pasteable text code (moves progress between browsers / devices).
+func export_code() -> String:
+	save()
+	var cf := ConfigFile.new()
+	cf.load(SAVE_PATH)
+	var body := Marshalls.utf8_to_base64(cf.encode_to_text())
+	return "%s-%s-%s" % [CODE_TAG, body.md5_text().substr(0, 6), body]
+
+## Validates and applies a save code. Returns "" on success or an error message.
+func import_code(code: String) -> String:
+	var c := code.strip_edges().replace(" ", "").replace("\n", "").replace("\r", "")
+	var parts := c.split("-", true, 2)
+	if parts.size() != 3 or parts[0] != CODE_TAG:
+		return "올바른 저장 코드가 아닙니다."
+	if parts[2].md5_text().substr(0, 6) != parts[1]:
+		return "코드가 손상되었습니다. 전체를 다시 복사해 주세요."
+	var cf := ConfigFile.new()
+	if cf.parse(Marshalls.base64_to_utf8(parts[2])) != OK or not cf.has_section("progress"):
+		return "저장 데이터를 읽을 수 없습니다."
+	reset_progress()
+	_apply_config(cf)
+	if not DB.HEROES.has(hero_id):
+		hero_id = "kael"
+	save()
+	Lang.apply(language)
+	_fit_ui()
+	apply_quality()
+	return ""

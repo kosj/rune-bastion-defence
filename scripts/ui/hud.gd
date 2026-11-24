@@ -369,7 +369,7 @@ func set_boss(name_txt: String, frac: float) -> void:
 	if not boss_panel.visible:
 		boss_panel.visible = true
 		UI.pop_in(boss_panel)
-	boss_name.text = "  " + name_txt
+	boss_name.text = "  " + tr(name_txt)
 	boss_bar.value = lerpf(boss_bar.value, frac, 0.25)
 
 func _build_vignette() -> void:
@@ -479,7 +479,7 @@ func set_lives(l: int) -> void:
 		tw.tween_property(lives_l, "scale", Vector2.ONE, 0.3)
 
 func set_wave(cur: int, total: int) -> void:
-	wave_l.text = ("웨이브 %d/%d" % [cur, total]) if total > 0 else ("웨이브 %d/∞" % cur)
+	wave_l.text = (tr("웨이브 %d/%d") % [cur, total]) if total > 0 else (tr("웨이브 %d/∞") % cur)
 
 var _toasts := 0
 

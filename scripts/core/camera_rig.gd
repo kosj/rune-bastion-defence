@@ -38,6 +38,8 @@ func set_bounds(r: Rect2) -> void:
 	bounds = r
 
 func shake(amount: float) -> void:
+	if not Game.screen_shake:
+		return
 	_shake = maxf(_shake, amount)
 
 func _unhandled_input(event: InputEvent) -> void:

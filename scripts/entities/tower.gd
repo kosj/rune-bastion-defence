@@ -5,6 +5,8 @@ extends Node3D
 var type := ""
 var level := 1
 var mastery := ""
+var ability := ""  # special ability bought after the mastery (one per mastery)
+var _tele_cd := 0.0
 var stats: Dictionary
 var invested := 0
 var plot: Vector2
@@ -38,7 +40,7 @@ func range_r() -> float:
 	return stats["range"]
 
 func sell_value() -> int:
-	return int(invested * 0.6)
+	return int(invested * (0.8 if DB.up("salvage") else 0.6))
 
 func next_cost() -> int:
 	if level < 3:
@@ -59,6 +61,16 @@ func apply_mastery(id: String) -> void:
 	invested += md["cost"]
 	stats = DB.tower_stats(type, 3, id)
 	level = 4
+	_build_model(true)
+	if type == "barracks":
+		_refresh_soldiers()
+
+func buy_ability() -> void:
+	var ad := DB.ability_def(type, mastery)
+	if ad.is_empty():
+		return
+	ability = ad["id"]
+	invested += DB.ability_cost(type, mastery)
 	_build_model(true)
 	if type == "barracks":
 		_refresh_soldiers()
@@ -269,11 +281,29 @@ func _add_mastery_visual(h: float) -> void:
 	crest.position.y = h + 0.9
 	crest.name = "Crest"
 	model.add_child(crest)
+	if ability != "":
+		var g := MeshInstance3D.new()
+		var gm := SphereMesh.new()
+		gm.radial_segments = 4
+		gm.rings = 2
+		gm.radius = 0.16
+		gm.height = 0.42
+		g.mesh = gm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.6, 0.95, 1.0)
+		mat.emission_enabled = true
+		mat.emission = Color(0.35, 0.9, 1.0)
+		mat.emission_energy_multiplier = 3.0
+		g.material_override = mat
+		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		g.position = Vector3(0.0, 0.62, 0.0)
+		crest.add_child(g)
 
 func _process(delta: float) -> void:
 	if delta <= 0.0:
 		return
 	_t += delta
+	_tele_cd -= delta
 	if crystal:
 		if not crystal.has_meta("y0"):
 			crystal.set_meta("y0", crystal.position.y)
@@ -390,7 +420,7 @@ func _fire(tgt: Enemy) -> void:
 						dmgv *= 3.0
 					var u := units[k % units.size()] as Node3D
 					k += 1
-					Projectile.arrow(u.global_position + Vector3(0, 0.95, 0), t, dmgv, crit)
+					Projectile.arrow(u.global_position + Vector3(0, 0.95, 0), t, dmgv, crit, float(stats.get("pierce", 0.0)), ability)
 				Audio.play("bow", -6.0, 0.12, 2))
 		"mage":
 			_aim_units(tgt.global_position, 0.36, 1.3)
@@ -411,7 +441,7 @@ func _fire(tgt: Enemy) -> void:
 				if mastery == "arcane":
 					_chain_lightning(t2)
 					return
-				Projectile.bolt(_muzzle(), t2, _roll(), c, stats.get("slow", 0.0), stats.get("splash", 0.0))
+				Projectile.bolt(_muzzle(), t2, _roll(), c, stats.get("slow", 0.0), stats.get("splash", 0.0), ability)
 				fx.magic_burst(_muzzle(), c, 0.55)
 				Audio.play("magic", -6.0, 0.1))
 		"artillery":
@@ -420,7 +450,7 @@ func _fire(tgt: Enemy) -> void:
 			var dest := tgt.global_position + lead
 			dest.y = LevelMain.I.terrain.walk_height(dest.x, dest.z)
 			var mz := _muzzle()
-			Projectile.bomb(mz, dest, _roll(), stats["splash"], stats.get("burn", 0.0), stats.get("cluster", 0))
+			Projectile.bomb(mz, dest, _roll(), stats["splash"], stats.get("burn", 0.0), stats.get("cluster", 0), false, ability)
 			var dir := (dest - mz)
 			dir.y = 0.0
 			fx.muzzle_flash(mz, (dir.normalized() + Vector3.UP * 1.2).normalized())
@@ -435,7 +465,12 @@ func _chain_lightning(first: Enemy) -> void:
 	var dmgv := _roll()
 	var n: int = stats.get("chain", 4)
 	Audio.play("zap", -3.0, 0.1)
+	if ability == "teleport" and _tele_cd <= 0.0 and not first.boss and first.dist > 3.0:
+		_tele_cd = 6.0
+		_teleport(first)
 	for i in n:
+		if not is_instance_valid(cur) or not cur.alive:
+			break
 		LevelMain.I.fx.lightning(from, cur.aim_point(), Color(0.8, 0.6, 1.0))
 		cur.damage(dmgv, "magic")
 		LevelMain.I.fx.magic_burst(cur.aim_point(), Color(0.8, 0.6, 1.0), 0.5)
@@ -453,6 +488,22 @@ func _chain_lightning(first: Enemy) -> void:
 			break
 		hit.append(nxt)
 		cur = nxt
+
+## Arcane ability: fold space and drop the enemy 8 m back down its path.
+func _teleport(e: Enemy) -> void:
+	var fx := LevelMain.I.fx
+	fx.magic_burst(e.aim_point(), Color(0.8, 0.5, 1.0), 1.0)
+	fx.rune_circle(e.global_position + Vector3(0, 0.1, 0), Color(0.8, 0.5, 1.0), 1.3, 0.6)
+	if e.blocker and is_instance_valid(e.blocker):
+		e.blocker.target_lost(e)
+	e.blocker = null
+	e.engaged = false
+	e.dist = maxf(e.dist - 8.0, 0.5)
+	e._update_transform(0.0)
+	e._prev = e.global_position
+	fx.magic_burst(e.aim_point(), Color(0.8, 0.5, 1.0), 1.0)
+	LevelMain.I.overlay.float_text(e.aim_point() + Vector3(0, 0.8, 0), "차원 이동!", Color(0.85, 0.6, 1.0), 1.0)
+	Audio.play("zap", -6.0, 0.1)
 
 # ---------------------------------------------------------------- barracks
 
@@ -506,6 +557,8 @@ func _spawn_one(i: int, n: int) -> void:
 	s.set_stats(stats["soldier_hp"], stats["soldier_dmg"], stats["soldier_armor"], 1.0)
 	s.hp = s.max_hp
 	s.heal_ps = stats.get("heal", 0.0)
+	s.holy = 0.5 if ability == "holy" else 0.0
+	s.javelin = ability == "javelin"
 	s.rally = rally
 	s.slot = _slot(i, n)
 	s.engage_radius = 3.0
@@ -533,6 +586,8 @@ func _refresh_soldiers() -> void:
 	for s in soldiers:
 		(s as Soldier).set_stats(stats["soldier_hp"], stats["soldier_dmg"], stats["soldier_armor"], 1.0)
 		(s as Soldier).heal_ps = stats.get("heal", 0.0)
+		(s as Soldier).holy = 0.5 if ability == "holy" else 0.0
+		(s as Soldier).javelin = ability == "javelin"
 	while soldiers.size() < n:
 		_spawn_one(soldiers.size(), n)
 	for i in soldiers.size():

@@ -17,10 +17,22 @@ func _ready() -> void:
 		if kv.size() == 2:
 			args[kv[0]] = kv[1]
 	var mode: String = args.get("mode", "auto")
+	if args.has("lang"):
+		Game.language = args["lang"]
+		Lang.apply(Game.language)
+	if args.has("ui_scale"):
+		Game.ui_scale = float(args["ui_scale"])
+		Game._fit_ui()
+	if args.get("selftest", "0") == "1":
+		_selftest()
+		return
 	if mode == "menu":
 		if args.get("progress", "0") == "1":
 			# fake a mid-game save so locked content shows up unlocked
-			Game.stars = [3, 3, 2, 1, 0]
+			Game.stars = [3, 3, 2, 1, 0, 0, 0, 0]
+			if args.get("progress_all", "0") == "1":
+				Game.stars = [3, 3, 3, 2, 3, 2, 1, 0]
+				Game.hero_xp = {"kael": 3000.0, "sera": 900.0}
 			Game.seen_enemies = {"goblin": true, "wolf": true, "shaman": true, "orc": true, "sapper": true, "gargoyle": true}
 			Game.stats = {"kills": 812, "wins": 4, "towers": 41, "masteries": 5, "meteors": 12, "gold": 9000, "endless_wave": 0}
 			Game._check_achievements()
@@ -57,6 +69,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	t += delta / maxf(Engine.time_scale, 0.01)
 	var mode: String = args.get("mode", "auto")
+	if args.has("lodprobe") and t >= float(args["lodprobe"]) and not has_meta("lodprobe") and LevelMain.I:
+		set_meta("lodprobe", true)
+		_lod_probe()
 	if args.has("radial_at") and t >= float(args["radial_at"]) and not has_meta("radial") and LevelMain.I:
 		set_meta("radial", true)
 		var L := LevelMain.I
@@ -367,6 +382,7 @@ func _smart_tick(delta: float) -> void:
 				if tw.next_cost() < up_c:
 					up_c = tw.next_cost()
 					up_i = i
+		var buy_ability := false
 		if all_l3:
 			for i in L.towers.keys():
 				var tw: Tower = L.towers[i]
@@ -375,6 +391,15 @@ func _smart_tick(delta: float) -> void:
 					if mc < up_c:
 						up_c = mc
 						up_i = i
+			if up_i < 0:
+				for i in L.towers.keys():
+					var tw: Tower = L.towers[i]
+					if tw.mastery != "" and tw.ability == "":
+						var ac := DB.ability_cost(tw.type, tw.mastery)
+						if ac < up_c:
+							up_c = ac
+							up_i = i
+							buy_ability = true
 		var leaking := L.lives < _last_lives
 		_last_lives = L.lives
 		var can_build := L.towers.size() < limit and L.gold >= cost
@@ -384,7 +409,10 @@ func _smart_tick(delta: float) -> void:
 		elif up_i >= 0 and L.gold >= up_c:
 			var tw2: Tower = L.towers[up_i]
 			L._select_tower(up_i)
-			L._on_radial_chosen("upgrade" if tw2.level < 3 else "mastery_" + BEST_MASTERY[tw2.type])
+			if buy_ability:
+				L._on_radial_chosen("ability")
+			else:
+				L._on_radial_chosen("upgrade" if tw2.level < 3 else "mastery_" + BEST_MASTERY[tw2.type])
 		elif can_build and (up_i < 0 or L.gold >= cost + up_c or (L.towers.size() < 4 + L.paths.size() * 2 and up_c > cost)):
 			_ai_build(L, want)
 		L._deselect()
@@ -448,6 +476,85 @@ func _build_all() -> void:
 			var ms: Array = tw.data()["masteries"]
 			tw.apply_mastery(ms[i % 2]["id"])
 	L.hud.set_gold(L.gold)
+
+## Save-code round trip, corrupted codes, talent math (headless).
+func _selftest() -> void:
+	var ok := true
+	var keep_stars := Game.stars.duplicate()
+	Game.stars = [3, 2, 1, 0, 0, 0, 0, 0]
+	Game.hero_xp = {"kael": 1300.0}
+	Game.hero_talents = {"kael": {"hp": 2}}
+	Game.upgrades = {"gold": true}
+	var code := Game.export_code()
+	Game.reset_progress()
+	var err := Game.import_code(code)
+	ok = ok and err == "" and Game.stars[0] == 3 and Game.stars[2] == 1 and Game.upgrades.get("gold", false)
+	ok = ok and is_equal_approx(float(Game.hero_xp.get("kael", 0)), 1300.0) and DB.talent("kael", "hp") == 2
+	print("SELFTEST roundtrip ", err == "", " rank=", DB.hero_rank("kael"), " points=", DB.talent_points("kael"), " hp_mult=", DB.talent_mult("kael", "hp"))
+	var bad1 := Game.import_code("hello")
+	var bad2 := Game.import_code(code.substr(0, code.length() - 8) + "AAAAAAAA")
+	ok = ok and bad1 != "" and bad2 != ""
+	print("SELFTEST bad codes: [", bad1, "] [", bad2, "]")
+	# old 5-region saves load into the 8-region list
+	var cf := ConfigFile.new()
+	cf.set_value("progress", "stars", [3, 3, 3, 3, 3])
+	Game.reset_progress()
+	Game._apply_config(cf)
+	ok = ok and Game.stars.size() == DB.LEVELS.size() and Game.stars[4] == 3 and Game.stars[5] == 0
+	print("SELFTEST old save stars=", Game.stars, " unlocked6=", Game.unlocked(5), " unlocked7=", Game.unlocked(6))
+	print("SELFTEST ", "PASS" if ok else "FAIL")
+	Game.reset_progress()
+	Game.stars = keep_stars
+	Game.save()
+	get_tree().quit()
+
+## Prints drawn primitives at several mesh LOD thresholds and the cost of each group of 3D nodes.
+func _lod_probe() -> void:
+	var vp := get_viewport()
+	get_tree().paused = true
+	print("FEATURES etc2=%s astc=%s s3tc=%s bptc=%s" % [OS.has_feature("etc2"), OS.has_feature("astc"), OS.has_feature("s3tc"), OS.has_feature("bptc")])
+	for th in [0.0, 1.0, 4.0, 32.0]:
+		vp.mesh_lod_threshold = th
+		for k in 4:
+			await RenderingServer.frame_post_draw
+		print("LOD threshold=%.1f primitives=%d draws=%d" % [th, Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)])
+	vp.mesh_lod_threshold = 1.0
+	for k in 4:
+		await RenderingServer.frame_post_draw
+	var base := Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+	var groups := {}
+	for n in LevelMain.I.find_children("*", "GeometryInstance3D", true, false):
+		if not (n as GeometryInstance3D).visible:
+			continue
+		var top: Node = n
+		while top.get_parent() != LevelMain.I and top.get_parent() != null:
+			top = top.get_parent()
+		var key := String(top.name).rstrip("0123456789_") + "/" + n.get_class()
+		if n is MultiMeshInstance3D and (n as MultiMeshInstance3D).multimesh and (n as MultiMeshInstance3D).multimesh.mesh:
+			key += "(" + (n as MultiMeshInstance3D).multimesh.mesh.resource_path.get_file().get_basename() + ")"
+		if not groups.has(key):
+			groups[key] = []
+		groups[key].append(n)
+	var costs := {}
+	for key in groups:
+		for n in groups[key]:
+			if is_instance_valid(n):
+				(n as GeometryInstance3D).visible = false
+		for k in 2:
+			await RenderingServer.frame_post_draw
+		costs[key] = base - Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+		for n in groups[key]:
+			if is_instance_valid(n):
+				(n as GeometryInstance3D).visible = true
+	var ks := costs.keys()
+	ks.sort_custom(func(a, b): return costs[a] > costs[b])
+	for k in ks.slice(0, 30):
+		print("COST %8d n=%d %s" % [costs[k], groups[k].size(), k])
+	for l in LevelMain.I.find_children("*", "DirectionalLight3D", true, false):
+		(l as Light3D).shadow_enabled = false
+	for k in 3:
+		await RenderingServer.frame_post_draw
+	print("NO-SHADOW primitives=%d (base %d)" % [Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), base])
 
 func _shot() -> void:
 	var dir: String = args.get("shots", "/tmp/shots")

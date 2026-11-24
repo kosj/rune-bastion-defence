@@ -5,14 +5,19 @@ extends Control
 
 const MAP_SIZE := Vector2(1536, 864)
 # flag positions in map UV (picked on the painted map: meadow road, river bridge, snow gate,
-# moon-forest shrine, troll canyon), plus the ruined portal on the east coast for endless mode
-const NODES := [Vector2(0.30, 0.625), Vector2(0.335, 0.435), Vector2(0.462, 0.17), Vector2(0.645, 0.45), Vector2(0.865, 0.30)]
-const ENDLESS := Vector2(0.805, 0.735)
+# moon-forest shrine, troll canyon, the black fortress, the east-coast falls, the sea temple ruins),
+# plus the old hill-top colonnade in the north-west for endless mode
+const NODES := [Vector2(0.30, 0.625), Vector2(0.335, 0.435), Vector2(0.462, 0.17), Vector2(0.645, 0.45), Vector2(0.872, 0.315),
+	Vector2(0.785, 0.16), Vector2(0.925, 0.555), Vector2(0.805, 0.735)]
+const ENDLESS := Vector2(0.115, 0.15)
 const ROADS := [
 	[Vector2(0.30, 0.625), Vector2(0.293, 0.53), Vector2(0.335, 0.435)],
 	[Vector2(0.335, 0.435), Vector2(0.40, 0.405), Vector2(0.47, 0.355), Vector2(0.50, 0.29), Vector2(0.48, 0.22), Vector2(0.462, 0.17)],
 	[Vector2(0.462, 0.17), Vector2(0.515, 0.25), Vector2(0.55, 0.335), Vector2(0.60, 0.405), Vector2(0.645, 0.45)],
-	[Vector2(0.645, 0.45), Vector2(0.70, 0.515), Vector2(0.775, 0.54), Vector2(0.83, 0.465), Vector2(0.858, 0.385), Vector2(0.865, 0.30)],
+	[Vector2(0.645, 0.45), Vector2(0.70, 0.515), Vector2(0.775, 0.54), Vector2(0.83, 0.465), Vector2(0.862, 0.39), Vector2(0.872, 0.315)],
+	[Vector2(0.872, 0.315), Vector2(0.85, 0.25), Vector2(0.815, 0.2), Vector2(0.785, 0.16)],
+	[Vector2(0.785, 0.16), Vector2(0.84, 0.115), Vector2(0.915, 0.15), Vector2(0.952, 0.26), Vector2(0.955, 0.4), Vector2(0.925, 0.555)],
+	[Vector2(0.925, 0.555), Vector2(0.90, 0.63), Vector2(0.85, 0.69), Vector2(0.805, 0.735)],
 ]
 
 var menu: Node  # main menu (opens the hero / bestiary / upgrade overlays)
@@ -310,7 +315,7 @@ func _card_shell(title: String, ribbon_kind := "red") -> VBoxContainer:
 func _open_card(i: int) -> void:
 	var d: Dictionary = DB.LEVELS[i]
 	var compact := size.y < 600.0
-	var vb := _card_shell("%d. %s" % [i + 1, d["name"]])
+	var vb := _card_shell("%d. %s" % [i + 1, tr(d["name"])])
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
 	vb.add_child(row)
@@ -355,9 +360,9 @@ func _open_card(i: int) -> void:
 	vb.add_child(er)
 	var meta := HBoxContainer.new()
 	meta.add_theme_constant_override("separation", 18)
-	meta.add_child(UI.stat("skull", "웨이브 %d" % d["waves"].size(), 17))
-	meta.add_child(UI.stat("heart", "생명 %d" % (10 if Game.difficulty == 1 else int(d["lives"])), 17))
-	meta.add_child(UI.stat("coin", "시작 골드 %d" % int(d["gold"]), 17))
+	meta.add_child(UI.stat("skull", tr("웨이브 %d") % d["waves"].size(), 17))
+	meta.add_child(UI.stat("heart", tr("생명 %d") % (10 if Game.difficulty == 1 else int(d["lives"])), 17))
+	meta.add_child(UI.stat("coin", tr("시작 골드 %d") % int(d["gold"]), 17))
 	vb.add_child(meta)
 	vb.add_child(UI.divider(520))
 	# difficulty + start
@@ -367,7 +372,7 @@ func _open_card(i: int) -> void:
 	vb.add_child(bottom)
 	for dv in [[0, "일반"], [1, "영웅"]]:
 		var sel: bool = Game.difficulty == dv[0]
-		var b := UI.button(dv[1], 20, false, Vector2(96, 54), "gold" if sel else "gray")
+		var b := UI.button(tr(dv[1], "difficulty"), 20, false, Vector2(96, 54), "gold" if sel else "gray")
 		var val: int = dv[0]
 		b.pressed.connect(func():
 			Game.difficulty = val
@@ -429,7 +434,7 @@ func _open_endless_card() -> void:
 	mr.add_child(nm)
 	mr.add_child(nxt)
 	info.add_child(mr)
-	info.add_child(UI.stat("crown", "최고 기록: 웨이브 %d" % int(Game.endless_best.get(str(mi), 0)), 18))
+	info.add_child(UI.stat("crown", tr("최고 기록: 웨이브 %d") % int(Game.endless_best.get(str(mi), 0)), 18))
 	vb.add_child(UI.divider(520))
 	var cc := CenterContainer.new()
 	var go := UI.button("출전", 30, true, Vector2(240, 62), "purple")

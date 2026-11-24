@@ -17,6 +17,8 @@ var slow := 0.0
 var burn := 0.0
 var cluster := 0
 var crit := false
+var pierce := 0.0
+var ability := ""  # tower ability riding on this shot: poison / execute / freeze / shock / napalm
 var color := Color.WHITE
 var _trail: CPUParticles3D
 var _last := Vector3.ZERO
@@ -31,23 +33,29 @@ static func _spawn(k: int) -> Projectile:
 	LevelMain.I.world.add_child(p)
 	return p
 
-static func arrow(from: Vector3, tgt: Enemy, d: float, is_crit := false) -> void:
+static func arrow(from: Vector3, tgt: Enemy, d: float, is_crit := false, p_pierce := 0.0, p_ability := "") -> Projectile:
 	var p := _spawn(Kind.ARROW)
 	p.start = from
 	p.target = tgt
 	p.dest = tgt.aim_point()
 	p.dmg = d
 	p.crit = is_crit
+	p.pierce = p_pierce
+	p.ability = p_ability
 	var dist := from.distance_to(p.dest)
 	p.dur = clampf(dist / 22.0, 0.22, 0.6)
 	p.arc = dist * 0.12
 	var m := Assets.instance("p_arrow")
 	m.scale = Vector3.ONE * (1.1 if not is_crit else 1.5)
+	if p_ability == "javelin":
+		m.scale = Vector3(1.6, 2.2, 1.6)
 	p.add_child(m)
 	p.global_position = from
+	return p
 
-static func bolt(from: Vector3, tgt: Enemy, d: float, c: Color, p_slow := 0.0, p_splash := 0.0) -> void:
+static func bolt(from: Vector3, tgt: Enemy, d: float, c: Color, p_slow := 0.0, p_splash := 0.0, p_ability := "") -> void:
 	var p := _spawn(Kind.BOLT)
+	p.ability = p_ability
 	p.start = from
 	p.target = tgt
 	p.dest = tgt.aim_point()
@@ -80,8 +88,9 @@ static func bolt(from: Vector3, tgt: Enemy, d: float, c: Color, p_slow := 0.0, p
 	p._trail = LevelMain.I.fx.trail(p, c, 0.3)
 	p.global_position = from
 
-static func bomb(from: Vector3, to: Vector3, d: float, p_splash: float, p_burn := 0.0, p_cluster := 0, is_small := false) -> void:
+static func bomb(from: Vector3, to: Vector3, d: float, p_splash: float, p_burn := 0.0, p_cluster := 0, is_small := false, p_ability := "") -> void:
 	var p := _spawn(Kind.BOMBLET if is_small else Kind.BOMB)
+	p.ability = p_ability
 	p.start = from
 	p.dest = to
 	p.dmg = d
@@ -156,8 +165,14 @@ func _impact() -> void:
 	match kind:
 		Kind.ARROW:
 			if target != null and is_instance_valid(target) and target.alive:
-				target.damage(dmg, "physical")
+				target.damage(dmg, "physical", true, pierce)
 				fx.hit_spark(dest, Color(1, 0.95, 0.8), 0.6)
+				if ability == "poison" and target.alive:
+					target.poison(9.0, 3.0)
+				elif ability == "execute" and target.alive and not target.boss and target.hp <= target.max_hp * 0.25:
+					target.damage(target.hp + 1.0, "true")
+					LevelMain.I.overlay.float_text(dest + Vector3(0, 0.7, 0), "처형!", Color(1.0, 0.4, 0.3), 1.1)
+					fx.magic_burst(dest, Color(1.0, 0.35, 0.25), 0.7)
 				if crit:
 					LevelMain.I.overlay.float_text(dest + Vector3(0, 0.6, 0), "치명타!", Color(1.0, 0.85, 0.2), 1.0)
 					fx.magic_burst(dest, Color(1.0, 0.85, 0.3), 0.6)
@@ -166,8 +181,10 @@ func _impact() -> void:
 				for e: Enemy in LevelMain.I.enemies.duplicate():
 					if e.alive and e.aim_point().distance_to(dest) < splash:
 						e.damage(dmg, "magic")
-						if slow > 0.0:
+						if slow > 0.0 and e.alive:
 							e.slow(1.0 - slow, 2.5)
+						if ability == "freeze" and e.alive and randf() < 0.2:
+							e.freeze(1.5)
 				fx.frost_nova(dest, splash)
 				Audio.play("frost", -6.0, 0.1)
 			elif target != null and is_instance_valid(target) and target.alive:
@@ -184,7 +201,7 @@ func _impact() -> void:
 					var a := i * TAU / cluster + randf() * 0.5
 					var to := dest + Vector3(cos(a), 0, sin(a)) * randf_range(1.6, 2.6)
 					to.y = LevelMain.I.terrain.walk_height(to.x, to.z)
-					Projectile.bomb(dest + Vector3(0, 0.3, 0), to, dmg * 0.4, 1.4, 0.0, 0, true)
+					Projectile.bomb(dest + Vector3(0, 0.3, 0), to, dmg * 0.4, 1.4, 10.0 if ability == "napalm" else 0.0, 0, true)
 		Kind.METEOR:
 			_explode(dest, splash, dmg, true, "magic")
 			fx.scorch(dest, splash)
@@ -211,3 +228,5 @@ func _explode(at: Vector3, r: float, d: float, big: bool, dtype := "physical") -
 			e.damage(d * falloff, dtype)
 			if burn > 0.0:
 				e.burn(burn * 0.5, 3.0)
+			if ability == "shock" and e.alive:
+				e.stun(0.8)

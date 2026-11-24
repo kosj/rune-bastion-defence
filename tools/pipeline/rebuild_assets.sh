@@ -37,4 +37,7 @@ mc 256 $C/mage_unit.glb 1024 idle=$D2/mage_idle.glb attack=$D2/mage_cast.glb
 mc 256 $C/sapper.glb 1024 run=$D3/sapper_run.glb attack=$D3/sapper_attack.glb death=$D3/sapper_death.glb
 mc 256 $C/ogre.glb 1024 run=$D3/ogre_run.glb attack=$D3/ogre_attack.glb death=$D3/ogre_death.glb roar=$D3/ogre_roar.glb
 mc 512 $C/sera.glb 1024 idle=$D3/sera_idle.glb run=$D3/sera_run.glb attack=$D3/sera_attack.glb skill=$D3/sera_skill.glb death=$D3/sera_death.glb cheer=$D3/sera_cheer.glb
+A4=$RAW/varco/anim_v4
+mc 256 $C/skeleton_knight.glb 1024 run=$A4/skeleton_knight_run.glb attack=$A4/skeleton_knight_attack.glb death=$A4/skeleton_knight_death.glb
+mc 512 $C/lich.glb 1024 run=$A4/lich_walk.glb attack=$A4/lich_attack.glb death=$A4/lich_death.glb roar=$A4/lich_summon.glb
 echo ALL_DONE

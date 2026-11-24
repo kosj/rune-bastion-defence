@@ -66,6 +66,8 @@ func _ready() -> void:
 		enemy_dmg_mult = 1.1
 	if DB.up("gold"):
 		gold += 60
+	if DB.up("lives"):
+		lives += 2 if (Game.difficulty == 1 and not Game.endless) else 5
 	max_lives = lives
 	for p in def["paths"]:
 		paths.append(LanePath.new(p))
@@ -192,28 +194,56 @@ func _setup_environment(theme: String) -> void:
 			sun_rot = Vector3(-60, 40, 0)
 			sun_e = 0.62
 			fog_col = Color(0.12, 0.16, 0.3)
+		"ruins":
+			# overcast, misty cliffs by the falls
+			sm.sky_top_color = Color(0.42, 0.5, 0.6)
+			sm.sky_horizon_color = Color(0.74, 0.78, 0.82)
+			sm.ground_horizon_color = Color(0.55, 0.58, 0.6)
+			sm.ground_bottom_color = Color(0.25, 0.28, 0.3)
+			sun_col = Color(0.9, 0.93, 1.0)
+			sun_rot = Vector3(-60, 40, 0)
+			sun_e = 0.84
+			fog_col = Color(0.58, 0.64, 0.7)
+		"swamp":
+			# ghost-lit temple marsh: moonlike green key light, dark sky
+			sm.sky_top_color = Color(0.04, 0.07, 0.07)
+			sm.sky_horizon_color = Color(0.18, 0.28, 0.22)
+			sm.ground_horizon_color = Color(0.12, 0.17, 0.14)
+			sm.ground_bottom_color = Color(0.03, 0.04, 0.04)
+			sun_col = Color(0.62, 0.86, 0.72)
+			sun_rot = Vector3(-62, -30, 0)
+			sun_e = 0.66
+			fog_col = Color(0.15, 0.24, 0.18)
+		"necro":
+			# ash and embers around the black citadel (neutral key light keeps materials readable)
+			sm.sky_top_color = Color(0.08, 0.06, 0.1)
+			sm.sky_horizon_color = Color(0.36, 0.17, 0.15)
+			sm.ground_horizon_color = Color(0.2, 0.15, 0.15)
+			sm.ground_bottom_color = Color(0.05, 0.04, 0.04)
+			sun_col = Color(0.98, 0.9, 0.86)
+			sun_rot = Vector3(-48, 30, 0)
+			sun_e = 0.95
+			fog_col = Color(0.32, 0.2, 0.2)
 	sky.sky_material = sm
 	env.sky = sky
 	env.background_mode = Environment.BG_SKY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.42 if theme != "night" else 0.75
-	if theme == "snow":
-		env.ambient_light_energy = 0.36
+	env.ambient_light_energy = {"night": 0.75, "snow": 0.36, "swamp": 0.72, "necro": 0.5, "ruins": 0.55}.get(theme, 0.42)
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	# white point 2.0: the cleaned (non-metallic, matte) materials are brighter in diffuse, so give
 	# the filmic shoulder more headroom - painted stone keeps its brick detail instead of clipping
 	env.tonemap_white = 2.0
-	env.tonemap_exposure = {"night": 1.1, "snow": 0.88, "autumn": 0.94}.get(theme, 0.98)
+	env.tonemap_exposure = {"night": 1.1, "snow": 0.88, "autumn": 0.94, "swamp": 1.1, "necro": 1.08, "ruins": 0.94}.get(theme, 0.98)
 	env.glow_enabled = true
-	env.glow_intensity = 0.45 if theme != "night" else 0.8
+	env.glow_intensity = 0.8 if theme in ["night", "swamp", "necro"] else 0.45
 	env.glow_bloom = 0.05
 	env.glow_hdr_threshold = 1.35
 	env.fog_enabled = true
 	env.fog_light_color = fog_col
-	env.fog_density = 0.0022 if theme != "night" else 0.004
+	env.fog_density = {"night": 0.004, "swamp": 0.0045, "necro": 0.0035, "ruins": 0.0036}.get(theme, 0.0022)
 	env.fog_sky_affect = 0.25
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.06
+	env.adjustment_saturation = {"necro": 0.9, "ruins": 0.95, "swamp": 0.88}.get(theme, 1.06)
 	env.adjustment_contrast = 1.06
 	var we := WorldEnvironment.new()
 	we.environment = env
@@ -285,7 +315,7 @@ func _place_landmarks() -> void:
 	castle.position = Vector3(e2.x, terrain.height_at(e2.x, e2.y) - 0.1, e2.y)
 	castle.rotation.y = atan2(t2.x, t2.y) + PI
 	_theme_overlay(castle)
-	_landmark_light(castle, Vector3(0, 3.0, 3.5), Color(1.0, 0.75, 0.4), 1.6 if def["theme"] == "night" else 0.0)
+	_landmark_light(castle, Vector3(0, 3.0, 3.5), Color(1.0, 0.75, 0.4), 1.6 if def["theme"] in ["night", "swamp", "necro"] else 0.0)
 	for p in paths:
 		var s2: Vector2 = (p as LanePath).sample(1.0)
 		var st: Vector2 = (p as LanePath).tangent(1.0)
@@ -302,7 +332,7 @@ func _place_landmarks() -> void:
 		q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		q.position = PORTAL_HOLE
 		portal.add_child(q)
-		_landmark_light(portal, PORTAL_HOLE + Vector3(0, 0, 1.2), Color(0.7, 0.3, 1.0), 2.2 if def["theme"] == "night" else 1.0)
+		_landmark_light(portal, PORTAL_HOLE + Vector3(0, 0, 1.2), Color(0.7, 0.3, 1.0), 2.2 if def["theme"] in ["night", "swamp", "necro"] else 1.0)
 	# bridges where paths cross the river
 	if def.has("river_x"):
 		var rx: float = def["river_x"]
@@ -395,6 +425,12 @@ func _decorate(theme: String) -> void:
 			terrain.decor_colorize = Color(0.55, 0.75, 0.7, 0.35)
 		"night":
 			terrain.decor_colorize = Color(0.35, 0.6, 0.75, 0.2)
+		"ruins":
+			terrain.decor_colorize = Color(0.4, 0.58, 0.52, 0.4)
+		"swamp":
+			terrain.decor_colorize = Color(0.3, 0.5, 0.38, 0.45)
+		"necro":
+			terrain.decor_colorize = Color(0.42, 0.3, 0.32, 0.85)
 	var round_n := 26
 	var pine_n := 26
 	match theme:
@@ -402,6 +438,10 @@ func _decorate(theme: String) -> void:
 		"autumn": round_n = 40; pine_n = 12
 		"snow": round_n = 0; pine_n = 52
 		"night": round_n = 22; pine_n = 34
+		"ruins": round_n = 18; pine_n = 16
+		"swamp": round_n = 30; pine_n = 14
+		"necro": round_n = 10; pine_n = 22
+	var dark: bool = theme in ["night", "swamp", "necro"]
 	var defs := []
 	# [model, count, min spacing, region, scale min, scale max]
 	if round_n > 0:
@@ -409,35 +449,37 @@ func _decorate(theme: String) -> void:
 		defs.append(["tree_round_v", 3, 4.0, "inner", 0.65, 0.95])
 	defs.append(["tree_pine_v", pine_n, 3.0, "edge", 0.7, 1.3])
 	defs.append(["tree_pine_v", 3, 4.0, "inner", 0.6, 0.9])
-	defs.append(["rocks_v", 14, 2.8, "near", 0.45, 0.9])
-	defs.append(["rocks_v", 10, 3.5, "edge", 0.8, 1.5])
+	var rocky: bool = theme in ["ruins", "necro"]
+	defs.append(["rocks_v", 22 if rocky else 14, 2.8, "near", 0.45, 0.9])
+	defs.append(["rocks_v", 16 if rocky else 10, 3.5, "edge", 0.8, 1.5])
 	if theme != "snow":
-		defs.append(["bush", 18, 2.2, "near", 0.7, 1.15])
-		defs.append(["flowers", 30 if theme != "night" else 14, 1.5, "inner", 0.8, 1.3])
-	defs.append(["crystals", 5 if theme != "night" else 12, 6.0, "near", 0.8, 1.3])
-	defs.append(["lamp", 6 if theme != "night" else 10, 6.0, "inner", 1.0, 1.0])
+		defs.append(["bush", 10 if theme == "necro" else 18, 2.2, "near", 0.7, 1.15])
+		defs.append(["flowers", 14 if dark else 30, 1.5, "inner", 0.8, 1.3])
+	defs.append(["crystals", 12 if dark else (8 if theme == "ruins" else 5), 6.0, "near", 0.8, 1.3])
+	defs.append(["lamp", 10 if dark else 6, 6.0, "inner", 1.0, 1.0])
 	defs.append(["fence", 6, 5.0, "inner", 1.0, 1.0])
 	defs.append(["barrels", 4, 6.0, "inner", 1.0, 1.0])
-	defs.append(["house", 3, 9.0, "near", 0.9, 1.05])
+	defs.append(["house", 1 if theme in ["ruins", "necro", "swamp"] else 3, 9.0, "near", 0.9, 1.05])
 	terrain.scatter_decor(defs, 99 + level_idx * 17)
-	if theme == "night":
-		# warm lantern pools of light on the dark map
+	if dark:
+		# lantern pools of light on the dark maps (warm, ghost-green in the marsh, ember-red at the citadel)
+		var lc: Color = {"swamp": Color(0.6, 1.0, 0.5), "necro": Color(1.0, 0.45, 0.25)}.get(theme, Color(1.0, 0.72, 0.38))
 		var n := 0
 		for xf: Transform3D in terrain.decor_xf.get("lamp", []):
 			if n >= (6 if Game.high_quality else 3):
 				break
 			var l := OmniLight3D.new()
-			l.light_color = Color(1.0, 0.72, 0.38)
+			l.light_color = lc
 			l.light_energy = 1.8
 			l.omni_range = 7.0
 			l.omni_attenuation = 1.6
 			l.position = xf.origin + Vector3(0.6, 2.3, 0)
 			world.add_child(l)
 			n += 1
-	var amb := {"snow": "snow", "autumn": "leaves", "night": "fireflies", "meadow": "motes", "river": "motes"}
+	var amb := {"snow": "snow", "autumn": "leaves", "night": "fireflies", "meadow": "motes", "river": "motes", "ruins": "motes", "swamp": "fireflies", "necro": "embers"}
 	if amb.has(theme):
 		fx.ambient(amb[theme])
-	if theme == "night":
+	if theme in ["night", "swamp"]:
 		fx.ambient("motes")
 
 func _make_range_ring() -> void:
@@ -549,6 +591,7 @@ func _spawn_enemy(type: String, path_i: int) -> void:
 	if e.boss:
 		hud.show_banner("보스 출현!", DB.ENEMIES[type]["name"], Color(1.0, 0.4, 0.3))
 		Audio.play("boss_roar", 2.0, 0.0)
+		Game.vibrate(140)
 		Audio.voice("ann_boss")
 		Audio.play_music("boss", 1.5)
 		cam_rig.shake(0.6)
@@ -569,7 +612,7 @@ func _call_wave() -> void:
 		add_gold(bonus, hero.global_position if hero else Vector3.ZERO, false)
 		for k in spell_cd:
 			spell_cd[k] = maxf(spell_cd[k] - wave_timer * 0.5, 0.0)
-		overlay.float_text(_wave_button_world(), "+%d 보너스!" % bonus, UI.GOLD, 1.3)
+		overlay.float_text(_wave_button_world(), tr("+%d 보너스!") % bonus, UI.GOLD, 1.3)
 	state = "playing"
 	wave_idx += 1
 	if Game.endless and wave_idx > 0:
@@ -583,10 +626,10 @@ func _call_wave() -> void:
 	var last := wave_idx == waves.size() - 1 and not Game.endless
 	if Game.endless:
 		var boss_wave := (wave_idx + 1) % 10 == 0
-		hud.show_banner("웨이브 %d" % (wave_idx + 1), "보스 웨이브!" if boss_wave else "적이 점점 강해집니다 (체력 x%.1f)" % DB.endless_hp_scale(wave_idx))
+		hud.show_banner(tr("웨이브 %d") % (wave_idx + 1), "보스 웨이브!" if boss_wave else tr("적이 점점 강해집니다 (체력 x%.1f)") % DB.endless_hp_scale(wave_idx))
 		Game.stat("endless_wave", wave_idx + 1, "max")
 	else:
-		hud.show_banner("마지막 웨이브!" if last else "웨이브 %d" % (wave_idx + 1), "적이 몰려옵니다!" if not last else "끝까지 버텨내세요!")
+		hud.show_banner("마지막 웨이브!" if last else tr("웨이브 %d") % (wave_idx + 1), "적이 몰려옵니다!" if not last else "끝까지 버텨내세요!")
 	Audio.play("horn", 0.0, 0.0)
 	Audio.voice("ann_final" if last else ("ann_wave_first" if wave_idx == 0 else "ann_wave"), 0.0, 1.0)
 	if tutorial_step == 1:
@@ -628,7 +671,7 @@ func _update_hud() -> void:
 		hud.hero_lv.text = str(hero.level)
 		hud.hero_dead.text = "" if hero.alive else str(int(ceil(hero.respawn_t)))
 		hud.hero_b.modulate = Color(1, 1, 1) if hero.alive else Color(0.45, 0.45, 0.5)
-		hud.skill_cd.value = hero.skill_cd / DB.hero_def()["skill_cd"]
+		hud.skill_cd.value = hero.skill_cd / hero.skill_cd_max()
 	for id in spell_cd:
 		var d: Dictionary = hud.spell_btns[id]
 		var cdm: float = spell_defs[id]["cd"]
@@ -666,10 +709,16 @@ func on_enemy_killed(e: Enemy) -> void:
 		hud.fly_coins(cam_rig.cam.unproject_position(e.aim_point()), clampi(int(e.d["gold"]) / 8 + 1, 1, 3))
 	if e.boss:
 		Game.stat("boss_kills")
+		if e.type == "lich":
+			Game.stat("lich_kills")
 		Audio.play_music("battle", 2.0)
 	Audio.play("coin", -10.0, 0.1)
 	if hero:
-		hero.add_xp(float(e.d["gold"]) * 2.0)
+		var xp := float(e.d["gold"]) * 2.0 * (1.3 if DB.up("hero_xp") else 1.0)
+		hero.add_xp(xp)
+		if Game.add_hero_xp(hero.hid, xp):
+			hud.toast(tr("영웅 등급 상승! 등급 %d") % DB.hero_rank(hero.hid), "영웅 화면에서 재능 포인트를 사용하세요", DB.hero_def()["portrait"])
+			Audio.play("levelup", -4.0)
 
 func on_enemy_exit(e: Enemy) -> void:
 	enemies.erase(e)
@@ -677,6 +726,7 @@ func on_enemy_exit(e: Enemy) -> void:
 		return
 	lives = maxi(lives - int(e.d["lives"]), 0)
 	hud.set_lives(lives)
+	Game.vibrate(45)
 	hud.flash_damage(lives <= maxi(max_lives / 4, 3))
 	Audio.play("life_lost", -2.0)
 	if lives <= maxi(max_lives / 4, 3):
@@ -767,7 +817,7 @@ func _select_hero() -> void:
 	selection = {"kind": "hero"}
 	hero.set_selected(true)
 	Audio.voice(hero.hid + "_select", 0.0, 6.0)
-	hud.show_info(DB.hero_def()["name"] + "  Lv.%d" % hero.level, "땅을 탭하면 이동 · 스킬: %s (자동/수동)" % DB.hero_def()["skill_name"],
+	hud.show_info(tr(DB.hero_def()["name"]) + "  Lv.%d" % hero.level, tr("땅을 탭하면 이동 · 스킬: %s (자동/수동)") % tr(DB.hero_def()["skill_name"]),
 		[["heart", "%d/%d" % [hero.hp, hero.max_hp]], ["st_dmg", "%d-%d" % [hero.dmg[0], hero.dmg[1]]], ["st_armor", "%d%%" % int(hero.armor * 100)]])
 	Audio.play("hero_select", -4.0, 0.05)
 
@@ -794,6 +844,11 @@ func _select_tower(i: int) -> void:
 	elif t.level == 3:
 		for m in t.data()["masteries"]:
 			opts.append({"id": "mastery_" + m["id"], "icon": Assets.tex("m_" + m["id"]), "label": str(m["cost"]), "coin": true, "cost": m["cost"], "enabled": gold >= int(m["cost"]), "kind": "purple"})
+	elif t.mastery != "" and t.ability == "":
+		var ad := DB.ability_def(t.type, t.mastery)
+		if not ad.is_empty():
+			var ac := DB.ability_cost(t.type, t.mastery)
+			opts.append({"id": "ability", "icon": Assets.tex("a_" + ad["id"]), "label": str(ac), "coin": true, "cost": ac, "enabled": gold >= ac, "kind": "teal"})
 	if t.type == "barracks":
 		opts.append({"id": "rally", "icon": Assets.tex("rally"), "instant": true})
 	else:
@@ -801,14 +856,17 @@ func _select_tower(i: int) -> void:
 	opts.append({"id": "sell", "icon": Assets.tex("sell"), "label": "+%d" % t.sell_value(), "coin": true, "kind": "red"})
 	hud.radial.open(t.global_position + Vector3(0, 1.5, 0), opts)
 	_show_range(t.global_position, t.range_r())
-	hud.show_info(_tower_title(t), _tower_special_text(t.stats), _tower_stats(t.type, t.stats))
+	var sp := _tower_special_text(t.stats)
+	if t.ability != "":
+		sp = ("◆ " + tr(DB.ability_def(t.type, t.mastery)["name"])) + (" · " + sp if sp != "" else "")
+	hud.show_info(_tower_title(t), sp, _tower_stats(t.type, t.stats))
 
 const PRIORITY_NAMES := {"first": "선두", "strong": "강적", "close": "근접"}
 
 func _tower_title(t: Tower) -> String:
 	if t.mastery != "":
 		return DB.mastery_def(t.type, t.mastery)["name"]
-	return "%s  Lv.%d" % [t.data()["name"], t.level]
+	return "%s  Lv.%d" % [tr(t.data()["name"]), t.level]
 
 func _tower_stats_text(type: String, st: Dictionary) -> String:
 	var parts: Array = []
@@ -822,27 +880,27 @@ func _tower_stats(type: String, st: Dictionary, prev := {}) -> Array:
 	var up := func(k: String) -> bool:
 		return not prev.is_empty() and prev.has(k) and str(prev[k]) != str(st[k])
 	if type == "barracks":
-		return [["st_unit", "병사 %d" % st["count"], up.call("count")],
+		return [["st_unit", tr("병사 %d") % st["count"], up.call("count")],
 			["heart", "%d" % st["soldier_hp"], up.call("soldier_hp")],
 			["st_dmg", "%d-%d" % [st["soldier_dmg"][0], st["soldier_dmg"][1]], up.call("soldier_dmg")],
 			["st_armor", "%d%%" % int(st["soldier_armor"] * 100), up.call("soldier_armor")],
-			["st_range", "집결 %.1f" % st["range"], up.call("range")]]
+			["st_range", tr("집결 %.1f") % st["range"], up.call("range")]]
 	return [["st_dmg", "%d-%d" % [st["dmg"][0], st["dmg"][1]], up.call("dmg")],
-		["st_rate", "%.1f초" % st["rate"], up.call("rate")],
+		["st_rate", tr("%.1f초") % st["rate"], up.call("rate")],
 		["st_range", "%.1f" % st["range"], up.call("range")]]
 
 func _tower_special_text(st: Dictionary) -> String:
 	var extra: Array = []
 	if st.has("splash"):
-		extra.append("폭발 범위 %.1f" % st["splash"])
+		extra.append(tr("폭발 범위 %.1f") % st["splash"])
 	if st.has("multishot"):
-		extra.append("%d연발" % st["multishot"])
+		extra.append(tr("%d연발") % st["multishot"])
 	if st.has("chain"):
-		extra.append("연쇄 %d" % st["chain"])
+		extra.append(tr("연쇄 %d") % st["chain"])
 	if st.has("slow"):
-		extra.append("둔화 %d%%" % int(st["slow"] * 100))
+		extra.append(tr("둔화 %d%%") % int(st["slow"] * 100))
 	if st.has("crit"):
-		extra.append("치명 %d%%" % int(st["crit"] * 100))
+		extra.append(tr("치명 %d%%") % int(st["crit"] * 100))
 	return " · ".join(extra)
 
 # ------------------------------------------------------------------ enemy inspection
@@ -873,14 +931,14 @@ func _refresh_enemy_info() -> void:
 	var d: Dictionary = e.d
 	var spd := float(d["speed"])
 	var spd_t := "빠름" if spd >= 3.0 else ("느림" if spd < 1.5 else "보통")
-	var title: String = d["name"] + ("  · 보스" if e.boss else "")
+	var title: String = tr(d["name"]) + (tr("  · 보스") if e.boss else "")
 	hud.show_info(title, str(d.get("desc", "")), [
 		["heart", "%d/%d" % [int(ceil(e.hp)), int(ceil(e.max_hp))]],
-		["st_armor", "방어 %d%%" % int(float(d["armor"]) * 100)],
-		["st_magic", "마저 %d%%" % int(float(d["mr"]) * 100)],
+		["st_armor", tr("방어 %d%%") % int(float(d["armor"]) * 100)],
+		["st_magic", tr("마저 %d%%") % int(float(d["mr"]) * 100)],
 		["st_speed", spd_t],
 		["coin", "%d" % int(d["gold"])],
-		["skull", "생명 -%d" % int(d["lives"])]])
+		["skull", tr("생명 -%d") % int(d["lives"])]])
 
 func _on_radial_preview(id: String) -> void:
 	var kind: String = selection.get("kind", "")
@@ -895,17 +953,20 @@ func _on_radial_preview(id: String) -> void:
 		if id == "upgrade":
 			var s2 := DB.tower_stats(tw.type, tw.level + 1, "")
 			_show_range(tw.global_position, s2["range"], Color(0.5, 1.0, 0.6))
-			hud.show_info("업그레이드 → Lv.%d" % (tw.level + 1), _tower_special_text(s2), _tower_stats(tw.type, s2, tw.stats))
+			hud.show_info(tr("업그레이드 → Lv.%d") % (tw.level + 1), _tower_special_text(s2), _tower_stats(tw.type, s2, tw.stats))
 		elif id.begins_with("mastery_"):
 			var mid := id.trim_prefix("mastery_")
 			var s3 := DB.tower_stats(tw.type, 3, mid)
 			var md := DB.mastery_def(tw.type, mid)
 			_show_range(tw.global_position, s3["range"], md["tint"])
 			hud.show_info(md["name"], md["desc"], _tower_stats(tw.type, s3, tw.stats))
+		elif id == "ability":
+			var ad := DB.ability_def(tw.type, tw.mastery)
+			hud.show_info(tr("특수 능력 · ") + tr(ad["name"]), ad["desc"], [["coin", "%d" % DB.ability_cost(tw.type, tw.mastery)]])
 		elif id == "sell":
-			hud.show_info("타워 판매", "한 번 더 탭하면 판매합니다.", [["coin", "+%d 골드" % tw.sell_value()]])
+			hud.show_info("타워 판매", "한 번 더 탭하면 판매합니다.", [["coin", tr("+%d 골드") % tw.sell_value()]])
 		elif id == "priority":
-			hud.show_info("공격 우선순위: " + PRIORITY_NAMES[tw.priority], "탭할 때마다 변경: 선두(가장 앞선 적) → 강적(체력 최대) → 근접(가장 가까운 적)")
+			hud.show_info(tr("공격 우선순위: ") + tr(PRIORITY_NAMES[tw.priority]), "탭할 때마다 변경: 선두(가장 앞선 적) → 강적(체력 최대) → 근접(가장 가까운 적)")
 
 func _on_radial_chosen(id: String) -> void:
 	var kind: String = selection.get("kind", "")
@@ -956,6 +1017,19 @@ func _on_radial_chosen(id: String) -> void:
 		Audio.play("upgrade", 0.0)
 		hud.show_banner(md["name"], "전문화 완료!", md["tint"])
 		_deselect()
+	elif id == "ability":
+		var ac := DB.ability_cost(tower.type, tower.mastery)
+		if gold < ac or tower.ability != "":
+			Audio.play("error", -4.0)
+			return
+		gold -= ac
+		hud.set_gold(gold)
+		tower.buy_ability()
+		Game.stat("abilities")
+		Audio.play("upgrade", 0.0)
+		var ad := DB.ability_def(tower.type, tower.mastery)
+		hud.show_banner(ad["name"], "특수 능력 습득!", Color(0.45, 0.9, 1.0))
+		_deselect()
 	elif id == "sell":
 		add_gold(tower.sell_value(), tower.global_position)
 		fx.dust(tower.global_position, 1.5)
@@ -967,7 +1041,7 @@ func _on_radial_chosen(id: String) -> void:
 	elif id == "priority":
 		var pr := tower.cycle_priority()
 		Audio.play("tick", -2.0)
-		overlay.float_text(tower.global_position + Vector3(0, 4.5, 0), "우선순위: " + PRIORITY_NAMES[pr], Color(1.0, 0.7, 0.5), 1.0)
+		overlay.float_text(tower.global_position + Vector3(0, 4.5, 0), tr("우선순위: ") + tr(PRIORITY_NAMES[pr]), Color(1.0, 0.7, 0.5), 1.0)
 		_select_tower(idx)
 	elif id == "rally":
 		hud.radial.close()
@@ -1263,13 +1337,13 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 		var cg := CenterContainer.new()
 		cg.add_child(grid)
 		vb.add_child(cg)
-		grid.add_child(UI.stat("heart", "남은 생명 %d / %d" % [lives, max_l], 19, UI.TEXT))
-		grid.add_child(UI.stat("skull", "처치 %d" % run_kills, 19, UI.TEXT))
-		grid.add_child(UI.stat("coin", "획득 골드 %d" % run_gold, 19, UI.TEXT))
-		grid.add_child(UI.stat("st_rate", "전투 %d:%02d" % [int(run_time) / 60, int(run_time) % 60], 19, UI.TEXT))
+		grid.add_child(UI.stat("heart", tr("남은 생명 %d / %d") % [lives, max_l], 19, UI.TEXT))
+		grid.add_child(UI.stat("skull", tr("처치 %d") % run_kills, 19, UI.TEXT))
+		grid.add_child(UI.stat("coin", tr("획득 골드 %d") % run_gold, 19, UI.TEXT))
+		grid.add_child(UI.stat("st_rate", tr("전투 %d:%02d") % [int(run_time) / 60, int(run_time) % 60], 19, UI.TEXT))
 		var gained := maxi(stars - prev_stars, 0)
 		if gained > 0 or (Game.difficulty == 1):
-			var rw := UI.label(("새로 얻은 ★ %d  — 왕국 강화에 사용하세요" % gained) if gained > 0 else "영웅 난이도 클리어!", 19, UI.GOLD, 5, "ui_black")
+			var rw := UI.label((tr("새로 얻은 ★ %d  — 왕국 강화에 사용하세요") % gained) if gained > 0 else "영웅 난이도 클리어!", 19, UI.GOLD, 5, "ui_black")
 			rw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			vb.add_child(rw)
 		if level_idx >= DB.LEVELS.size() - 1:
@@ -1305,6 +1379,9 @@ const DEFEAT_TIPS := [
 	"유성 낙하는 적이 뭉쳤을 때 쓰면 효과가 커요.",
 	"폭탄병은 병사를 무시하고 달려요. 길 초입에 화력을 모으세요.",
 	"레벨 3 타워의 전문화가 전세를 뒤집어요. 상황에 맞는 쪽을 고르세요.",
+	"해골 기사는 한 번 다시 일어나요. 마법 피해가 더 잘 들어요.",
+	"전문화한 타워를 다시 탭하면 특수 능력을 배울 수 있어요.",
+	"리치 군주는 해골을 계속 불러내요. 광역 공격으로 잔챙이를 정리하세요.",
 ]
 
 func _defeat() -> void:
@@ -1313,6 +1390,7 @@ func _defeat() -> void:
 	state = "lost"
 	Engine.time_scale = 1.0
 	Audio.play("defeat", 0.0, 0.0)
+	Game.vibrate(300)
 	Game.save()
 	if Game.endless:
 		_endless_over()
@@ -1324,7 +1402,7 @@ func _defeat() -> void:
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vb.add_child(l)
 		var tipp := UI.framed("parch", 2)
-		var tip := UI.ink("팁 · " + str(DEFEAT_TIPS[randi() % DEFEAT_TIPS.size()]), 17, UI.INK)
+		var tip := UI.ink(tr("팁 · ") + tr(str(DEFEAT_TIPS[randi() % DEFEAT_TIPS.size()])), 17, UI.INK)
 		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		tip.custom_minimum_size.x = 452
 		tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1333,8 +1411,8 @@ func _defeat() -> void:
 		var grid := HBoxContainer.new()
 		grid.alignment = BoxContainer.ALIGNMENT_CENTER
 		grid.add_theme_constant_override("separation", 28)
-		grid.add_child(UI.stat("skull", "처치 %d" % run_kills, 18, UI.TEXT))
-		grid.add_child(UI.stat("st_rate", "웨이브 %d / %d" % [maxi(wave_idx + 1, 0), waves.size()], 18, UI.TEXT))
+		grid.add_child(UI.stat("skull", tr("처치 %d") % run_kills, 18, UI.TEXT))
+		grid.add_child(UI.stat("st_rate", tr("웨이브 %d / %d") % [maxi(wave_idx + 1, 0), waves.size()], 18, UI.TEXT))
 		vb.add_child(grid)
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1354,7 +1432,7 @@ func _defeat() -> void:
 func _on_achievement(id: String) -> void:
 	for a in DB.ACHIEVEMENTS:
 		if a["id"] == id:
-			hud.toast("업적 달성: " + a["name"], a["desc"] + "  (보상 ★1)", a["icon"])
+			hud.toast(tr("업적 달성: ") + tr(a["name"]), tr(a["desc"]) + tr("  (보상 ★1)"), a["icon"])
 			Audio.play("levelup", -4.0)
 			Game.save()
 			return
@@ -1370,17 +1448,17 @@ func _endless_over() -> void:
 	Game.save()
 	_clear_cards()
 	_modal = hud.modal("전투 종료", func(vb: VBoxContainer):
-		var l := UI.title("웨이브 %d" % reached, 54, "title_kr", 12)
+		var l := UI.title(tr("웨이브 %d") % reached, 54, "title_kr", 12)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vb.add_child(l)
-		var r := UI.label("신기록 달성!" if record else "최고 기록  웨이브 %d" % maxi(best, reached), 23, Color(1.0, 0.75, 0.4) if record else UI.TEXT, 5, "ui_black")
+		var r := UI.label("신기록 달성!" if record else tr("최고 기록  웨이브 %d") % maxi(best, reached), 23, Color(1.0, 0.75, 0.4) if record else UI.TEXT, 5, "ui_black")
 		r.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vb.add_child(r)
 		var grid := HBoxContainer.new()
 		grid.alignment = BoxContainer.ALIGNMENT_CENTER
 		grid.add_theme_constant_override("separation", 28)
-		grid.add_child(UI.stat("skull", "처치 %d" % run_kills, 18, UI.TEXT))
-		grid.add_child(UI.stat("coin", "획득 골드 %d" % run_gold, 18, UI.TEXT))
+		grid.add_child(UI.stat("skull", tr("처치 %d") % run_kills, 18, UI.TEXT))
+		grid.add_child(UI.stat("coin", tr("획득 골드 %d") % run_gold, 18, UI.TEXT))
 		vb.add_child(grid)
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_CENTER

@@ -42,6 +42,12 @@ var _cry_cd := 4.0
 var _fuse := -1.0
 var _enraged := false
 var _fuse_fx: Node3D
+var poison_dps := 0.0
+var poison_t := 0.0
+var _poison_fx := 0.0
+var _revived := false
+var _revive_t := 0.0
+var _summon_cd := 6.0
 
 func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 	type = p_type
@@ -63,6 +69,8 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 	var weapon := ""
 	match d["model"]:
 		"goblin": weapon = "w_dagger" if type == "goblin" else ""
+		"skeleton_knight": weapon = "w_sword" if type == "skeleton_knight" else "w_dagger"
+		"lich": weapon = ""
 		"orc": weapon = "w_axe"
 		"troll": weapon = "w_club"
 	model = CharacterModel.new()
@@ -92,12 +100,21 @@ func progress() -> float:
 	return dist
 
 func _process(delta: float) -> void:
+	if _revive_t > 0.0 and delta > 0.0:
+		_revive_t -= delta
+		if _revive_t <= 0.0:
+			_rise()
+		return
 	if not alive:
 		return
 	if delta <= 0.0:
 		return
 	_hit_t = maxf(_hit_t - delta, 0.0)
 	# status effects
+	if haste_t > 0.0:
+		haste_t -= delta
+		if haste_t <= 0.0:
+			haste_mult = 1.0
 	if slow_t > 0.0:
 		slow_t -= delta
 		if slow_t <= 0.0:
@@ -113,6 +130,15 @@ func _process(delta: float) -> void:
 			LevelMain.I.fx.burn_puff(aim_point())
 		if not alive:
 			return
+	if poison_t > 0.0:
+		poison_t -= delta
+		damage(poison_dps * delta, "true", false)
+		_poison_fx -= delta
+		if _poison_fx <= 0.0:
+			_poison_fx = 0.35
+			LevelMain.I.fx.hit_spark(aim_point(), Color(0.55, 1.0, 0.3), 0.5)
+		if not alive:
+			return
 	if stun_t > 0.0:
 		stun_t -= delta
 		return
@@ -122,8 +148,22 @@ func _process(delta: float) -> void:
 		if _heal_cd <= 0.0:
 			_heal_cd = 4.0
 			_heal_allies()
-	if boss:
+	if d.get("slam", false):
 		_slam_cd -= delta
+	if d.get("warcry", false):
+		_cry_cd -= delta
+		if _cry_cd <= 0.0:
+			_cry_cd = 9.0
+			_warcry()
+	if boss and not _enraged and hp < max_hp * 0.5 and d.has("enrage_summon"):
+		_enrage()
+		return
+	if d.has("summon"):
+		_summon_cd -= delta
+		if _summon_cd <= 0.0:
+			_summon_cd = float(d.get("summon_cd", 10.0)) * (0.75 if _enraged else 1.0)
+			_raise_dead()
+			return
 	# blocked by a soldier?
 	if blocker != null and (not is_instance_valid(blocker) or not blocker.alive or blocker.target != self):
 		blocker = null
@@ -185,8 +225,8 @@ func _fight(delta: float) -> void:
 	if _attacking > 0.0:
 		_attacking -= delta
 		if _attacking <= 0.0:
-			if boss and _slam_cd <= 0.0:
-				_slam_cd = 6.0
+			if d.get("slam", false) and _slam_cd <= 0.0:
+				_slam_cd = 6.0 if boss else 8.0
 				_boss_slam()
 			elif is_instance_valid(blocker) and blocker.alive:
 				var dmg := randf_range(d["dmg"][0], d["dmg"][1]) * LevelMain.I.enemy_dmg_mult
@@ -206,7 +246,7 @@ func _boss_slam() -> void:
 	for s: Soldier in LevelMain.I.soldiers.duplicate():
 		if s.alive and s.global_position.distance_to(p) < r:
 			s.take_damage(randf_range(d["dmg"][0], d["dmg"][1]))
-			s.stun(1.6 if boss else 1.2)
+			s.stun(1.6 if boss else 1.0)
 
 ## Sapper: blows up when a soldier blocks it, hurting every soldier nearby.
 func _explode() -> void:
@@ -225,8 +265,8 @@ func _warcry() -> void:
 	var any := false
 	for e: Enemy in LevelMain.I.enemies:
 		if e.alive and e != self and not e.boss and e.global_position.distance_to(global_position) < 5.0:
-			e.haste_mult = 1.35
-			e.haste_t = 4.0
+			e.haste_mult = 1.25
+			e.haste_t = 3.5
 			LevelMain.I.fx.hit_spark(e.aim_point(), Color(1.0, 0.35, 0.2), 0.8)
 			any = true
 	if any:
@@ -249,13 +289,20 @@ func _enrage() -> void:
 	lv.fx.shockwave(global_position, 6.0, Color(1.0, 0.25, 0.1))
 	lv.fx.light_flash(aim_point(), Color(1.0, 0.3, 0.1), 5.0, 10.0, 0.4)
 	lv.cam_rig.shake(1.0)
-	lv.hud.show_banner("보스 격노!", "고블린 증원이 몰려옵니다", Color(1.0, 0.35, 0.25))
+	var kind: String = d.get("enrage_summon", "goblin")
+	var undead := kind.begins_with("skeleton")
+	lv.hud.show_banner("보스 격노!", "해골 기사 군단이 일어납니다" if undead else "고블린 증원이 몰려옵니다", Color(1.0, 0.35, 0.25))
 	Audio.play("boss_roar", 3.0, 0.0)
+	Game.vibrate(160)
 	if model.has("roar"):
 		model.play("roar", 1.4, 0.1, true)
 		stun_t = 1.6
-	for i in 6:
-		lv.spawn_enemy_at("goblin", path, maxf(dist - 2.5 - i * 0.9, 0.5))
+	var n := 3 if undead else 6
+	for i in n:
+		lv.spawn_enemy_at(kind, path, maxf(dist - 2.5 - i * 1.4, 0.5))
+	if undead:
+		for i in 6:
+			lv.spawn_enemy_at("skeleton", path, maxf(dist - 1.5 - i * 0.8, 0.5))
 
 func _heal_allies() -> void:
 	var healed := false
@@ -286,12 +333,12 @@ func _update_transform(delta: float) -> void:
 		_yaw = lerp_angle(_yaw, target_yaw, clampf(delta * 8.0, 0.0, 1.0)) if delta > 0.0 else target_yaw
 		model.rotation.y = _yaw
 
-func damage(amount: float, dtype: String, flash := true) -> void:
+func damage(amount: float, dtype: String, flash := true, pierce := 0.0) -> void:
 	if not alive:
 		return
 	var a := amount
 	if dtype == "physical":
-		a *= (1.0 - armor)
+		a *= (1.0 - armor * (1.0 - pierce))
 	elif dtype == "magic":
 		a *= (1.0 - mr)
 	hp -= a
@@ -318,12 +365,64 @@ func stun(t: float) -> void:
 		return
 	stun_t = maxf(stun_t, t)
 
+func poison(dps: float, t: float) -> void:
+	poison_dps = maxf(poison_dps, dps)
+	poison_t = maxf(poison_t, t)
+
+## Frozen solid: a stun with an icy look (bosses shrug it off).
+func freeze(t: float) -> void:
+	if boss:
+		return
+	stun(t)
+	slow(0.5, t + 1.0)
+	LevelMain.I.fx.frost_nova(global_position, 0.9)
+
+## Lich: raise skeletons around itself.
+func _raise_dead() -> void:
+	var lv := LevelMain.I
+	var n := int(d.get("summon_n", 3)) + (2 if _enraged else 0)
+	if model.has("roar"):
+		model.play("roar", 1.5, 0.1, true)
+	stun_t = 1.1
+	lv.fx.rune_circle(global_position + Vector3(0, 0.1, 0), Color(0.5, 1.0, 0.45), 3.4, 1.0)
+	lv.fx.light_flash(aim_point(), Color(0.45, 1.0, 0.4), 3.0, 8.0, 0.35)
+	Audio.play("warcry", -4.0, 0.05)
+	for i in n:
+		lv.spawn_enemy_at(String(d.get("summon", "skeleton")), path, clampf(dist - 1.0 - i * 0.9, 0.5, path.length - 1.0))
+
+## Skeleton knight: collapses once, then pulls itself back together.
+func _rise() -> void:
+	alive = true
+	hp = max_hp * float(d.get("revive", 0.5))
+	_revived = true
+	stun_t = 0.0
+	slow_t = 0.0
+	burn_t = 0.0
+	poison_t = 0.0
+	slow_mult = 1.0
+	position.y = LevelMain.I.terrain.walk_height(position.x, position.z)
+	LevelMain.I.fx.rune_circle(global_position + Vector3(0, 0.1, 0), Color(0.5, 1.0, 0.45), 1.4, 0.7)
+	LevelMain.I.fx.soul(aim_point(), Color(0.5, 1.0, 0.45))
+	model.play("run", clampf(speed * _anim_base, 0.5, 2.6), 0.2, true)
+
 func _die() -> void:
 	alive = false
 	hp = 0.0
 	if blocker and is_instance_valid(blocker):
 		blocker.target_lost(self)
 	blocker = null
+	engaged = false
+	if d.has("revive") and not _revived:
+		# down, not out: stays on the enemy list (the wave is not cleared) and rises again
+		_revive_t = 2.4
+		if model.body:
+			model.body.material_overlay = null
+		if model.has("death"):
+			model.play("death", 1.2, 0.1, true)
+		LevelMain.I.fx.soul(aim_point(), Color(0.6, 0.9, 0.6))
+		Audio.play("die_small", -6.0, 0.12)
+		LevelMain.I.overlay.float_text(aim_point() + Vector3(0, 0.8, 0), "다시 일어납니다!", Color(0.6, 1.0, 0.55), 1.0)
+		return
 	LevelMain.I.on_enemy_killed(self)
 	var fx := LevelMain.I.fx
 	fx.soul(aim_point(), Color(1.0, 0.6, 0.4) if boss else Color(0.75, 0.7, 1.0))

@@ -34,6 +34,12 @@ const THEMES := {
 		"rock": Color(0.5, 0.53, 0.6), "sand": Color(0.85, 0.88, 0.95), "tuft": Color(0.75, 0.82, 0.9), "tufts": 0.0},
 	"night": {"grass": "terrain_grass", "grass_tint": Color(0.7, 0.86, 0.9), "colorize": Color(0.3, 0.55, 0.6, 0.35), "dirt_tint": Color(0.8, 0.8, 0.9),
 		"rock": Color(0.42, 0.44, 0.52), "sand": Color(0.6, 0.62, 0.7), "tuft": Color(0.24, 0.42, 0.36), "tufts": 0.9},
+	"ruins": {"grass": "terrain_grass", "grass_tint": Color(0.66, 0.78, 0.7), "colorize": Color(0.4, 0.55, 0.5, 0.3), "dirt_tint": Color(0.78, 0.76, 0.74),
+		"rock": Color(0.5, 0.53, 0.55), "sand": Color(0.72, 0.72, 0.68), "tuft": Color(0.32, 0.5, 0.38), "tufts": 0.9},
+	"swamp": {"grass": "terrain_grass", "grass_tint": Color(0.5, 0.6, 0.52), "colorize": Color(0.32, 0.42, 0.36, 0.55), "dirt_tint": Color(0.6, 0.62, 0.55),
+		"rock": Color(0.32, 0.36, 0.34), "sand": Color(0.45, 0.5, 0.42), "tuft": Color(0.22, 0.38, 0.24), "tufts": 1.0},
+	"necro": {"grass": "terrain_grass", "grass_tint": Color(0.6, 0.58, 0.56), "colorize": Color(0.42, 0.4, 0.4, 0.75), "dirt_tint": Color(0.66, 0.6, 0.58),
+		"rock": Color(0.3, 0.28, 0.3), "sand": Color(0.45, 0.4, 0.38), "tuft": Color(0.38, 0.34, 0.3), "tufts": 0.5},
 }
 
 
@@ -190,7 +196,7 @@ func _build_mesh() -> void:
 	mat.set_shader_parameter("colorize", th["colorize"])
 	mat.set_shader_parameter("rock_col", th["rock"])
 	mat.set_shader_parameter("sand_col", th["sand"])
-	mat.set_shader_parameter("cloud_strength", 0.12 if theme == "night" else 0.24)
+	mat.set_shader_parameter("cloud_strength", 0.12 if theme in ["night", "swamp", "necro"] else 0.24)
 	mi.material_override = mat
 	mi.name = "TerrainMesh"
 	add_child(mi)

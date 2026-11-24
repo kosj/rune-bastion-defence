@@ -385,7 +385,7 @@ func _open_heroes() -> void:
 		nv.add_theme_constant_override("separation", 0)
 		nv.add_child(UI.ink(h["name"], 25 if not compact else 22, UI.INK if unlocked else UI.INK_SOFT, "title_kr"))
 		nv.add_child(UI.ink(h["title"], 17, Color(0.55, 0.18, 0.1), "ui_black"))
-		var kind := "원거리 · 사거리 %.1f" % float(h["range"]) if h.get("ranged", false) else "근접 · 적을 막아섬"
+		var kind := tr("원거리 · 사거리 %.1f") % float(h["range"]) if h.get("ranged", false) else "근접 · 적을 막아섬"
 		nv.add_child(UI.ink(kind, 16, UI.INK_SOFT))
 		top.add_child(nv)
 		cv.add_child(top)
@@ -402,18 +402,36 @@ func _open_heroes() -> void:
 		var sk := HBoxContainer.new()
 		sk.add_theme_constant_override("separation", 6)
 		sk.add_child(UI.icon(Assets.tex(h["skill_icon"]), 30))
-		sk.add_child(UI.ink("%s · 재사용 %d초" % [h["skill_name"], int(h["skill_cd"])], 16, UI.INK, "ui_black"))
+		sk.add_child(UI.ink(tr("%s · 재사용 %d초") % [tr(h["skill_name"]), int(h["skill_cd"])], 16, UI.INK, "ui_black"))
 		cv.add_child(sk)
+		# persistent rank (lifetime XP) -> talent points
+		var rk := HBoxContainer.new()
+		rk.add_theme_constant_override("separation", 8)
+		var rb := UI.badge(str(DB.hero_rank(id)), 30, 16)
+		rk.add_child(rb)
+		var prog: Array = DB.hero_rank_progress(id)
+		var rbar := UI.bar("gold", 0, 12)
+		rbar.max_value = maxf(float(prog[1]), 1.0)
+		rbar.value = float(prog[0]) if float(prog[1]) > 0.0 else rbar.max_value
+		rbar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rbar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		rk.add_child(rbar)
+		var pts := DB.talent_points(id)
+		rk.add_child(UI.ink(tr("재능 포인트 %d") % pts, 16, Color(0.6, 0.16, 0.08) if pts > 0 else UI.INK_SOFT, "ui_black"))
+		cv.add_child(rk)
+		var brow := HBoxContainer.new()
+		brow.add_theme_constant_override("separation", 8)
 		var b: Button
+		var bw := cw - 40 - (128 if unlocked else 0)
 		if not unlocked:
-			b = UI.button("2번째 지역 클리어 시 해금", 17, false, Vector2(cw - 40, 50), "gray")
+			b = UI.button("2번째 지역 클리어 시 해금", 17, false, Vector2(bw, 50), "gray")
 			b.icon = Assets.tex("lock")
 			b.disabled = true
 		elif chosen:
-			b = UI.button("출전 중", 21, false, Vector2(cw - 40, 50), "gold")
+			b = UI.button("출전 중", 21, false, Vector2(bw, 50), "gold")
 			b.icon = Assets.tex("check")
 		else:
-			b = UI.button("이 영웅으로 출전", 21, true, Vector2(cw - 40, 50), "red")
+			b = UI.button("이 영웅으로 출전", 21, true, Vector2(bw, 50), "red")
 			b.pressed.connect(func():
 				Game.hero_id = id
 				Game.save()
@@ -424,8 +442,124 @@ func _open_heroes() -> void:
 				_hero.play("idle")
 				shade.queue_free()
 				_open_heroes())
-		cv.add_child(b)
+		brow.add_child(b)
+		if unlocked:
+			var tb := UI.button("재능", 20, false, Vector2(120, 50), "purple")
+			tb.icon = Assets.tex("ht_skill")
+			tb.add_theme_constant_override("icon_max_width", 26)
+			if pts > 0:
+				var bd := UI.badge(str(pts), 26, 14)
+				bd.position = Vector2(98, -8)
+				tb.add_child(bd)
+			tb.pressed.connect(func():
+				shade.queue_free()
+				_open_talents(id))
+			brow.add_child(tb)
+		cv.add_child(brow)
 		hb.add_child(p)
+
+## Hero talents: rank points (from lifetime battle XP) bought into four 3-step talents.
+func _open_talents(id: String) -> void:
+	var h: Dictionary = DB.HEROES[id]
+	var o := _overlay(tr("재능 · %s") % tr(h["name"]), "dark")
+	var shade: Control = o[0]
+	var vb: VBoxContainer = o[1]
+	var compact := get_viewport().get_visible_rect().size.y < 600.0
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 12)
+	head.add_child(UI.icon(Assets.tex(h["portrait"]), 64 if not compact else 52))
+	var hv := VBoxContainer.new()
+	hv.add_theme_constant_override("separation", 2)
+	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var rank_l := UI.label("", 22, UI.GOLD, 5, "ui_black")
+	hv.add_child(rank_l)
+	var bar := UI.bar("gold", 0, 14)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hv.add_child(bar)
+	var xp_l := UI.label("", 15, UI.MUTED, 3)
+	hv.add_child(xp_l)
+	head.add_child(hv)
+	head.custom_minimum_size = Vector2(640, 0)
+	vb.add_child(head)
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 6 if compact else 8)
+	vb.add_child(rows)
+	var refresh: Callable
+	var cells := []
+	for td in DB.HERO_TALENTS:
+		var cp := UI.framed("slim", 2)
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 10)
+		cp.add_child(hb)
+		hb.add_child(UI.icon(Assets.tex(td["icon"]), 50 if not compact else 42))
+		var tv := VBoxContainer.new()
+		tv.add_theme_constant_override("separation", 0)
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tv.add_child(UI.label(td["name"], 20, UI.TEXT, 4, "ui_black"))
+		tv.add_child(UI.label(td["desc"], 15, UI.MUTED, 3))
+		hb.add_child(tv)
+		var pips := HBoxContainer.new()
+		pips.add_theme_constant_override("separation", 2)
+		pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hb.add_child(pips)
+		var bt := UI.button("+1", 20, false, Vector2(72, 48), "gold")
+		hb.add_child(bt)
+		var tid: String = td["id"]
+		bt.pressed.connect(func():
+			if DB.talent_points(id) <= 0 or DB.talent(id, tid) >= DB.TALENT_MAX:
+				Audio.play("error", -4.0)
+				return
+			var cur: Dictionary = Game.hero_talents.get(id, {})
+			cur[tid] = DB.talent(id, tid) + 1
+			Game.hero_talents[id] = cur
+			Game.save()
+			Audio.play("upgrade", -2.0)
+			UI.pop_in(cp)
+			refresh.call())
+		cells.append([tid, pips, bt])
+		rows.add_child(cp)
+	refresh = func():
+		var r := DB.hero_rank(id)
+		var prog: Array = DB.hero_rank_progress(id)
+		rank_l.text = tr("등급 %d  ·  재능 포인트 %d") % [r, DB.talent_points(id)]
+		bar.max_value = maxf(float(prog[1]), 1.0)
+		bar.value = float(prog[0]) if float(prog[1]) > 0.0 else bar.max_value
+		xp_l.text = tr("다음 등급까지 경험치 %d") % int(float(prog[1]) - float(prog[0])) if float(prog[1]) > 0.0 else tr("최고 등급 달성!")
+		for c in cells:
+			var lv := DB.talent(id, c[0])
+			var pp: HBoxContainer = c[1]
+			for ch in pp.get_children():
+				ch.queue_free()
+			for k in DB.TALENT_MAX:
+				var st := UI.icon(Assets.tex("star" if k < lv else "star_empty"), 24)
+				pp.add_child(st)
+			(c[2] as Button).disabled = lv >= DB.TALENT_MAX or DB.talent_points(id) <= 0
+	refresh.call()
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	var back := UI.button("영웅 목록", 20, false, Vector2(170, 52), "blue")
+	back.icon = Assets.tex("ic_hero")
+	back.add_theme_constant_override("icon_max_width", 26)
+	back.pressed.connect(func():
+		shade.queue_free()
+		_open_heroes())
+	row.add_child(back)
+	var rs := UI.button("재능 초기화", 20, false, Vector2(170, 52), "gray")
+	rs.icon = Assets.tex("ic_retry")
+	rs.add_theme_constant_override("icon_max_width", 24)
+	rs.pressed.connect(func():
+		Game.hero_talents[id] = {}
+		Game.save()
+		Audio.play("sell", -4.0)
+		refresh.call())
+	row.add_child(rs)
+	vb.add_child(row)
+	var hint := UI.label("전투에서 얻은 경험치가 쌓여 등급이 오르고, 등급마다 재능 포인트 1을 받습니다.", 15, UI.MUTED, 3)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(640, 0)
+	vb.add_child(hint)
 
 # ---------------------------------------------------------------- bestiary
 
@@ -476,14 +610,14 @@ func _open_bestiary() -> void:
 		g1.columns = 2
 		g1.add_theme_constant_override("h_separation", 22)
 		g1.add_theme_constant_override("v_separation", 6)
-		g1.add_child(UI.stat("heart", "체력 %d" % e["hp"], 18))
-		g1.add_child(UI.stat("st_speed", "속도 %s" % spd, 18))
-		g1.add_child(UI.stat("st_armor", "방어 %d%%" % int(float(e["armor"]) * 100), 18))
-		g1.add_child(UI.stat("st_magic", "마법 저항 %d%%" % int(float(e["mr"]) * 100), 18))
-		g1.add_child(UI.stat("coin", "보상 %d" % e["gold"], 18))
-		g1.add_child(UI.stat("skull", "생명 -%d" % e["lives"], 18))
+		g1.add_child(UI.stat("heart", tr("체력 %d") % e["hp"], 18))
+		g1.add_child(UI.stat("st_speed", tr("속도 %s") % tr(spd), 18))
+		g1.add_child(UI.stat("st_armor", tr("방어 %d%%") % int(float(e["armor"]) * 100), 18))
+		g1.add_child(UI.stat("st_magic", tr("마법 저항 %d%%") % int(float(e["mr"]) * 100), 18))
+		g1.add_child(UI.stat("coin", tr("보상 %d") % e["gold"], 18))
+		g1.add_child(UI.stat("skull", tr("생명 -%d") % e["lives"], 18))
 		dv.add_child(g1)
-		var tip := UI.ink("공략: " + str(e.get("desc", "")), 17, UI.INK)
+		var tip := UI.ink(tr("공략: ") + tr(str(e.get("desc", ""))), 17, UI.INK)
 		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		tip.custom_minimum_size = Vector2(detail.custom_minimum_size.x - 40, 0)
 		dv.add_child(tip)
@@ -508,7 +642,7 @@ func _open_bestiary() -> void:
 		show.call(first)
 	else:
 		dv.add_child(UI.ink("아직 만난 적이 없습니다.\n전투에서 적을 만나면 기록됩니다.", 18, UI.INK_SOFT))
-	var cnt := UI.label("발견 %d / %d" % [seen_n, DB.ENEMIES.size()], 18, UI.GOLD, 4, "ui_black")
+	var cnt := UI.label(tr("발견 %d / %d") % [seen_n, DB.ENEMIES.size()], 18, UI.GOLD, 4, "ui_black")
 	cnt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	left.add_child(cnt)
 
@@ -516,7 +650,7 @@ func _open_bestiary() -> void:
 
 ## Achievements: lifetime goals, each worth one upgrade star.
 func _open_achievements() -> void:
-	var o := _overlay("업적  ★ %d / %d" % [Game.achievement_count(), DB.ACHIEVEMENTS.size()], "blue")
+	var o := _overlay(tr("업적  ★ %d / %d") % [Game.achievement_count(), DB.ACHIEVEMENTS.size()], "blue")
 	var vb: VBoxContainer = o[1]
 	var vs := get_viewport().get_visible_rect().size
 	var sc := ScrollContainer.new()
@@ -644,7 +778,7 @@ func _open_upgrades() -> void:
 		cells.append([cp, bt, id, cost, nl, dl])
 		grid.add_child(cp)
 	refresh = func():
-		have.text = "보유 ★ %d" % Game.available_stars()
+		have.text = tr("보유 %d") % Game.available_stars()
 		for cell in cells:
 			var owned: bool = Game.upgrades.get(cell[2], false)
 			var afford: bool = Game.available_stars() >= int(cell[3])
@@ -682,24 +816,37 @@ func _open_upgrades() -> void:
 
 func _open_settings() -> void:
 	var o := _overlay("설정", "blue")
+	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
-	vb.add_theme_constant_override("separation", 14)
-	vb.custom_minimum_size = Vector2(440, 0)
+	vb.add_theme_constant_override("separation", 12)
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 26)
+	vb.add_child(cols)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 12)
+	left.custom_minimum_size = Vector2(400, 0)
+	cols.add_child(left)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 12)
+	right.custom_minimum_size = Vector2(400, 0)
+	cols.add_child(right)
+	# --- sound & graphics
+	left.add_child(_section("소리 · 그래픽"))
 	for row in [["음악", Game.music_volume, "music"], ["효과음", Game.sfx_volume, "sfx"]]:
 		var hb := HBoxContainer.new()
 		hb.add_theme_constant_override("separation", 14)
-		var l := UI.label(row[0], 22, UI.TEXT, 4, "ui_black")
-		l.custom_minimum_size.x = 90
+		var l := UI.label(row[0], 21, UI.TEXT, 4, "ui_black")
+		l.custom_minimum_size.x = 92
 		hb.add_child(l)
-		var s := HSlider.new()
-		s.min_value = 0
-		s.max_value = 1
-		s.step = 0.05
-		s.value = row[1]
-		s.custom_minimum_size = Vector2(300, 40)
-		s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var sl := HSlider.new()
+		sl.min_value = 0
+		sl.max_value = 1
+		sl.step = 0.05
+		sl.value = row[1]
+		sl.custom_minimum_size = Vector2(280, 40)
+		sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var key: String = row[2]
-		s.value_changed.connect(func(v):
+		sl.value_changed.connect(func(v):
 			if key == "music":
 				Game.music_volume = v
 				Audio.update_music_volume()
@@ -707,54 +854,193 @@ func _open_settings() -> void:
 				Game.sfx_volume = v
 				Audio.play("click")
 			Game.save())
-		hb.add_child(s)
-		vb.add_child(hb)
-	var hq := CheckButton.new()
-	hq.text = "고품질 그래픽 (그림자·안티에일리어싱)"
-	hq.button_pressed = Game.high_quality
-	hq.add_theme_font_override("font", Assets.font("ui_black"))
-	hq.toggled.connect(func(v):
+		hb.add_child(sl)
+		left.add_child(hb)
+	left.add_child(_toggle("고품질 그래픽 (그림자·안티에일리어싱)", Game.high_quality, func(v):
 		Game.high_quality = v
 		Game.apply_quality()
-		Game.save())
-	vb.add_child(hq)
-	vb.add_child(UI.divider(440))
+		Game.save()))
+	left.add_child(_toggle("화면 흔들림", Game.screen_shake, func(v):
+		Game.screen_shake = v
+		Game.save()))
+	left.add_child(_toggle("진동 (지원하는 모바일 기기)", Game.vibration, func(v):
+		Game.vibration = v
+		Game.save()
+		Game.vibrate(60)))
+	# --- interface, language, save data
+	right.add_child(_section("화면 · 언어"))
+	var scales := [[0.9, "작게"], [1.0, "보통"], [1.15, "크게"]]
+	right.add_child(_choice("UI 크기", scales, Game.ui_scale, func(v):
+		Game.set_ui_scale(v)
+		shade.queue_free()
+		(func(): _open_settings()).call_deferred()))
+	right.add_child(_choice("언어", [["", "자동"], ["ko", "한국어"], ["en", "English"]], Game.language, func(v):
+		Game.language = v
+		Lang.apply(v)
+		Game.save()
+		Game.goto_scene("res://scenes/main_menu.tscn")))
+	right.add_child(_section("저장 데이터"))
+	var sv := HBoxContainer.new()
+	sv.add_theme_constant_override("separation", 10)
+	var ex := UI.button("내보내기", 19, false, Vector2(195, 52), "green")
+	ex.icon = Assets.tex("ic_upgrade")
+	ex.add_theme_constant_override("icon_max_width", 22)
+	ex.pressed.connect(func():
+		shade.queue_free()
+		_open_save_code(true))
+	sv.add_child(ex)
+	var im := UI.button("가져오기", 19, false, Vector2(195, 52), "blue")
+	im.icon = Assets.tex("ic_map")
+	im.add_theme_constant_override("icon_max_width", 22)
+	im.pressed.connect(func():
+		shade.queue_free()
+		_open_save_code(false))
+	sv.add_child(im)
+	right.add_child(sv)
+	# installable web app (PWA): Chrome/Edge/Android hand us their install prompt; iOS needs Safari's share menu
+	if OS.has_feature("web") and not bool(JavaScriptBridge.eval("!!(window.rbStandalone && window.rbStandalone())", true)):
+		if bool(JavaScriptBridge.eval("!!(window.rbCanInstall && window.rbCanInstall())", true)):
+			var ib := UI.button("앱으로 설치", 19, false, Vector2(400, 50), "purple")
+			ib.icon = Assets.tex("ic_play")
+			ib.add_theme_constant_override("icon_max_width", 22)
+			ib.pressed.connect(func():
+				JavaScriptBridge.eval("window.rbInstall && window.rbInstall()", true)
+				ib.disabled = true)
+			right.add_child(ib)
+		elif OS.has_feature("web_ios"):
+			var il := UI.label("Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 화면으로 실행됩니다.", 15, UI.MUTED, 3)
+			il.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			il.custom_minimum_size = Vector2(400, 0)
+			right.add_child(il)
 	# destructive action needs a second tap within 3 s
-	var rs := UI.button("진행 상황 초기화", 19, false, Vector2(300, 50), "gray")
+	var rs := UI.button("진행 상황 초기화", 19, false, Vector2(400, 50), "gray")
 	var armed := [false]
 	rs.pressed.connect(func():
 		if not armed[0]:
 			armed[0] = true
-			rs.text = "정말 초기화? 한 번 더 누르세요"
+			rs.text = tr("정말 초기화? 한 번 더 누르세요")
 			UI._btn_styles(rs, "red")
 			get_tree().create_timer(3.0).timeout.connect(func():
-				if is_instance_valid(rs) and armed[0] and rs.text.begins_with("정말"):
+				if is_instance_valid(rs) and armed[0]:
 					armed[0] = false
-					rs.text = "진행 상황 초기화"
+					rs.text = tr("진행 상황 초기화")
 					UI._btn_styles(rs, "gray"))
 			return
 		armed[0] = false
-		Game.stars = [0, 0, 0, 0, 0]
-		Game.heroic = [false, false, false, false, false]
-		Game.upgrades = {}
-		Game.stats = {}
-		Game.achievements = {}
-		Game.seen_enemies = {}
-		Game.endless_best = {}
-		Game.hero_id = "kael"
-		Game.seen_tutorial = false
+		Game.reset_progress()
 		Game.save()
-		rs.text = "초기화 완료"
+		rs.text = tr("초기화 완료")
 		UI._btn_styles(rs, "gray")
 		rs.disabled = true)
-	var cc := CenterContainer.new()
-	cc.add_child(rs)
-	vb.add_child(cc)
+	right.add_child(rs)
+
+func _section(text: String) -> Control:
+	var l := UI.label(text, 17, UI.GOLD, 4, "ui_black")
+	return l
+
+func _toggle(text: String, on: bool, cb: Callable) -> CheckButton:
+	var c := CheckButton.new()
+	c.text = text
+	c.button_pressed = on
+	c.add_theme_font_override("font", Assets.font("ui_black"))
+	c.add_theme_font_size_override("font_size", 18)
+	c.toggled.connect(cb)
+	return c
+
+## Row of segmented buttons; options are [value, label] pairs.
+func _choice(label: String, options: Array, current: Variant, cb: Callable) -> Control:
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 6)
+	var l := UI.label(label, 19, UI.TEXT, 4, "ui_black")
+	l.custom_minimum_size.x = 92
+	hb.add_child(l)
+	for op in options:
+		var sel: bool = str(op[0]) == str(current) or (op[0] is float and current is float and absf(float(op[0]) - float(current)) < 0.01)
+		var b := UI.button(op[1], 17, false, Vector2(98, 46), "gold" if sel else "gray")
+		var v: Variant = op[0]
+		b.pressed.connect(func():
+			Audio.play("click", -4.0)
+			cb.call(v))
+		hb.add_child(b)
+	return hb
+
+## Save transfer: export shows the code (also copied to the clipboard / downloadable on the web),
+## import takes a pasted code (the browser's own prompt on the web: it supports paste on phones).
+func _open_save_code(export: bool) -> void:
+	var o := _overlay("저장 내보내기" if export else "저장 가져오기", "blue")
+	var shade: Control = o[0]
+	var vb: VBoxContainer = o[1]
+	var web := OS.has_feature("web")
+	var info := UI.label("", 17, UI.TEXT, 3)
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.custom_minimum_size = Vector2(560, 0)
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(info)
+	var te := TextEdit.new()
+	te.custom_minimum_size = Vector2(560, 150)
+	te.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	te.add_theme_font_size_override("font_size", 13)
+	vb.add_child(te)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	vb.add_child(row)
+	if export:
+		var code := Game.export_code()
+		te.text = code
+		te.editable = false
+		DisplayServer.clipboard_set(code)
+		info.text = tr("아래 코드를 복사해 다른 기기에서 ‘가져오기’ 하세요. (클립보드에 복사했습니다)")
+		var cp := UI.button("다시 복사", 19, false, Vector2(170, 52), "green")
+		cp.pressed.connect(func():
+			DisplayServer.clipboard_set(code)
+			Audio.play("click", -4.0)
+			info.text = tr("클립보드에 복사했습니다."))
+		row.add_child(cp)
+		if web:
+			var dl := UI.button("파일로 저장", 19, false, Vector2(170, 52), "blue")
+			dl.pressed.connect(func():
+				JavaScriptBridge.download_buffer(code.to_utf8_buffer(), "rune_bastion_save.txt", "text/plain"))
+			row.add_child(dl)
+	else:
+		info.text = tr("다른 기기에서 내보낸 저장 코드를 붙여넣으세요. 현재 진행 상황을 덮어씁니다.")
+		te.placeholder_text = "RB1-..."
+		var apply := func(code: String):
+			var err := Game.import_code(code)
+			if err != "":
+				info.text = tr(err)
+				info.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
+				Audio.play("error", -4.0)
+				return
+			Audio.play("upgrade", -2.0)
+			Game.goto_scene("res://scenes/main_menu.tscn")
+		if web:
+			var pb := UI.button("코드 붙여넣기", 19, true, Vector2(200, 52), "green")
+			pb.pressed.connect(func():
+				var got = JavaScriptBridge.eval("window.prompt(%s, '') || ''" % JSON.stringify(tr("저장 코드를 붙여넣으세요")), true)
+				if got is String and got != "":
+					te.text = got
+					apply.call(got))
+			row.add_child(pb)
+		var ok := UI.button("적용", 19, false, Vector2(150, 52), "gold")
+		ok.pressed.connect(func(): apply.call(te.text))
+		row.add_child(ok)
+	var back := UI.button("닫기", 19, false, Vector2(150, 52), "gray")
+	back.pressed.connect(func():
+		shade.queue_free()
+		_open_settings())
+	row.add_child(back)
 
 # screenshot hooks for tools/test_runner (open=_test_card / _test_endless)
 func _test_card() -> void:
 	_open_select()
 	(func(): (_select as WorldMap)._open_card(1)).call_deferred()
+
+func _test_talents() -> void:
+	_open_talents("kael")
+
+func _test_save() -> void:
+	_open_save_code(true)
 
 func _test_endless() -> void:
 	_open_select()
