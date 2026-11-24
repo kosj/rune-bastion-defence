@@ -395,6 +395,23 @@ func _open_card(i: int) -> void:
 		var note2 := UI.ink("쉬움: 적 체력 -28% · 공격력 -15% · 시작 골드 +30% — 별은 그대로 얻습니다", 15, Color(0.12, 0.42, 0.16))
 		note2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vb.add_child(note2)
+	# iron challenge: unlocked by three stars here
+	var irow := HBoxContainer.new()
+	irow.alignment = BoxContainer.ALIGNMENT_CENTER
+	irow.add_theme_constant_override("separation", 12)
+	if Game.stars[i] >= 3:
+		var ib := UI.button("철인 도전", 19, false, Vector2(190, 48), "purple")
+		ib.icon = Assets.tex("skull")
+		ib.add_theme_constant_override("icon_max_width", 24)
+		ib.pressed.connect(func(): Game.start_challenge(i))
+		irow.add_child(ib)
+		var il := UI.ink("✓ 철인 배지 획득" if Game.iron_done(i) else "생명 3 · 주문 없음 · 골드 +40%", 15, Color(0.12, 0.42, 0.16) if Game.iron_done(i) else UI.INK_SOFT, "ui_black")
+		il.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		irow.add_child(il)
+	else:
+		var lk := UI.ink("별 3개를 얻으면 철인 도전이 열립니다", 15, UI.INK_SOFT)
+		irow.add_child(lk)
+	vb.add_child(irow)
 
 func _open_endless_card() -> void:
 	var maps := []

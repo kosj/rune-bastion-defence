@@ -67,6 +67,10 @@ func _ready() -> void:
 		gold = int(def["gold"]) + 200
 		lives = 20
 		hp_mult = 1.0
+	elif Game.challenge:
+		# iron challenge: three lives, no spells, a little more gold to plan with
+		lives = 3
+		gold = int(gold * 1.4)
 	elif Game.difficulty == 1:
 		hp_mult *= 1.15
 		lives = 10
@@ -78,7 +82,7 @@ func _ready() -> void:
 		gold = int(gold * 1.3)
 	if DB.up("gold"):
 		gold += 60
-	if DB.up("lives"):
+	if DB.up("lives") and not Game.challenge:
 		lives += 2 if (Game.difficulty == 1 and not Game.endless) else 5
 	max_lives = lives
 	for p in def["paths"]:
@@ -151,6 +155,10 @@ func _ready() -> void:
 	if first:
 		Game.stat(intro_key)
 	cine.level_intro(first)
+	if Game.challenge:
+		hud.show_banner(def["name"], "철인 도전 · 생명 3 · 주문 없음", Color(1.0, 0.55, 0.4))
+		for sid in hud.spell_btns:
+			((hud.spell_btns[sid] as Dictionary)["button"] as Control).visible = false
 	Audio.play_music(battle_music())
 	if level_idx == 0 and not Game.seen_tutorial:
 		tutorial_step = 0
@@ -1253,6 +1261,8 @@ func _on_radial_chosen(id: String) -> void:
 		hud.target_hint.text = "집결 지점을 탭하세요 (길 위, 범위 내)"
 
 func _spell_pressed(id: String) -> void:
+	if Game.challenge:
+		return
 	if spell_cd[id] > 0.0 or state == "won" or state == "lost":
 		Audio.play("error", -6.0)
 		return
@@ -1268,6 +1278,8 @@ func _handle_targeting(gp: Vector3) -> void:
 	var t := targeting
 	targeting = ""
 	hud.target_hint.text = ""
+	if Game.challenge and t in ["meteor", "reinforce"]:
+		return
 	match t:
 		"meteor":
 			spell_cd["meteor"] = spell_defs["meteor"]["cd"]
@@ -1477,7 +1489,16 @@ func _victory() -> void:
 	var max_l: int = max_lives
 	var stars := 3 if lives >= max_l - 2 else (2 if lives >= max_l / 2 else 1)
 	var prev_stars := int(Game.stars[level_idx])
-	Game.set_stars(level_idx, stars)
+	if Game.challenge:
+		stars = prev_stars
+		Game.stat("iron_%d" % level_idx, 1, "max")
+		var iron_n := 0
+		for li in DB.LEVELS.size():
+			if Game.iron_done(li):
+				iron_n += 1
+		Game.stat("iron_clears", iron_n, "max")
+	else:
+		Game.set_stars(level_idx, stars)
 	Game.stat("wins")
 	if lives >= max_l:
 		Game.stat("flawless")
@@ -1485,6 +1506,8 @@ func _victory() -> void:
 		Game.stat("heroic_wins")
 	if hero and hero.hid == "sera":
 		Game.stat("sera_wins")
+	if hero and hero.hid == "ren":
+		Game.stat("ren_wins")
 	var st_total := 0
 	for v in Game.stars:
 		st_total += int(v)
@@ -1576,7 +1599,11 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 		grid.add_child(UI.stat("coin", tr("획득 골드 %d") % run_gold, 19, UI.TEXT))
 		grid.add_child(UI.stat("st_rate", tr("전투 %d:%02d") % [int(run_time) / 60, int(run_time) % 60], 19, UI.TEXT))
 		var gained := maxi(stars - prev_stars, 0)
-		if gained > 0 or (Game.difficulty == 1):
+		if Game.challenge:
+			var il := UI.label("철인 도전 성공! 지역 카드에 철인 배지가 붙었습니다", 19, Color(1.0, 0.62, 0.45), 5, "ui_black")
+			il.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			vb.add_child(il)
+		elif gained > 0 or (Game.difficulty == 1):
 			var rw := UI.label((tr("새로 얻은 ★ %d  — 왕국 강화에 사용하세요") % gained) if gained > 0 else "영웅 난이도 클리어!", 19, UI.GOLD, 5, "ui_black")
 			rw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			vb.add_child(rw)
@@ -1723,7 +1750,7 @@ func _log_run(result: String, stars := 0) -> void:
 	for k in towers:
 		var t: Tower = towers[k]
 		tw.append("%s%d%s%s" % [t.type.substr(0, 2), t.level, ("-" + t.mastery) if t.mastery != "" else "", "+" if t.ability != "" else ""])
-	Game.log_play({"lv": level_idx, "d": Game.difficulty, "e": Game.endless, "h": hero.hid if hero else "",
+	Game.log_play({"lv": level_idx, "d": Game.difficulty, "e": Game.endless, "c": Game.challenge, "h": hero.hid if hero else "",
 		"r": result, "s": stars, "wv": wave_idx + 1, "nw": waves.size(), "li": lives, "ml": max_lives,
 		"t": int(run_time), "k": run_kills, "g": gold, "tw": tw, "lw": _lost_by_wave, "lt": _leaks,
 		"sp": _spells_used, "hl": hero.level if hero else 0, "ts": int(Time.get_unix_time_from_system())})

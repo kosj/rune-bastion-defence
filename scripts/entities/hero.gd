@@ -179,14 +179,19 @@ func _engage(delta: float) -> void:
 		var spd := maxf(model.anim_length("attack") / maxf(atk_rate * 0.8, 0.3), 1.0)
 		model.play("attack", spd, 0.06, true)
 		_impact = CharacterModel.ATTACK_IMPACT / spd
-		LevelMain.I.fx.charge(aim_point() + Vector3(0, 0.3, 0), Color(0.5, 0.85, 1.0), _impact)
+		if not _archer():
+			LevelMain.I.fx.charge(aim_point() + Vector3(0, 0.3, 0), Color(0.5, 0.85, 1.0), _impact)
 	if _impact > 0.0:
 		_impact -= delta
 		if _impact <= 0.0 and is_instance_valid(target) and target.alive:
 			var from := aim_point() + Vector3(0, 0.35, 0) + to.normalized() * 0.5
-			Projectile.bolt(from, target, randf_range(dmg[0], dmg[1]), Color(0.5, 0.85, 1.0), 0.0, 0.0)
-			LevelMain.I.fx.magic_burst(from, Color(0.5, 0.85, 1.0), 0.45)
-			Audio.play("magic", -8.0, 0.12)
+			if _archer():
+				Projectile.arrow(from, target, randf_range(dmg[0], dmg[1]), false, float(DB.hero_def().get("pierce", 0.0)))
+				Audio.play("bow", -9.0, 0.1, 2)
+			else:
+				Projectile.bolt(from, target, randf_range(dmg[0], dmg[1]), Color(0.5, 0.85, 1.0), 0.0, 0.0)
+				LevelMain.I.fx.magic_burst(from, Color(0.5, 0.85, 1.0), 0.45)
+				Audio.play("magic", -8.0, 0.12)
 	elif model.current != "attack" and _react_t <= 0.0:
 		model.play("idle")
 
@@ -203,6 +208,13 @@ func cast_skill() -> bool:
 		if to.length() > 0.1:
 			_yaw = atan2(to.x, to.z)
 			rotation.y = _yaw
+		if _archer():
+			# the clip is a long volley loop: play its opening draw fast, then the arrows fall
+			model.play("skill", 2.6, 0.08, true)
+			_skill_t = 0.7
+			LevelMain.I.fx.telegraph(_skill_at, skill_radius(), 0.7 + 0.5, Color(1.0, 0.85, 0.35))
+			Audio.play("bow", -2.0, 0.05, 2)
+			return true
 		model.play("skill", 1.4, 0.08, true)
 		_skill_t = 0.85
 		LevelMain.I.fx.rune_circle(_skill_at + Vector3(0, 0.08, 0), Color(0.5, 0.85, 1.0), skill_radius(), 0.9)
@@ -214,7 +226,13 @@ func cast_skill() -> bool:
 	Audio.play("whirl", -2.0)
 	return true
 
+func _archer() -> bool:
+	return DB.hero_def().get("projectile", "") == "arrow"
+
 func _skill_impact() -> void:
+	if ranged and _archer():
+		_arrow_rain()
+		return
 	if ranged:
 		_star_storm()
 		return
@@ -246,6 +264,46 @@ func _star_storm() -> void:
 		if e.alive and e.global_position.distance_to(_skill_at) < r:
 			e.damage(dmg_v, "magic")
 			e.slow(float(h["skill_slow"]), 3.0)
+	model.play("idle")
+
+## Ren: sixteen arrows fall over the chosen spot; each splashes a little and pins (slows) what it hits.
+func _arrow_rain() -> void:
+	var h: Dictionary = DB.hero_def()
+	var r: float = skill_radius()
+	var per: float = skill_damage() * 0.4
+	var slow_k: float = float(h.get("skill_slow", 0.65))
+	var at := _skill_at
+	var lv := LevelMain.I
+	for i in 16:
+		var a := randf() * TAU
+		var d := sqrt(randf()) * r
+		var land := at + Vector3(cos(a) * d, 0, sin(a) * d)
+		land.y = lv.terrain.walk_height(land.x, land.z)
+		var start := land + Vector3(randf_range(-1.5, 1.5), 8.0, randf_range(-1.5, 1.5))
+		var arr := Assets.instance("p_arrow")
+		arr.scale = Vector3.ONE * 1.3
+		lv.world.add_child(arr)
+		arr.global_position = start
+		arr.look_at(land, Vector3.RIGHT)
+		arr.rotate_object_local(Vector3.RIGHT, -PI * 0.5)
+		arr.visible = false
+		var tw := arr.create_tween()
+		tw.tween_interval(i * 0.055)
+		tw.tween_callback(func(): arr.visible = true)
+		tw.tween_property(arr, "global_position", land + Vector3(0, 0.25, 0), 0.32).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_callback(func():
+			lv.fx.hit_spark(land + Vector3(0, 0.3, 0), Color(1.0, 0.85, 0.45), 0.7)
+			if i % 4 == 0:
+				lv.fx.dust(land, 0.5)
+				Audio.play("bow", -12.0, 0.15, 2)
+			for e: Enemy in lv.enemies.duplicate():
+				if e.alive and e.global_position.distance_to(land) < 1.25:
+					e.damage(per, "physical", true, 0.4)
+					if e.alive:
+						e.slow(slow_k, 1.8))
+		tw.tween_interval(0.6)
+		tw.tween_callback(arr.queue_free)
+	lv.cam_rig.shake(0.25)
 	model.play("idle")
 
 func _on_hit(e: Enemy) -> void:

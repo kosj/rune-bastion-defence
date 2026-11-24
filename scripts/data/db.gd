@@ -132,6 +132,15 @@ const HEROES := {
 		"respawn": 14.0, "regen": 6.0, "skill_cd": 16.0, "skill_dmg": 75, "skill_radius": 3.6, "skill_slow": 0.6,
 		"unlock": 1,
 	},
+	"ren": {
+		"name": "숲의 사수 렌", "title": "바람의 명궁", "model": "ranger", "scale": 1.85, "weapon": "",
+		"portrait": "portrait_ranger", "skill_icon": "skill_arrows", "skill_name": "화살비",
+		"desc": "원거리 물리 딜러. 빠르게 쏘는 화살이 방어력을 30% 꿰뚫고 공중 적도 맞힙니다. 화살비는 적이 가장 많은 곳에 화살 16발을 쏟아부어 맞은 적을 둔화시킵니다.",
+		"hp": 230, "dmg": [10, 15], "armor": 0.15, "atk_rate": 0.72, "speed": 4.5, "ranged": true, "range": 6.8,
+		"projectile": "arrow", "pierce": 0.3,
+		"respawn": 13.0, "regen": 6.0, "skill_cd": 15.0, "skill_dmg": 70, "skill_radius": 3.4, "skill_slow": 0.65,
+		"unlock": 3,
+	},
 }
 const HERO_XP := [0, 120, 320, 650, 1100]
 
@@ -204,6 +213,9 @@ const ACHIEVEMENTS := [
 	{"id": "meteor", "name": "하늘의 분노", "desc": "유성 낙하 25회 사용", "stat": "meteors", "goal": 25, "icon": "spell_meteor"},
 	{"id": "gold", "name": "왕실 금고", "desc": "누적 골드 20,000 획득", "stat": "gold", "goal": 20000, "icon": "coin"},
 	{"id": "sera", "name": "별빛의 동료", "desc": "세라와 함께 지역 클리어", "stat": "sera_wins", "goal": 1, "icon": "portrait_sera"},
+	{"id": "ren", "name": "바람의 동료", "desc": "렌과 함께 지역 클리어", "stat": "ren_wins", "goal": 1, "icon": "portrait_ranger"},
+	{"id": "iron", "name": "강철 의지", "desc": "철인 도전 1회 성공", "stat": "iron_clears", "goal": 1, "icon": "skull"},
+	{"id": "iron_all", "name": "철인 군주", "desc": "모든 지역 철인 도전 성공", "stat": "iron_clears", "goal": 8, "icon": "crown"},
 	{"id": "endless15", "name": "끝없는 전쟁", "desc": "무한 모드 15웨이브 도달", "stat": "endless_wave", "goal": 15, "icon": "wave_call"},
 	{"id": "endless30", "name": "불멸의 성채", "desc": "무한 모드 30웨이브 도달", "stat": "endless_wave", "goal": 30, "icon": "crown"},
 	{"id": "lich", "name": "망자의 안식", "desc": "리치 군주 모르가스 처치", "stat": "lich_kills", "goal": 1, "icon": "portrait_lich"},

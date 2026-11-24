@@ -203,3 +203,20 @@ Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 �
 쉬움	Casual
 쉬움|difficulty	Casual
 쉬움: 적 체력 -28% · 공격력 -15% · 시작 골드 +30% — 별은 그대로 얻습니다	Casual: enemy HP -28% · damage -15% · starting gold +30% — stars count as usual
+숲의 사수 렌	Ren the Forest Archer
+바람의 명궁	Master of the Wind Bow
+화살비	Arrow Rain
+원거리 물리 딜러. 빠르게 쏘는 화살이 방어력을 30% 꿰뚫고 공중 적도 맞힙니다. 화살비는 적이 가장 많은 곳에 화살 16발을 쏟아부어 맞은 적을 둔화시킵니다.	Ranged physical damage. Fast arrows pierce 30% of armor and hit flying enemies. Arrow Rain pours 16 arrows onto the densest crowd and slows everything they hit.
+바람의 동료	Wind Companion
+렌과 함께 지역 클리어	Clear a region with Ren
+강철 의지	Iron Will
+철인 도전 1회 성공	Complete an Iron Challenge
+철인 군주	Iron Sovereign
+모든 지역 철인 도전 성공	Complete the Iron Challenge in every region
+철인 도전 · 생명 3 · 주문 없음	Iron Challenge · 3 lives · no spells
+철인 도전 성공! 지역 카드에 철인 배지가 붙었습니다	Iron Challenge complete! The region card now wears the iron badge
+%d번째 지역 클리어 시 해금	Unlocks after clearing region %d
+철인 도전	Iron Challenge
+✓ 철인 배지 획득	✓ Iron badge earned
+생명 3 · 주문 없음 · 골드 +40%	3 lives · no spells · gold +40%
+별 3개를 얻으면 철인 도전이 열립니다	Earn 3 stars to unlock the Iron Challenge

@@ -4,7 +4,7 @@ extends Node3D
 
 const LOOPING := ["idle", "run", "roar_loop"]
 ## Some VARCO motion clips (jog_looping) are authored facing sideways; correct per clip.
-const YAW_FIX := {"hero": {"run": 90.0}, "footman": {"run": 90.0}, "goblin": {"run": 90.0}, "sapper": {"run": 90.0}, "sera": {"run": 90.0}, "orc": {"attack": -90.0}, "ogre": {"roar": -90.0}}
+const YAW_FIX := {"hero": {"run": 90.0}, "footman": {"run": 90.0}, "goblin": {"run": 90.0}, "sapper": {"run": 90.0}, "sera": {"run": 90.0}, "ranger": {"run": 90.0}, "orc": {"attack": -90.0}, "ogre": {"roar": -90.0}}
 const ATTACK_IMPACT := 0.62  # seconds into the trimmed attack clip
 
 static var _prepared := {}

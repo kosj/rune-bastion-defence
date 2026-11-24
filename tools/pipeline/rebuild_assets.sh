@@ -23,6 +23,15 @@ blender -b -P "$H/process_hq.py" -- "$RAW/props_in" "$OUT/models" "$M" \
  barrels:foot:1.9:2000:512:256:hard:256 crystals:height:1.7:1500:512:256:hard:256 fence:foot:2.8:1200:512:256:hard:256 \
  bridge:foot:8.0:3500:1024:512:hard:256 flowers:foot:1.3:1500:512:256:soft:256 \
  2>&1 | grep -E "^(BAKE|DONE|AO|ORM)|Traceback|Error"
+# phone meshes for the mobile pack (mobile/models, swapped in by tools/build_web.sh)
+MOB=${MOB_OUT:-$OUT/mobile_models}
+blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq" "$MOB" "$MOB/meta.json" \
+ archer_1:tower:2.9:5500:512:256:hard:256 archer_2:tower:3.1:6000:512:256:hard:256 archer_3:tower:3.3:7000:512:256:hard:256 \
+ barracks_1:tower:3.5:5500:512:256:hard:256 barracks_2:tower:3.7:6000:512:256:hard:256 barracks_3:tower:3.9:7000:512:256:hard:256 \
+ mage_1:tower:3.0:5500:512:256:hard:256 mage_2:tower:3.2:6000:512:256:hard:256 mage_3:tower:3.4:7000:512:256:hard:256 \
+ artillery_1:tower:3.2:5500:512:256:hard:256 artillery_2:tower:3.4:6000:512:256:hard:256 artillery_3:tower:3.6:7000:512:256:hard:256 \
+ castle:foot:10.5:13000:1024:512:hard:256 portal:foot:7.0:10000:1024:512:hard:256 \
+ 2>&1 | grep -E "^(DONE)|Traceback|Error"
 A4=$RAW/varco/anim_v4; A=$RAW/varco/anim; A5=$RAW/varco/anim_v5; D2=$RAW/dl_v2; D3=$RAW/dl_v3; C="$OUT/characters"
 mc() { local np=$1; shift; NORMAL_PX=$np blender -b -P "$H/merge_character.py" -- "$@" 2>&1 | grep -E "^(WROTE|AO|ORM)|Traceback|Error"; }
 mc 256 $C/footman.glb 1024 idle=$A/footman_idle.glb run=$A/footman_run.glb attack=$A/footman_attack.glb death=$A/footman_death.glb hit=$A5/footman_hit.glb cheer=$A5/footman_cheer.glb

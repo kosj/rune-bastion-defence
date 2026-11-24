@@ -359,8 +359,18 @@ func _open_heroes() -> void:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 16)
 	hb.alignment = BoxContainer.ALIGNMENT_CENTER
-	vb.add_child(hb)
-	var cw := minf((vs.x - 160.0) / 2.0, 430.0)
+	# three cards side by side when they fit; on narrow (phone) canvases they scroll sideways
+	var n_h := DB.HEROES.size()
+	var cw := minf((vs.x - 120.0 - 16.0 * (n_h - 1)) / n_h, 430.0)
+	if cw >= 340.0:
+		vb.add_child(hb)
+	else:
+		cw = 380.0
+		var sc := ScrollContainer.new()
+		sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		sc.custom_minimum_size = Vector2(vs.x - 110.0, 0)
+		sc.add_child(hb)
+		vb.add_child(sc)
 	for id in DB.HEROES:
 		var h: Dictionary = DB.HEROES[id]
 		var unlocked := Game.hero_unlocked(id)
@@ -429,7 +439,7 @@ func _open_heroes() -> void:
 		var b: Button
 		var bw := cw - 40 - (128 if unlocked else 0)
 		if not unlocked:
-			b = UI.button("2번째 지역 클리어 시 해금", 17, false, Vector2(bw, 50), "gray")
+			b = UI.button(tr("%d번째 지역 클리어 시 해금") % (int(h.get("unlock", 0)) + 1), 17, false, Vector2(bw, 50), "gray")
 			b.icon = Assets.tex("lock")
 			b.disabled = true
 		elif chosen:

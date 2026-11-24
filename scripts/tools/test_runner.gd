@@ -40,8 +40,12 @@ func _ready() -> void:
 			if args.get("progress_all", "0") == "1":
 				Game.stars = [3, 3, 3, 2, 3, 2, 1, 0]
 				Game.hero_xp = {"kael": 3000.0, "sera": 900.0}
+			if args.get("progress_max", "0") == "1":
+				Game.stars = [3, 3, 3, 3, 3, 3, 3, 2]
 			Game.seen_enemies = {"goblin": true, "wolf": true, "shaman": true, "orc": true, "sapper": true, "gargoyle": true}
 			Game.stats = {"kills": 812, "wins": 4, "towers": 41, "masteries": 5, "meteors": 12, "gold": 9000, "endless_wave": 0}
+			if args.get("progress_max", "0") == "1":
+				Game.stats["iron_1"] = 1
 			Game._check_achievements()
 		_menu = (load("res://scenes/main_menu.tscn") as PackedScene).instantiate()
 		get_tree().root.add_child.call_deferred(_menu)
@@ -55,9 +59,11 @@ func _ready() -> void:
 	Game.seen_tutorial = args.get("tutorial", "0") == "0"
 	Game.difficulty = int(args.get("diff", "0"))
 	Game.hero_id = args.get("hero", "kael")
-	if Game.hero_id == "sera" and Game.stars[1] == 0:
-		Game.stars[1] = 1
+	var need := int((DB.HEROES.get(Game.hero_id, {}) as Dictionary).get("unlock", -1))
+	if need >= 0 and Game.stars[need] == 0:
+		Game.stars[need] = 1
 	Game.endless = args.get("endless", "0") == "1"
+	Game.challenge = args.get("challenge", "0") == "1"
 	if args.get("alt_mastery", "0") == "1":
 		BEST_MASTERY = {"archer": "ranger", "barracks": "lancer", "mage": "frost", "artillery": "cluster"}
 	# star upgrades a player would plausibly own by this level (default: 3 stars per earlier level)
@@ -120,6 +126,17 @@ func _process(delta: float) -> void:
 				L2._show_enemy_card(args.get("enemy", "orc"))
 			"boss":
 				L2._spawn_enemy(args.get("enemy", "troll"), 0)
+			"skillshow":
+				# enemies on the road beside the hero, then the hero's skill on them
+				var lp2: LanePath = L2.paths[0]
+				var hp2 := L2.hero.global_position
+				var off: float = lp2.closest(Vector2(hp2.x, hp2.z)).y
+				for k in int(args.get("n", "8")):
+					L2.spawn_enemy_at(args.get("enemy", "goblin"), lp2, clampf(off - 1.5 + k * 0.5, 1.0, lp2.length - 1.0))
+				var cp := lp2.sample(off)
+				L2.cam_rig.focus(Vector3(cp.x, 0, cp.y), float(args.get("zoom", "14")))
+				L2.cam_rig._pos = L2.cam_rig.target
+				L2.get_tree().create_timer(0.3).timeout.connect(func(): L2.hero.cast_skill())
 			"spawn":
 				var lp: LanePath = L2.paths[0]
 				for k in int(args.get("n", "6")):

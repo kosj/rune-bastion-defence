@@ -7,6 +7,7 @@ var stars: Array = []
 var heroic: Array = []
 var upgrades := {}
 var difficulty := 0  # 0 = normal, 1 = heroic (veteran), 2 = casual (easy)
+var challenge := false  # iron challenge run (3 lives, no spells), unlocked by 3 stars in a region
 var hero_id := "kael"
 var seen_enemies := {}
 var stats := {}
@@ -163,12 +164,23 @@ func goto_scene(path: String) -> void:
 func start_level(idx: int) -> void:
 	current_level = idx
 	endless = false
+	challenge = false
 	goto_scene("res://scenes/level.tscn")
+
+func start_challenge(idx: int) -> void:
+	current_level = idx
+	endless = false
+	challenge = true
+	goto_scene("res://scenes/level.tscn")
+
+func iron_done(idx: int) -> bool:
+	return int(stats.get("iron_%d" % idx, 0)) > 0
 
 func start_endless(map_idx: int) -> void:
 	current_level = map_idx
 	endless_map = map_idx
 	endless = true
+	challenge = false
 	goto_scene("res://scenes/level.tscn")
 
 func hero_unlocked(id: String) -> bool:

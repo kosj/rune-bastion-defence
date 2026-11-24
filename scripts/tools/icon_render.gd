@@ -86,7 +86,7 @@ func _run() -> void:
 			cam.look_at(c, Vector3.UP)
 			await _shot("tower_%s_%d" % [t, lv])
 	# characters
-	var chars := {"sera": [1.8, "", "idle"], "sapper": [1.3, "", "run"], "ogre": [3.0, "", "roar"], "hero": [1.95, "w_sword", "idle"], "goblin": [1.25, "w_dagger", "run"], "shaman": [1.35, "", "run"],
+	var chars := {"ranger": [1.85, "", "idle"], "sera": [1.8, "", "idle"], "sapper": [1.3, "", "run"], "ogre": [3.0, "", "roar"], "hero": [1.95, "w_sword", "idle"], "goblin": [1.25, "w_dagger", "run"], "shaman": [1.35, "", "run"],
 		"orc": [2.2, "w_axe", "run"], "warchief": [2.8, "w_axe", "run"], "troll": [4.2, "w_club", "roar"], "wolf": [1.5, "", ""], "gargoyle": [1.6, "", ""],
 		"skeleton": [1.45, "w_dagger", "attack", 0.0, 0.15], "skeleton_knight": [2.1, "", "attack", 0.0, 0.4], "lich": [3.7, "", "run", 0.0, 0.3]}
 	for k in chars:

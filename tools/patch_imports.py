@@ -66,8 +66,10 @@ for f in glob.glob("assets/**/*.import", recursive=True):
         s = re.sub(r"mipmaps/generate=\w+", "mipmaps/generate=true", s)
         if role == "normal":
             s = re.sub(r"compress/normal_map=\d", "compress/normal_map=1", s)
-    elif "/ui/kit/" in f or base.startswith("world_map"):
-        q = 0.85 if base.startswith("world_map") else 0.92
+    elif "/ui/kit/" in f or base.startswith(("world_map", "level_", "loading_bg", "portrait_")):
+        # painted art (map, region thumbnails, loading screen, portraits): lossy WebP is invisible
+        # at these sizes and a fraction of the lossless size
+        q = 0.85 if base.startswith(("world_map", "level_", "loading_bg")) else 0.92
         s = re.sub(r"compress/mode=\d", "compress/mode=1", s)
         s = re.sub(r"compress/lossy_quality=[0-9.]+", "compress/lossy_quality=%.2f" % q, s)
         s = re.sub(r"mipmaps/generate=\w+", "mipmaps/generate=true", s)

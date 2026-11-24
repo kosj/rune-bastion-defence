@@ -29,6 +29,14 @@ if [ "${MOBILE_PACK:-1}" = "1" ]; then
   tar --exclude=./build --exclude=./.git -cf - . | (cd "$MP" && tar -xf -)
   (
     cd "$MP"
+    # lighter towers / castle / portal for phones; drop the textures extracted from the desktop
+    # meshes so the re-baked maps of the phone meshes are extracted instead
+    for g in mobile/models/*.glb; do
+      n=$(basename "$g" .glb)
+      cp "$g" "assets/models/$n.glb"
+      rm -f assets/models/${n}_albedo.png* assets/models/${n}_normal.png* assets/models/${n}_orm.png*
+    done
+    timeout 1800 $GODOT --headless --path . --import >/dev/null 2>&1 || true
     python3 tools/patch_imports.py --mobile
     # only the mobile (ETC2/ASTC) variants are needed in this pack
     grep -q "import_s3tc_bptc" project.godot || \
