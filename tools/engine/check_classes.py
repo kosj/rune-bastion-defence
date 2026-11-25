@@ -63,8 +63,10 @@ core_text = ""
 for f in ("scene/register_scene_types.cpp", "servers/register_server_types.cpp", "core/register_core_types.cpp"):
     core_text += open(os.path.join(src, f), encoding="utf-8").read()
 
-# not exported (export_presets.cfg exclude_filter) or not part of the game
-skip = re.compile(r"^(scripts/tools/|scenes/test_runner|scenes/icon_render|scenes/pose_test|web/|tools/|build/|\.git/|addons/)")
+# the game's own files only (CI checks the Godot source out inside the workspace), minus what the
+# export leaves out (export_presets.cfg exclude_filter)
+keep = re.compile(r"^(scripts/|scenes/|assets/|\.godot/imported/|[^/]+\.(tscn|tres)$)")
+skip = re.compile(r"^(scripts/tools/|scenes/test_runner|scenes/icon_render|scenes/pose_test)")
 hits = []
 pat = re.compile(r"\b(" + "|".join(sorted(map(re.escape, classes), key=len, reverse=True)) + r")\b")
 for root, dirs, files in os.walk(proj):
@@ -72,7 +74,7 @@ for root, dirs, files in os.walk(proj):
     dirs[:] = [d for d in dirs if not (d.startswith(".") and d != ".godot") and d not in ("build",)]
     for f in files:
         rel = os.path.normpath(os.path.join(rel_root, f)).replace(os.sep, "/")
-        if skip.match(rel):
+        if not keep.match(rel) or skip.match(rel):
             continue
         if f.endswith((".gd", ".tscn", ".tres")) and not rel.startswith(".godot/"):
             text = open(os.path.join(root, f), encoding="utf-8", errors="replace").read()
