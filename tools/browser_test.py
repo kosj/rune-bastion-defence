@@ -1,6 +1,6 @@
 """Load the hosted web build in headless Chrome (SwiftShader WebGL2), capture console + screenshots.
 Usage: browser_test.py <dir> <out_prefix> [w h] [--play] [--early] [--mobile] [--query=pack=mobile]
-                       [--locale=ko-KR] [--throttle=Mbit/s] [--nosw]"""
+                       [--locale=ko-KR] [--throttle=Mbit/s] [--nosw] [--revisit] [--smoke]"""
 import asyncio, sys, threading, http.server, functools, os, time
 from playwright.async_api import async_playwright
 
@@ -11,7 +11,8 @@ H = int(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4].isdigit() else 720
 PLAY = "--play" in sys.argv
 EARLY = "--early" in sys.argv
 NOSW = "--nosw" in sys.argv
-REVISIT = "--revisit" in sys.argv  # after the title screen, load the page again (service-worker cache)  # no service worker: its requests bypass the network throttle  # press start before the streamed content has arrived (wait card)
+REVISIT = "--revisit" in sys.argv
+SMOKE = "--smoke" in sys.argv  # exit 1 on page errors, engine errors or missing milestones (CI)  # after the title screen, load the page again (service-worker cache)  # no service worker: its requests bypass the network throttle  # press start before the streamed content has arrived (wait card)
 MOBILE = "--mobile" in sys.argv
 QUERY = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--query=")), "")
 LOCALE = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--locale=")), "ko-KR")
@@ -154,5 +155,20 @@ async def main():
                 print(l)
         print("SUMMARY", {k: round(v, 1) for k, v in marks.items()})
         await b.close()
+        if SMOKE:
+            need = ["menu_first_frame", "chunk_menu", "chunk_stage1", "chunk_towers", "chunk_world", "menu_world_built"]
+            if PLAY:
+                need.append("level_first_frame")
+            bad = ["missing milestone " + n for n in need if n not in marks]
+            for l in logs:
+                if "GL Driver" in l:
+                    continue
+                if (l.startswith(("[error]", "[pageerror]")) or "SCRIPT ERROR" in l or "CHUNK MISS" in l
+                        or "Cannot get class" in l or "Failed loading resource" in l):
+                    bad.append(l[:200])
+            if bad:
+                print("SMOKE FAIL\n  " + "\n  ".join(bad[:30]))
+                sys.exit(1)
+            print("SMOKE OK")
 
 asyncio.run(main())

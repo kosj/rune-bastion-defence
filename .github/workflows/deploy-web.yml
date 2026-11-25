@@ -19,11 +19,27 @@ env:
   GODOT_VERSION: 4.7.2
 
 jobs:
+  # size-optimized engine template (tools/engine); cached, so normally a minute
+  engine:
+    uses: ./.github/workflows/web-engine.yml
+
   web:
+    needs: engine
+    # still deploy (with the official template) if the engine template could not be built
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+
+      - name: Engine template from the engine job
+        id: tpl
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: web-template-*
+          merge-multiple: true
+          path: ~/rb-template
 
       - name: Cache Godot + export templates
         id: godot-cache
@@ -59,6 +75,11 @@ jobs:
         run: |
           export GODOT=~/godot/godot
           export BUILD_ID="$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}"
+          if [ -f ~/rb-template/web_nothreads_release.zip ]; then
+            export RB_WEB_TEMPLATE=~/rb-template/web_nothreads_release.zip
+          else
+            echo "::warning::no size-optimized engine template; exporting with the official one"
+          fi
           bash tools/build_web.sh
           test -f build/web_hosted/index.html
           # core packs + download chunks (tools/split_pck.py, scripts/data/pack_chunks.gd)
@@ -75,6 +96,11 @@ jobs:
           pip install --quiet fonttools
           python3 tools/make_fonts.py --check
           bash tools/check_chunks.sh
+
+      - name: Browser smoke test (headless Chrome plays the built page; nothing is published if it fails)
+        run: |
+          pip install --quiet playwright
+          python3 tools/browser_test.py build/web_hosted /tmp/smoke 1280 720 --play --nosw --smoke
 
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4
