@@ -1,7 +1,9 @@
 #!/bin/bash
 # Rebuild every game-ready 3D asset from the raw VARCO downloads (see tools/pipeline/*.py).
-# Triangle budgets are sized for the game camera (towers ~100-200 px tall at the closest zoom):
-# more triangles than that are invisible there but cost every frame, twice with shadows.
+# Triangle budgets come from the game camera: "e1.0" = the smallest mesh whose deviation from the
+# high-poly stays under 1 px at the closest zoom (process_hq.py: 81.7 px/m at 900 px). Fewer
+# triangles show as dented silhouettes and torn foliage up close; more are invisible there and the
+# engine's automatic LODs drop them when zoomed out. Phones: "e1.6" (smaller, 0.8-scaled view).
 #   structures: high-poly regen (dl_hq) -> decimate + weighted normals + normal/AO bake
 #   props:      phase-2 raw meshes      -> same pipeline, smaller budgets
 #   characters: rigged per-animation GLBs -> merged clips, AO bake in rest pose, cleaned ORM
@@ -13,17 +15,17 @@ RAW=${RAW:-/home/claude}
 mkdir -p "$OUT/models" "$OUT/characters"
 M="$OUT/models/meta.json"
 blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq" "$OUT/models" "$M" \
- archer_1:tower:2.9:7500:1024:512:hard:256 archer_2:tower:3.1:8500:1024:512:hard:256 archer_3:tower:3.3:10000:1024:512:hard:256 \
- barracks_1:tower:3.5:7500:1024:512:hard:256 barracks_2:tower:3.7:8500:1024:512:hard:256 barracks_3:tower:3.9:10000:1024:512:hard:256 \
- mage_1:tower:3.0:7500:1024:512:hard:256 mage_2:tower:3.2:8500:1024:512:hard:256 mage_3:tower:3.4:10000:1024:512:hard:256 \
- artillery_1:tower:3.2:7500:1024:512:hard:256 artillery_2:tower:3.4:8500:1024:512:hard:256 artillery_3:tower:3.6:10000:1024:512:hard:256 \
- castle:foot:10.5:14000:2048:1024:hard:512 portal:foot:7.0:11000:1024:1024:hard:512 plot:foot:3.6:1600:1024:512:hard:256 \
+ archer_1:tower:2.9:e1.0:1024:512:hard:256 archer_2:tower:3.1:e1.0:1024:512:hard:256 archer_3:tower:3.3:e1.0:1024:512:hard:256 \
+ barracks_1:tower:3.5:e1.0:1024:512:hard:256 barracks_2:tower:3.7:e1.0:1024:512:hard:256 barracks_3:tower:3.9:e1.0:1024:512:hard:256 \
+ mage_1:tower:3.0:e1.0:1024:512:hard:256 mage_2:tower:3.2:e1.0:1024:512:hard:256 mage_3:tower:3.4:e1.0:1024:512:hard:256 \
+ artillery_1:tower:3.2:e1.0:1024:512:hard:256 artillery_2:tower:3.4:e1.0:1024:512:hard:256 artillery_3:tower:3.6:e1.0:1024:512:hard:256 \
+ castle:foot:10.5:e1.0:2048:1024:hard:512 portal:foot:7.0:e1.0:1024:1024:hard:512 plot:foot:3.6:e1.0:1024:512:hard:256 \
  2>&1 | grep -E "^(BAKE|DONE|AO|ORM)|Traceback|Error"
 blender -b -P "$H/process_hq.py" -- "$RAW/props_in" "$OUT/models" "$M" \
- tree_round_v:height:4.6:2400:1024:512:soft:256 tree_pine_v:height:5.2:1500:1024:512:soft:256 rocks_v:foot:2.2:1000:512:256:soft:256 \
- bush:foot:1.9:1800:512:256:soft:256 house:foot:4.6:1800:1024:512:hard:256 lamp:height:2.7:700:512:256:hard:256 \
- barrels:foot:1.9:1000:512:256:hard:256 crystals:height:1.7:900:512:256:hard:256 fence:foot:2.8:700:512:256:hard:256 \
- bridge:foot:8.0:2000:1024:512:hard:256 flowers:foot:1.3:900:512:256:soft:256 \
+ tree_round_v:height:4.6:e1.0:1024:512:soft:256 tree_pine_v:height:5.2:e1.0:1024:512:soft:256 rocks_v:foot:2.2:e1.0:512:256:soft:256 \
+ bush:foot:1.9:e1.0:512:256:soft:256 house:foot:4.6:e1.0:1024:512:hard:256 lamp:height:2.7:e1.0:512:256:hard:256 \
+ barrels:foot:1.9:e1.0:512:256:hard:256 crystals:height:1.7:e1.0:512:256:hard:256 fence:foot:2.8:e1.0:512:256:hard:256 \
+ bridge:foot:8.0:e1.0:1024:512:hard:256 flowers:foot:1.3:e1.0:512:256:soft:256 \
  2>&1 | grep -E "^(BAKE|DONE|AO|ORM)|Traceback|Error"
 # held props and small set pieces (VARCO image-to-3D, grip/centre pivot + yaw so blades face +X and
 # the mortar's muzzle faces +Z in Godot): name:mode:size:tris:albedo:normal:style:orm:pivot:yaw
@@ -37,11 +39,18 @@ python3 "$H/make_emit.py" "$OUT/models"
 # phone meshes for the mobile pack (mobile/models, swapped in by tools/build_web.sh)
 MOB=${MOB_OUT:-$OUT/mobile_models}
 blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq" "$MOB" "$MOB/meta.json" \
- archer_1:tower:2.9:5500:512:256:hard:256 archer_2:tower:3.1:6000:512:256:hard:256 archer_3:tower:3.3:7000:512:256:hard:256 \
- barracks_1:tower:3.5:5500:512:256:hard:256 barracks_2:tower:3.7:6000:512:256:hard:256 barracks_3:tower:3.9:7000:512:256:hard:256 \
- mage_1:tower:3.0:5500:512:256:hard:256 mage_2:tower:3.2:6000:512:256:hard:256 mage_3:tower:3.4:7000:512:256:hard:256 \
- artillery_1:tower:3.2:5500:512:256:hard:256 artillery_2:tower:3.4:6000:512:256:hard:256 artillery_3:tower:3.6:7000:512:256:hard:256 \
- castle:foot:10.5:13000:1024:512:hard:256 portal:foot:7.0:10000:1024:512:hard:256 \
+ archer_1:tower:2.9:e1.6:512:256:hard:256 archer_2:tower:3.1:e1.6:512:256:hard:256 archer_3:tower:3.3:e1.6:512:256:hard:256 \
+ barracks_1:tower:3.5:e1.6:512:256:hard:256 barracks_2:tower:3.7:e1.6:512:256:hard:256 barracks_3:tower:3.9:e1.6:512:256:hard:256 \
+ mage_1:tower:3.0:e1.6:512:256:hard:256 mage_2:tower:3.2:e1.6:512:256:hard:256 mage_3:tower:3.4:e1.6:512:256:hard:256 \
+ artillery_1:tower:3.2:e1.6:512:256:hard:256 artillery_2:tower:3.4:e1.6:512:256:hard:256 artillery_3:tower:3.6:e1.6:512:256:hard:256 \
+ castle:foot:10.5:e1.6:1024:512:hard:256 portal:foot:7.0:e1.6:1024:512:hard:256 \
+ 2>&1 | grep -E "^(DONE)|Traceback|Error"
+# props are drawn as MultiMeshes (no engine LOD): phones get their own lighter copies too
+blender -b -P "$H/process_hq.py" -- "$RAW/props_in" "$MOB" "$MOB/meta.json" \
+ tree_round_v:height:4.6:e1.6:1024:512:soft:256 tree_pine_v:height:5.2:e1.6:1024:512:soft:256 rocks_v:foot:2.2:e1.6:512:256:soft:256 \
+ bush:foot:1.9:e1.6:512:256:soft:256 house:foot:4.6:e1.6:1024:512:hard:256 lamp:height:2.7:e1.6:512:256:hard:256 \
+ barrels:foot:1.9:e1.6:512:256:hard:256 crystals:height:1.7:e1.6:512:256:hard:256 fence:foot:2.8:e1.6:512:256:hard:256 \
+ bridge:foot:8.0:e1.6:1024:512:hard:256 flowers:foot:1.3:e1.6:512:256:soft:256 \
  2>&1 | grep -E "^(DONE)|Traceback|Error"
 A4=$RAW/varco/anim_v4; A=$RAW/varco/anim; A5=$RAW/varco/anim_v5; D2=$RAW/dl_v2; D3=$RAW/dl_v3; C="$OUT/characters"
 mc() { local np=$1; shift; NORMAL_PX=$np blender -b -P "$H/merge_character.py" -- "$@" 2>&1 | grep -E "^(WROTE|AO|ORM)|Traceback|Error"; }

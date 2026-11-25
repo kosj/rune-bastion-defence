@@ -1,6 +1,8 @@
 """Load the hosted web build in headless Chrome (SwiftShader WebGL2), capture console + screenshots.
 Usage: browser_test.py <dir> <out_prefix> [w h] [--play] [--early] [--mobile] [--query=pack=mobile]
-                       [--locale=ko-KR] [--throttle=Mbit/s] [--nosw] [--revisit] [--smoke]"""
+                       [--locale=ko-KR] [--throttle=Mbit/s] [--nosw] [--revisit] [--smoke] [--glcount]
+--glcount: real WebGL draw calls per frame in the battle (Godot's own counter leaves out the depth
+           prepass), e.g. to compare --mobile (phones skip the prepass) with desktop"""
 import asyncio, sys, threading, http.server, functools, os, time
 from playwright.async_api import async_playwright
 
@@ -15,6 +17,15 @@ REVISIT = "--revisit" in sys.argv
 SMOKE = "--smoke" in sys.argv
 CARD_WAIT = float(next((a.split("=")[1] for a in sys.argv if a.startswith("--card-wait=")), "1.5"))  # s on the briefing card  # exit 1 on page errors, engine errors or missing milestones (CI)  # after the title screen, load the page again (service-worker cache)  # no service worker: its requests bypass the network throttle  # press start before the streamed content has arrived (wait card)
 MOBILE = "--mobile" in sys.argv
+GLCOUNT = "--glcount" in sys.argv
+ANDROID_UA = "--android-ua" in sys.argv  # phone user agent (web_android feature) on the desktop click flow
+GL_HOOK = """(() => {
+  const P = WebGL2RenderingContext.prototype; const st = window.__gl = {draws: 0, frames: 0, on: false};
+  for (const f of ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced', 'drawRangeElements']) {
+    const o = P[f]; if (!o) continue; P[f] = function () { if (st.on) st.draws++; return o.apply(this, arguments); };
+  }
+  const tick = () => { if (st.on) st.frames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+})();"""
 QUERY = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--query=")), "")
 LOCALE = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--locale=")), "ko-KR")
 THROTTLE = float(next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--throttle=")), "0"))  # Mbit/s, 0 = off
@@ -40,7 +51,7 @@ async def main():
         b = await p.chromium.launch(executable_path="/usr/bin/google-chrome", headless=True,
                                     args=["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"])
         kw = dict(viewport={"width": W, "height": H}, device_scale_factor=(2 if MOBILE else 1), has_touch=MOBILE, is_mobile=MOBILE, locale=LOCALE)
-        if MOBILE:
+        if MOBILE or ANDROID_UA:
             kw["user_agent"] = UA_PHONE
         if NOSW:
             kw["service_workers"] = "block"
@@ -53,6 +64,8 @@ async def main():
                 "downloadThroughput": THROTTLE * 1e6 / 8, "uploadThroughput": 5e6 / 8})
             print("network throttled to %.0f Mbit/s" % THROTTLE)
         pg.set_default_timeout(120000)
+        if GLCOUNT:
+            await pg.add_init_script(GL_HOOK)
         logs = []
         pg.on("console", lambda m: logs.append(f"[{m.type}] {m.text}"))
         marks = {}
@@ -142,6 +155,11 @@ async def main():
             print("level ready %.1fs after pressing start" % (marks.get("level_first_frame", 0) - t_click))
             await pg.wait_for_timeout(4000)
             await pg.screenshot(path=out + "_level.png")
+            if GLCOUNT:
+                await pg.evaluate("Object.assign(window.__gl, {draws: 0, frames: 0, on: true})")
+                await pg.wait_for_timeout(4000)
+                g = await pg.evaluate("Object.assign(window.__gl, {on: false})")
+                print("GLCOUNT %.1f draws/frame over %d frames" % (g["draws"] / max(g["frames"], 1), g["frames"]))
             # tap the hero portrait, then the ground (hero move); then press pause
             await pg.mouse.click(63, H - 128 + 2 + 49)
             await pg.wait_for_timeout(800)

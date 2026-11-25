@@ -145,7 +145,7 @@ func _process(delta: float) -> void:
 				var tws := {}
 				for k in L.towers:
 					tws["%s%d" % [(L.towers[k] as Tower).type, (L.towers[k] as Tower).level]] = true
-				print("HITCH t=%.1f %.0fms enemies=%s towers=%s" % [t, ms, ",".join(kinds.keys()), ",".join(tws.keys())])
+				print("HITCH t=%.1f %.0fms tick=%d enemies=%s towers=%s" % [t, ms, Time.get_ticks_msec(), ",".join(kinds.keys()), ",".join(tws.keys())])
 				_hitch_log.append(ms)
 		_hitch_us = now
 	if args.has("dbg_anim") and t >= float(args["dbg_anim"]) and not has_meta("dbg_anim") and LevelMain.I:
@@ -796,6 +796,31 @@ func _lod_probe() -> void:
 	ks.sort_custom(func(a, b): return dcosts[a] > dcosts[b])
 	for k in ks.slice(0, 30):
 		print("DRAWS %4d n=%d %s" % [dcosts[k], groups[k].size(), k])
+	# shadow-pass share of each group: switch only its shadow casting off
+	var scosts := {}
+	for key in groups:
+		var was := {}
+		for n in groups[key]:
+			if is_instance_valid(n):
+				was[n] = (n as GeometryInstance3D).cast_shadow
+				(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for k in 2:
+			await RenderingServer.frame_post_draw
+		scosts[key] = base - Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+		for n in was:
+			(n as GeometryInstance3D).cast_shadow = was[n]
+	ks.sort_custom(func(a, b): return scosts[a] > scosts[b])
+	for k in ks.slice(0, 16):
+		var info := ""
+		var g0 = groups[k][0]
+		if g0 is MultiMeshInstance3D and g0.multimesh and g0.multimesh.mesh:
+			var mm: MultiMesh = g0.multimesh
+			var tri := 0
+			for si in mm.mesh.get_surface_count():
+				var ia = mm.mesh.surface_get_arrays(si)[Mesh.ARRAY_INDEX]
+				tri += (ia.size() if ia else mm.mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX].size()) / 3
+			info = " tris=%d inst=%d surf=%d" % [tri, mm.instance_count, mm.mesh.get_surface_count()]
+		print("SHADOWCOST %8d of %8d n=%d %s%s" % [scosts[k], costs[k], groups[k].size(), k, info])
 	for l in LevelMain.I.find_children("*", "DirectionalLight3D", true, false):
 		(l as Light3D).shadow_enabled = false
 	for k in 3:
@@ -989,6 +1014,17 @@ func _perf_tick() -> void:
 				var k2 := own.scene_file_path.get_file() if own.scene_file_path != "" else String(own.name)
 				mx[k2] = mx.get(k2, 0) + 1
 			print("MLIST ", mx)
+		if args.has("proc_list"):
+			# who runs every frame: processing nodes by script (or class) under the level and the HUD
+			var by2 := {}
+			for n in LevelMain.I.find_children("*", "", true, false):
+				if n.is_processing() or n.is_physics_processing():
+					var sc: Script = n.get_script()
+					var k3 := (sc.resource_path.get_file() if sc and sc.resource_path != "" else n.get_class()) + ("/phys" if n.is_physics_processing() else "")
+					by2[k3] = by2.get(k3, 0) + 1
+			var ks: Array = by2.keys()
+			ks.sort_custom(func(x, y): return by2[x] > by2[y])
+			print("PROCLIST ", ", ".join(ks.map(func(k): return "%s x%d" % [k, by2[k]])))
 		if args.has("perf_split"):
 			_perf_split()
 		elif args.get("perf_quit", "1") == "1":

@@ -11,6 +11,8 @@ generate-high / reduce / bake workflow):
 
 blender -b -P process_hq.py -- IN_DIR OUT_DIR META_JSON name:mode:size:tris:albedo:normal:style[:orm[:pivot[:yaw]]] ...
   mode  foot|tower|height   style  hard|soft
+  tris  a triangle count, or eN[/cap]: the smallest count whose deviation from the high-poly stays
+        under N px at the closest game zoom (PX_PER_M, default 81.7 = 16 m away at 900 px)
 """
 import bpy
 import bmesh
@@ -50,10 +52,104 @@ def only(o):
     bpy.context.view_layer.objects.active = o
 
 
+# Screen-space error budget: the game's closest zoom (camera 16 m away, fov 38, 900 px tall view)
+# shows 81.7 px per metre. A tris field "e1.0" asks for the smallest mesh whose deviation from the
+# high-poly (99th percentile, both directions) stays under 1.0 px there; "e1.0/12000" also caps it.
+PX_PER_M = float(os.environ.get("PX_PER_M", "81.7"))
+
+
+def _sample(o, n):
+    co = np.zeros(len(o.data.vertices) * 3)
+    o.data.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    if len(co) > n:
+        co = co[np.random.default_rng(7).choice(len(co), n, replace=False)]
+    return co
+
+
+def deviation_px(high, high_bvh, high_pts, low):
+    """p99 surface deviation of `low` from `high` in screen px at the closest zoom (both ways)."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    lb = BVHTree.FromObject(low, dg)
+    d1 = [lb.find_nearest(Vector(v))[3] for v in high_pts]
+    d2 = [high_bvh.find_nearest(Vector(v))[3] for v in _sample(low, 6000)]
+    d1 = [d for d in d1 if d is not None]
+    d2 = [d for d in d2 if d is not None]
+    return max(float(np.percentile(d1, 99)), float(np.percentile(d2, 99))) * PX_PER_M
+
+
+def weld(o):
+    """Join the vertices the glTF export split along UV seams (UVs stay per corner). Decimating the
+    split mesh lets both sides of every seam drift apart: hairline cracks, and the engine's LOD
+    generator sees so many borders that it gives up."""
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4 * max(o.dimensions))
+    bm.to_mesh(o.data)
+    bm.free()
+
+
+def decimate_to(low, tris):
+    t = tri_count(low)
+    if t > tris:
+        only(low)
+        mod = low.modifiers.new("dec", "DECIMATE")
+        mod.decimate_type = "COLLAPSE"
+        mod.ratio = tris / t
+        mod.use_collapse_triangulate = True
+        bpy.ops.object.modifier_apply(modifier="dec")
+
+
+def budget_for_error(high, target_px, cap):
+    """Smallest reduction of `high` (within 8 %) whose deviation stays under target_px, trying the
+    seam-welded and the split mesh: returns (requested tris, welded?, actual tris, error px).
+    Welding wins unless it needs over 10 % more triangles (some AI props are open shells that
+    collapse badly once welded)."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    hb = BVHTree.FromObject(high, dg)
+    pts = _sample(high, 12000)
+    src = tri_count(high)
+
+    def err_at(n, welded):
+        c = high.copy()
+        c.data = high.data.copy()
+        bpy.context.collection.objects.link(c)
+        if welded:
+            weld(c)
+        decimate_to(c, n)
+        e = deviation_px(high, hb, pts, c)
+        t = tri_count(c)
+        me = c.data
+        bpy.data.objects.remove(c, do_unlink=True)
+        bpy.data.meshes.remove(me)
+        return e, t
+
+    out = []
+    for welded in (True, False):
+        hi = min(src, cap)
+        lo = max(200, hi // 40)
+        e, t = err_at(hi, welded)
+        if e <= target_px:
+            while hi / lo > 1.08:
+                mid = int(math.sqrt(hi * lo))
+                e2, t2 = err_at(mid, welded)
+                if e2 <= target_px:
+                    hi, e, t = mid, e2, t2
+                else:
+                    lo = mid
+        out.append((hi, welded, t, e))
+        print("BUDGET", "welded" if welded else "split", "tris", t, "err_px %.2f" % e)
+    w, sp = out
+    ok_w, ok_s = w[3] <= target_px, sp[3] <= target_px
+    if ok_w and (not ok_s or w[2] <= sp[2] * 1.1):
+        return w
+    return sp if ok_s else min(out, key=lambda r: r[3])
+
+
 for spec in specs:
     p = spec.split(":")
     name, mode, size = p[0], p[1], float(p[2])
-    tris, albedo_px, normal_px, style = int(p[3]), int(p[4]), int(p[5]), p[6]
+    tris_spec, albedo_px, normal_px, style = p[3], int(p[4]), int(p[5]), p[6]
     orm_px = int(p[7]) if len(p) > 7 else 512
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=os.path.join(IN, name + ".glb"))
@@ -118,20 +214,23 @@ for spec in specs:
     high.data.update()
     src_tris = tri_count(high)
 
-    # 2. reduce a copy
+    # 2. reduce a copy (to a fixed budget, or to the smallest one meeting a screen-space error)
+    err_px = None
+    welded = False
+    if tris_spec.startswith("e"):
+        tgt, _, cap = tris_spec[1:].partition("/")
+        tris, welded, _, err_px = budget_for_error(high, float(tgt), int(cap) if cap else 10 ** 9)
+    else:
+        tris = int(tris_spec)
     low = high.copy()
     low.data = high.data.copy()
     low.name = "Body"
     low.data.name = "Body"
     bpy.context.collection.objects.link(low)
+    if welded:
+        weld(low)
+    decimate_to(low, tris)
     only(low)
-    t = tri_count(low)
-    if t > tris:
-        mod = low.modifiers.new("dec", "DECIMATE")
-        mod.decimate_type = "COLLAPSE"
-        mod.ratio = tris / t
-        mod.use_collapse_triangulate = True
-        bpy.ops.object.modifier_apply(modifier="dec")
 
     # 3. shading
     if low.data.has_custom_normals:
@@ -258,6 +357,7 @@ for spec in specs:
     bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, name + ".glb"), export_format="GLB", use_selection=True,
                               export_yup=True, export_image_format="AUTO", export_tangents=True,
                               export_animations=False)
-    print("DONE", name, "src_tris", src_tris, "tris", tri_count(low), "baked", baked_ok, meta[name])
+    print("DONE", name, "src_tris", src_tris, "tris", tri_count(low), "err_px", None if err_px is None else round(err_px, 2), "welded", welded,
+          "baked", baked_ok, meta[name])
 
 json.dump(meta, open(META, "w"), indent=1)
