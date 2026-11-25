@@ -10,7 +10,7 @@ const ATTACK_IMPACT := 0.62  # seconds into the trimmed attack clip
 static var _prepared := {}
 static var _tint_mats := {}
 static var _blob_mesh: QuadMesh
-static var _blob_mat: StandardMaterial3D
+static var _blob_mat: ShaderMaterial
 
 var anim: AnimationPlayer
 var skel: Skeleton3D
@@ -22,8 +22,10 @@ var _flash_mat: StandardMaterial3D
 var _base_mat: Material
 var _inst: Node3D
 var _yaw_target := 0.0
-var _blob: MeshInstance3D
+var _blob := false  # wants a contact shadow in the shared BlobLayer (one draw call for all units)
 var _blob_size := 1.0
+## Height of the contact shadow above this node's origin (models lifted off their root put it lower).
+var blob_y := 0.14
 ## Flying units (gargoyles) hover above the ground: no contact shadow under them.
 var ground_blob := true
 
@@ -41,6 +43,15 @@ func setup(p_model: String, p_scale: float, tint := Color.WHITE, weapon := "") -
 	if anim:
 		_prepare_anims(p_model)
 		anim.playback_default_blend_time = 0.15
+		# off-screen units skip skeletal animation (mixer, skeleton pose and skin upload are a large
+		# share of each frame); they carry on from the same pose as soon as they are seen again
+		var k := maxf(p_scale, 0.5)
+		var en := VisibleOnScreenEnabler3D.new()
+		en.aabb = AABB(Vector3(-0.9, -0.2, -0.9) * k, Vector3(1.8, 1.9, 1.8) * k)
+		# the path must be set before it enters the tree: its default ("..") would switch this whole
+		# model off on the first off-screen check
+		en.enable_node_path = NodePath("../" + String(get_path_to(anim)))
+		add_child(en)
 	if body:
 		_base_mat = body.mesh.surface_get_material(0)
 		if tint != Color.WHITE:
@@ -58,19 +69,23 @@ func setup(p_model: String, p_scale: float, tint := Color.WHITE, weapon := "") -
 func refresh_shadow() -> void:
 	var cheap := not Game.high_quality
 	for g in find_children("*", "GeometryInstance3D", true, false):
-		if g != _blob:
-			(g as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if cheap else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	if cheap and ground_blob and _blob == null:
-		_blob = MeshInstance3D.new()
-		_blob.mesh = _blob_quad()
-		_blob.material_override = _blob_material()
-		_blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_blob.rotation_degrees.x = -90.0
-		_blob.position.y = 0.14
-		_blob.scale = Vector3.ONE * _blob_size
-		add_child(_blob)
+		(g as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if cheap else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	var want := cheap and ground_blob
+	if want != _blob:
+		_blob = want
+		if is_inside_tree():
+			if want:
+				BlobLayer.join(self)
+			else:
+				BlobLayer.leave(self)
+
+func _enter_tree() -> void:
 	if _blob:
-		_blob.visible = cheap and ground_blob
+		BlobLayer.join(self)
+
+func _exit_tree() -> void:
+	if _blob:
+		BlobLayer.leave(self)
 
 static func _blob_quad() -> QuadMesh:
 	if _blob_mesh == null:
@@ -78,24 +93,25 @@ static func _blob_quad() -> QuadMesh:
 		_blob_mesh.size = Vector2(1, 1)
 	return _blob_mesh
 
-static func _blob_material() -> StandardMaterial3D:
+static func _blob_material() -> ShaderMaterial:
 	if _blob_mat == null:
-		var g := Gradient.new()
-		g.set_color(0, Color(0.02, 0.02, 0.03, 0.8))
-		g.set_color(1, Color(0.02, 0.02, 0.03, 0.0))
-		g.add_point(0.5, Color(0.02, 0.02, 0.03, 0.55))
-		var gt := GradientTexture2D.new()
-		gt.gradient = g
-		gt.fill = GradientTexture2D.FILL_RADIAL
-		gt.fill_from = Vector2(0.5, 0.5)
-		gt.fill_to = Vector2(1.0, 0.5)
-		gt.width = 64
-		gt.height = 64
-		_blob_mat = StandardMaterial3D.new()
-		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_blob_mat.albedo_texture = gt
-		_blob_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		# soft radial contact shadow worked out from the quad's own coordinates (0.8 -> 0.55 -> 0);
+		# no texture, so it does not depend on UVs (MultiMesh instances of a QuadMesh lost them here)
+		var sh := Shader.new()
+		sh.code = """shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled;
+varying vec2 lp;
+void vertex() {
+	lp = VERTEX.xy;
+}
+void fragment() {
+	float d = length(lp) * 2.0;
+	float a = d < 0.5 ? mix(0.8, 0.55, d / 0.5) : mix(0.55, 0.0, clamp((d - 0.5) / 0.5, 0.0, 1.0));
+	ALBEDO = vec3(0.02, 0.02, 0.03);
+	ALPHA = a;
+}"""
+		_blob_mat = ShaderMaterial.new()
+		_blob_mat.shader = sh
 		_blob_mat.render_priority = -1
 	return _blob_mat
 

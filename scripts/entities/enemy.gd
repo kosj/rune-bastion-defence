@@ -86,8 +86,7 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		add_child(staff)
 	if d["model"] == "wolf" and model.anim == null:
 		model.position.y = 0.42 * sc
-		if model._blob:
-			model._blob.position.y = 0.14 - model.position.y
+		model.blob_y = 0.14 - model.position.y
 	if flying:
 		model.rotation_degrees.x = 8.0
 	# clip playback per metre travelled (gallops cover far more ground per cycle than a jog)

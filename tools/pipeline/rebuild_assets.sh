@@ -1,5 +1,7 @@
 #!/bin/bash
 # Rebuild every game-ready 3D asset from the raw VARCO downloads (see tools/pipeline/*.py).
+# Triangle budgets are sized for the game camera (towers ~100-200 px tall at the closest zoom):
+# more triangles than that are invisible there but cost every frame, twice with shadows.
 #   structures: high-poly regen (dl_hq) -> decimate + weighted normals + normal/AO bake
 #   props:      phase-2 raw meshes      -> same pipeline, smaller budgets
 #   characters: rigged per-animation GLBs -> merged clips, AO bake in rest pose, cleaned ORM
@@ -11,25 +13,25 @@ RAW=${RAW:-/home/claude}
 mkdir -p "$OUT/models" "$OUT/characters"
 M="$OUT/models/meta.json"
 blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq" "$OUT/models" "$M" \
- archer_1:tower:2.9:14000:1024:512:hard:256 archer_2:tower:3.1:16000:1024:512:hard:256 archer_3:tower:3.3:20000:1024:512:hard:256 \
- barracks_1:tower:3.5:14000:1024:512:hard:256 barracks_2:tower:3.7:16000:1024:512:hard:256 barracks_3:tower:3.9:20000:1024:512:hard:256 \
- mage_1:tower:3.0:14000:1024:512:hard:256 mage_2:tower:3.2:16000:1024:512:hard:256 mage_3:tower:3.4:20000:1024:512:hard:256 \
- artillery_1:tower:3.2:14000:1024:512:hard:256 artillery_2:tower:3.4:16000:1024:512:hard:256 artillery_3:tower:3.6:20000:1024:512:hard:256 \
- castle:foot:10.5:30000:2048:1024:hard:512 portal:foot:7.0:24000:1024:1024:hard:512 plot:foot:3.6:3000:1024:512:hard:256 \
+ archer_1:tower:2.9:7500:1024:512:hard:256 archer_2:tower:3.1:8500:1024:512:hard:256 archer_3:tower:3.3:10000:1024:512:hard:256 \
+ barracks_1:tower:3.5:7500:1024:512:hard:256 barracks_2:tower:3.7:8500:1024:512:hard:256 barracks_3:tower:3.9:10000:1024:512:hard:256 \
+ mage_1:tower:3.0:7500:1024:512:hard:256 mage_2:tower:3.2:8500:1024:512:hard:256 mage_3:tower:3.4:10000:1024:512:hard:256 \
+ artillery_1:tower:3.2:7500:1024:512:hard:256 artillery_2:tower:3.4:8500:1024:512:hard:256 artillery_3:tower:3.6:10000:1024:512:hard:256 \
+ castle:foot:10.5:14000:2048:1024:hard:512 portal:foot:7.0:11000:1024:1024:hard:512 plot:foot:3.6:1600:1024:512:hard:256 \
  2>&1 | grep -E "^(BAKE|DONE|AO|ORM)|Traceback|Error"
 blender -b -P "$H/process_hq.py" -- "$RAW/props_in" "$OUT/models" "$M" \
- tree_round_v:height:4.6:4000:1024:512:soft:256 tree_pine_v:height:5.2:3400:1024:512:soft:256 rocks_v:foot:2.2:1500:512:256:soft:256 \
- bush:foot:1.9:3200:512:256:soft:256 house:foot:4.6:3000:1024:512:hard:256 lamp:height:2.7:1200:512:256:hard:256 \
- barrels:foot:1.9:2000:512:256:hard:256 crystals:height:1.7:1500:512:256:hard:256 fence:foot:2.8:1200:512:256:hard:256 \
- bridge:foot:8.0:3500:1024:512:hard:256 flowers:foot:1.3:1500:512:256:soft:256 \
+ tree_round_v:height:4.6:2400:1024:512:soft:256 tree_pine_v:height:5.2:1500:1024:512:soft:256 rocks_v:foot:2.2:1000:512:256:soft:256 \
+ bush:foot:1.9:1800:512:256:soft:256 house:foot:4.6:1800:1024:512:hard:256 lamp:height:2.7:700:512:256:hard:256 \
+ barrels:foot:1.9:1000:512:256:hard:256 crystals:height:1.7:900:512:256:hard:256 fence:foot:2.8:700:512:256:hard:256 \
+ bridge:foot:8.0:2000:1024:512:hard:256 flowers:foot:1.3:900:512:256:soft:256 \
  2>&1 | grep -E "^(BAKE|DONE|AO|ORM)|Traceback|Error"
 # held props and small set pieces (VARCO image-to-3D, grip/centre pivot + yaw so blades face +X and
 # the mortar's muzzle faces +Z in Godot): name:mode:size:tris:albedo:normal:style:orm:pivot:yaw
 blender -b -P "$H/process_hq.py" -- "$RAW/weapons_in/raw" "$OUT/models" "$M" \
- w_sword:height:1.44:2500:512:512:hard:256:0.15:0 w_axe:height:1.34:2500:512:512:hard:256:0.2:90 \
- w_club:height:1.85:3000:512:512:soft:256:0.13:0 w_dagger:height:0.58:1500:512:256:hard:256:0.2:0 \
- mortar:foot:1.25:5000:1024:512:hard:256:0:180 meteor:foot:1.4:1500:512:512:soft:256:0.5:0 \
- shaman_crystal:height:1.1:2000:512:512:hard:256:0.12:0 mage_crystal:height:1.0:1500:512:512:hard:256:0.5:0 \
+ w_sword:height:1.44:800:512:512:hard:256:0.15:0 w_axe:height:1.34:800:512:512:hard:256:0.2:90 \
+ w_club:height:1.85:900:512:512:soft:256:0.13:0 w_dagger:height:0.58:600:512:256:hard:256:0.2:0 \
+ mortar:foot:1.25:1800:1024:512:hard:256:0:180 meteor:foot:1.4:900:512:512:soft:256:0.5:0 \
+ shaman_crystal:height:1.1:900:512:512:hard:256:0.12:0 mage_crystal:height:1.0:700:512:512:hard:256:0.5:0 \
  2>&1 | grep -E "^(DONE)|Traceback|Error"
 python3 "$H/make_emit.py" "$OUT/models"
 # phone meshes for the mobile pack (mobile/models, swapped in by tools/build_web.sh)

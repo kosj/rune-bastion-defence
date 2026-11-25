@@ -88,6 +88,7 @@ func _burst(pos: Vector3, amount: int, life: float, mesh: Mesh, grad: Gradient, 
 	if not hq:
 		amount = maxi(int(amount * 0.6), 1)
 	var p := CPUParticles3D.new()
+	p.fixed_fps = 30  # simulated at 30 Hz and interpolated: same look, half the CPU at 60 fps
 	p.one_shot = true
 	p.amount = amount
 	p.lifetime = life
@@ -263,6 +264,7 @@ func telegraph(pos: Vector3, r: float, t: float, c: Color) -> void:
 ## Persistent bonfire: looping flames + smoke and a flickering warm light.
 func campfire(pos: Vector3) -> void:
 	var fire := CPUParticles3D.new()
+	fire.fixed_fps = 30
 	fire.amount = 16 if hq else 9
 	fire.lifetime = 0.9
 	fire.mesh = _pmesh("fx_fire_flip", true, true)
@@ -283,6 +285,7 @@ func campfire(pos: Vector3) -> void:
 	add_child(fire)
 	fire.global_position = pos
 	var sm := CPUParticles3D.new()
+	sm.fixed_fps = 30
 	sm.amount = 6 if hq else 3
 	sm.lifetime = 3.0
 	sm.mesh = _pmesh("fx_smoke_flip", false, true)
@@ -535,6 +538,7 @@ func fire_patch(pos: Vector3, r: float, dps: float) -> void:
 	add_child(node)
 	node.global_position = pos
 	var p := CPUParticles3D.new()
+	p.fixed_fps = 30
 	p.amount = 16 if hq else 8
 	p.lifetime = 0.8
 	p.mesh = _pmesh("fx_fire_flip", true, true)
@@ -559,6 +563,7 @@ func fire_patch(pos: Vector3, r: float, dps: float) -> void:
 ## world-space ambient emitter that follows the camera target (leaves, snow, fireflies, embers)
 func ambient(kind: String) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
+	p.fixed_fps = 30
 	p.amount = 70 if hq else 30
 	p.lifetime = 9.0
 	p.preprocess = 9.0

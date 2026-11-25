@@ -24,6 +24,16 @@ func _ready() -> void:
 	if args.has("lang"):
 		Game.language = args["lang"]
 		Lang.apply(Game.language)
+	if args.has("perf_off"):
+		# A/B cost probe: switch a whole subsystem off for every node that enters the tree
+		var off: String = args["perf_off"]
+		get_tree().node_added.connect(func(n):
+			if off.contains("anim") and n is AnimationMixer:
+				(n as AnimationMixer).set_deferred("active", false)
+			if off.contains("particles") and n is CPUParticles3D:
+				n.set_deferred("emitting", false)
+			if off.contains("tween") and n is Node:
+				pass)
 	if args.has("hq"):
 		Game.high_quality = args["hq"] == "1"
 		Game.apply_quality()
@@ -99,6 +109,22 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	t += delta / maxf(Engine.time_scale, 0.01)
 	var mode: String = args.get("mode", "auto")
+	if args.has("dbg_anim") and t >= float(args["dbg_anim"]) and not has_meta("dbg_anim") and LevelMain.I:
+		set_meta("dbg_anim", true)
+		for bl in get_tree().root.find_children("*", "BlobLayer", true, false):
+			if bl.members.size() > 0:
+				print("DBGBLOB xf0=", bl.multimesh.get_instance_transform(0), " model0=", bl.members[0].global_position, " mesh=", bl.multimesh.mesh, " mat=", bl.material_override, " gxf=", bl.global_transform)
+			print("DBGBLOB members=", bl.members.size(), " vis=", bl.multimesh.visible_instance_count, " inside=", bl.is_inside_tree(), " parent=", bl.get_parent(), " aabb=", bl.custom_aabb, " visible=", bl.is_visible_in_tree())
+		print("DBGBLOB layers=", BlobLayer._layers.size())
+
+		for cm in get_tree().get_nodes_in_group("unit_shadow").slice(0, 6):
+			var en: VisibleOnScreenEnabler3D = null
+			for c in cm.get_children():
+				if c is VisibleOnScreenEnabler3D:
+					en = c
+			print("DBGANIM ", cm.model_name, " anim_pm=", cm.anim.process_mode if cm.anim else -1, " can_process=", cm.anim.can_process() if cm.anim else false, " playing=", cm.anim.is_playing() if cm.anim else false, " cur=", cm.current, " onscreen=", en.is_on_screen() if en else "none", " active=", cm.anim.active if cm.anim else false)
+	if args.has("perf") and LevelMain.I:
+		_perf_tick()
 	if args.has("lodprobe") and t >= float(args["lodprobe"]) and not has_meta("lodprobe") and LevelMain.I:
 		set_meta("lodprobe", true)
 		_lod_probe()
@@ -682,12 +708,12 @@ func _lod_probe() -> void:
 	var us := get_tree().get_nodes_in_group("unit_shadow")
 	var nb := 0
 	for u in us:
-		if u._blob and u._blob.visible:
+		if u._blob:
 			nb += 1
 	print("UNITS %d with blob %d hq=%s" % [us.size(), nb, Game.high_quality])
 	if not us.is_empty():
 		var u0: CharacterModel = us[0]
-		print("blob0 ", u0._blob.global_position if u0._blob else "none", " model ", u0.global_position, " body_shadow ", u0.body.cast_shadow if u0.body else -1)
+		print("blob0 ", u0._blob, " model ", u0.global_position, " body_shadow ", u0.body.cast_shadow if u0.body else -1)
 	if args.get("groups", "0") != "1":
 		get_tree().quit()
 		return
@@ -699,12 +725,18 @@ func _lod_probe() -> void:
 		while top.get_parent() != LevelMain.I and top.get_parent() != null:
 			top = top.get_parent()
 		var key := String(top.name).rstrip("0123456789_") + "/" + n.get_class()
+		if n is MeshInstance3D and (n as MeshInstance3D).mesh:
+			var mp := (n as MeshInstance3D).mesh.resource_path
+			var own: Node = n.owner
+			key += "(" + (mp.get_file().get_basename() if mp != "" and not mp.contains("::") else (own.scene_file_path.get_file().get_basename() if own and own.scene_file_path != "" else mp.get_file())) + ")"
 		if n is MultiMeshInstance3D and (n as MultiMeshInstance3D).multimesh and (n as MultiMeshInstance3D).multimesh.mesh:
 			key += "(" + (n as MultiMeshInstance3D).multimesh.mesh.resource_path.get_file().get_basename() + ")"
 		if not groups.has(key):
 			groups[key] = []
 		groups[key].append(n)
 	var costs := {}
+	var dcosts := {}
+	var base_draws := Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 	for key in groups:
 		for n in groups[key]:
 			if is_instance_valid(n):
@@ -712,6 +744,7 @@ func _lod_probe() -> void:
 		for k in 2:
 			await RenderingServer.frame_post_draw
 		costs[key] = base - Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+		dcosts[key] = base_draws - Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 		for n in groups[key]:
 			if is_instance_valid(n):
 				(n as GeometryInstance3D).visible = true
@@ -719,6 +752,9 @@ func _lod_probe() -> void:
 	ks.sort_custom(func(a, b): return costs[a] > costs[b])
 	for k in ks.slice(0, 30):
 		print("COST %8d n=%d %s" % [costs[k], groups[k].size(), k])
+	ks.sort_custom(func(a, b): return dcosts[a] > dcosts[b])
+	for k in ks.slice(0, 30):
+		print("DRAWS %4d n=%d %s" % [dcosts[k], groups[k].size(), k])
 	for l in LevelMain.I.find_children("*", "DirectionalLight3D", true, false):
 		(l as Light3D).shadow_enabled = false
 	for k in 3:
@@ -734,3 +770,106 @@ func _shot() -> void:
 	shot_i += 1
 	img.save_png(p)
 	print("SHOT ", p)
+
+
+## perf=START,DUR: from START (test seconds) sample DUR seconds of frames and print one summary line:
+## real frame time (mean / p95), script+animation process time, physics, render CPU time,
+## draw calls, primitives, visible objects, node count and live enemies.
+var _pf := {}
+
+func _perf_tick() -> void:
+	var a := (args["perf"] as String).split(",")
+	var t0 := float(a[0])
+	var dur := float(a[1]) if a.size() > 1 else 10.0
+	if t < t0:
+		return
+	var now := Time.get_ticks_usec()
+	if _pf.is_empty():
+		_pf = {"last": now, "start": now, "ft": [], "pt": [], "ph": [], "rc": [], "dc": [], "pr": [], "ob": [], "en": []}
+		RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+		Prof.on = args.has("prof")
+		Prof.acc.clear()
+		Prof.cnt.clear()
+		return
+	if _pf.has("done"):
+		return
+	_pf["ft"].append((now - int(_pf["last"])) / 1000.0)
+	_pf["last"] = now
+	_pf["pt"].append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
+	_pf["ph"].append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
+	_pf["rc"].append(RenderingServer.viewport_get_measured_render_time_cpu(get_viewport().get_viewport_rid()))
+	_pf["dc"].append(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	_pf["pr"].append(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+	_pf["ob"].append(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
+	_pf["en"].append(LevelMain.I.enemies.size())
+	if (now - int(_pf["start"])) / 1e6 >= dur:
+		_pf["done"] = true
+		var mean := func(k): return (_pf[k] as Array).reduce(func(x, y): return x + y, 0.0) / maxf((_pf[k] as Array).size(), 1)
+		var ft: Array = (_pf["ft"] as Array).duplicate()
+		ft.sort()
+		var p95: float = ft[int(ft.size() * 0.95)] if not ft.is_empty() else 0.0
+		print("PERF level=%s hq=%s frames=%d frame=%.2fms p95=%.2fms process=%.2fms physics=%.2fms render_cpu=%.2fms draws=%.0f prims=%.0f objs=%.0f nodes=%d enemies=%.1f towers=%d" % [
+			LevelMain.I.def["id"], Game.high_quality, ft.size(), mean.call("ft"), p95, mean.call("pt"), mean.call("ph"), mean.call("rc"),
+			mean.call("dc"), mean.call("pr"), mean.call("ob"), Performance.get_monitor(Performance.OBJECT_NODE_COUNT), mean.call("en"), LevelMain.I.towers.size()])
+		if Prof.on:
+			var nf: int = ft.size()
+			var keys: Array = Prof.acc.keys()
+			keys.sort_custom(func(x, y): return Prof.acc[x] > Prof.acc[y])
+			var pl := "PROF per-frame:"
+			for k in keys:
+				pl += " %s=%.2fms(%.1fus x%.1f)" % [k, Prof.acc[k] / 1000.0 / nf, float(Prof.acc[k]) / Prof.cnt[k], float(Prof.cnt[k]) / nf]
+			print(pl)
+		if args.has("perf_list"):
+			var by := {}
+			for n in LevelMain.I.find_children("*", "CPUParticles3D", true, false):
+				var c := n as CPUParticles3D
+				var k := "%s/%s amt=%d em=%s fps=%d" % [c.get_parent().name.rstrip("0123456789_@"), c.name.rstrip("0123456789_@"), c.amount, c.emitting, c.fixed_fps]
+				by[k] = by.get(k, 0) + 1
+			for k in by:
+				print("PLIST x%d %s" % [by[k], k])
+			var mx := {}
+			for n in LevelMain.I.find_children("*", "AnimationMixer", true, false):
+				var own: Node = n.get_parent()
+				var k2 := own.scene_file_path.get_file() if own.scene_file_path != "" else String(own.name)
+				mx[k2] = mx.get(k2, 0) + 1
+			print("MLIST ", mx)
+		if args.has("perf_split"):
+			_perf_split()
+		elif args.get("perf_quit", "1") == "1":
+			get_tree().quit()
+
+## Process-time share of each system: switch one group of nodes off for a moment and see how much
+## script + animation time disappears (entities freeze meanwhile; only the timing matters).
+func _perf_split() -> void:
+	var L := LevelMain.I
+	var phases := {
+		"enemies": func(on): for e in L.enemies: if is_instance_valid(e): e.set_process(on),
+		"towers": func(on): for k in L.towers: L.towers[k].set_process(on),
+		"projectiles": func(on): for n in get_tree().get_nodes_in_group("projectile"): n.set_process(on),
+		"soldiers": func(on): for n in get_tree().get_nodes_in_group("soldier"): n.set_process(on),
+		"anim": func(on): for n in L.find_children("*", "AnimationMixer", true, false): (n as AnimationMixer).active = on,
+		"particles": func(on): for n in L.find_children("*", "CPUParticles3D", true, false): (n as CPUParticles3D).speed_scale = 1.0 if on else 0.0,
+		"hud": func(on): L.hud.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED,
+		"level": func(on): L.set_process(on),
+	}
+	var res := {}
+	for k in ["base"] + phases.keys():
+		if k != "base":
+			phases[k].call(false)
+		var acc := 0.0
+		var n := 0
+		for f in 90:
+			await get_tree().process_frame
+			acc += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+			n += 1
+		res[k] = acc / n
+		if k != "base":
+			phases[k].call(true)
+		for f in 10:
+			await get_tree().process_frame
+	var line := "SPLIT base=%.2fms" % res["base"]
+	for k in phases.keys():
+		line += " %s=-%.2f" % [k, res["base"] - res[k]]
+	print(line, " groups: soldier=", get_tree().get_nodes_in_group("soldier").size(), " projectile=", get_tree().get_nodes_in_group("projectile").size(),
+		" mixers=", L.find_children("*", "AnimationMixer", true, false).size(), " cpuparticles=", L.find_children("*", "CPUParticles3D", true, false).size())
+	get_tree().quit()

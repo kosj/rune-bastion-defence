@@ -75,10 +75,20 @@ var testing := false  # automated runs: skip the first-visit level intros
 var playlog: Array = []
 const PLAYLOG_MAX := 60
 
+## The 3D resolution the quality setting asks for; ResGuard may go below it on a slow GPU.
+func base_3d_scale() -> float:
+	return 1.0 if high_quality else 0.8
+
+var res_guard: ResGuard
+
 func apply_quality() -> void:
 	var vp := get_tree().root
 	vp.msaa_3d = Viewport.MSAA_4X if high_quality else Viewport.MSAA_DISABLED
-	vp.scaling_3d_scale = 1.0 if high_quality else 0.8
+	vp.scaling_3d_scale = base_3d_scale()
+	if res_guard == null:
+		res_guard = ResGuard.new()
+		add_child(res_guard)
+	res_guard.reset()
 	# automatic mesh LOD: on the low setting accept ~4 px of simplification error (phones, small screens)
 	vp.mesh_lod_threshold = 1.0 if high_quality else 4.0
 	get_tree().call_group("unit_shadow", "refresh_shadow")
