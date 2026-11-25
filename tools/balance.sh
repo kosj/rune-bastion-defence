@@ -5,8 +5,8 @@ MODE=${1:-smart}; DIFF=${2:-0}; shift 2 || true
 mkdir -p /tmp/bal
 LEVELS=${LEVELS:-0 1 2 3 4 5 6 7 8 9}
 for L in $LEVELS; do
-  (timeout 1000 godot --headless --path . res://scenes/test_runner.tscn -- level=$L mode=$MODE diff=$DIFF speed=5 max_t=900 "$@" > /tmp/bal/${MODE}_${DIFF}_${TAG:-x}_$L.log 2>&1 &)
+  timeout 1000 ${GODOT:-godot} --headless --path . res://scenes/test_runner.tscn -- level=$L mode=$MODE diff=$DIFF speed=5 max_t=900 "$@" > /tmp/bal/${MODE}_${DIFF}_${TAG:-x}_$L.log 2>&1 &
 done
-sleep 5
-while pgrep -f "test_runner.tscn" >/dev/null; do sleep 5; done
+# wait for our own runs (a pgrep on the command line also matched the calling shell and hung)
+wait
 for L in $LEVELS; do echo "L$L $(grep -E 'RESULT|TIMEOUT|SCRIPT ERROR' /tmp/bal/${MODE}_${DIFF}_${TAG:-x}_$L.log | head -2 | tr '\n' ' ')"; done

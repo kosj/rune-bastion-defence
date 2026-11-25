@@ -1,5 +1,5 @@
 /* Rune Bastion service worker: offline play + instant repeat loads.
- * - Versioned requests (?v=<build id>: the gz parts of the engine and game data, index.js) are
+ * - Versioned requests (?v=<build id>: the gz / br parts of the engine and the game data chunks) are
  *   cache-first in the cache "rb-v-<build id>"; when a new build id shows up, older rb-v-* caches
  *   are dropped, so a deploy never mixes parts of two builds and old data does not pile up.
  * - Everything else (the page itself, icons, worklets) is network-first with a cache fallback,

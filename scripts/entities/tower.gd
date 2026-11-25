@@ -43,6 +43,11 @@ func range_r() -> float:
 func sell_value() -> int:
 	return int(invested * (0.8 if DB.up("salvage") else 0.6))
 
+## Is the model of tower level `lvl` (1..4) downloaded? (web: upgrades come in a later chunk)
+func model_ready(lvl: int) -> bool:
+	var mname: String = DB.TOWERS[type]["levels"][mini(lvl, 3) - 1]["model"]
+	return Content.allows(Assets.MODEL_DIR + mname + ".glb")
+
 func next_cost() -> int:
 	if level < 3:
 		return data()["levels"][level]["cost"]

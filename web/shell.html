@@ -57,85 +57,131 @@ $GODOT_HEAD_INCLUDE
 </div>
 <div id="rotate"><div class="ph"></div><div id="rottxt">가로 모드로 돌리면 더 넓게 볼 수 있어요</div><button id="rotok">세로로 계속하기</button></div>
 <script>
-// --- compressed asset loader: index.wasm / index.pck are shipped gzip'd as *.gz.bin and inflated in the browser ---
+// --- loader: the engine and the packs ship compressed in parts (*.gz.bin, plus *.br.bin where
+// Brotli pays off), inflated in the browser with DecompressionStream. Brotli is used where the
+// browser inflates it natively (Safari 18.4+, Firefox 147+), gzip elsewhere. ---
 const RB_BUILD = "$RB_BUILD_ID";
 (function () {
-  const GZ = $RB_GZ_MAP;
+  const GZ = $RB_GZ_MAP;      // file -> {parts, size, gz, mime, br: {parts, gz}}
+  const CHUNKS = $RB_CHUNKS;  // download chunks after the core pack, in order (scripts/data/pack_chunks.gd)
   window.RB_GZ = GZ;
+  const canInflate = (f) => { try { new DecompressionStream(f); return true; } catch (e) { return false; } };
+  const BR = canInflate('brotli');
+  // Phones and tablets get index_mobile*.pck: the same game with GPU-compressed (ETC2) 3D textures,
+  // size-capped for small screens - less to download and 4-8x less GPU memory. Only when the
+  // browser can actually sample ETC2 textures; ?pack=mobile|desktop overrides for testing.
+  let pack = 'index';
+  if (GZ['index_mobile.pck']) {
+    const q = new URLSearchParams(location.search).get('pack');
+    const ua = navigator.userAgent;
+    const touchMac = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+    let want = q ? q === 'mobile' : (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || touchMac);
+    if (want) {
+      try {
+        const gl = document.createElement('canvas').getContext('webgl2');
+        want = !!(gl && gl.getExtension('WEBGL_compressed_texture_etc'));
+        const lose = gl && gl.getExtension('WEBGL_lose_context');
+        if (lose) lose.loseContext();
+      } catch (e) { want = false; }
+    }
+    if (want) { pack = 'index_mobile'; console.log('[RB] mobile pack (ETC2 textures)'); }
+  }
+  window.RB_PACK = pack;
+  const ver = RB_BUILD ? '?v=' + RB_BUILD : '';
+  const variant = (key) => (BR && GZ[key].br) ? { parts: GZ[key].br.parts, z: GZ[key].br.gz, fmt: 'brotli' }
+                                             : { parts: GZ[key].parts, z: GZ[key].gz, fmt: 'gzip' };
   const origFetch = window.fetch.bind(window);
+  // start the engine and core-pack downloads now, before the engine script has even loaded
+  const early = {};
+  for (const key of ['index.wasm', pack + '.pck']) {
+    if (GZ[key] && 'DecompressionStream' in window)
+      for (const p of variant(key).parts) early[p] = origFetch(p + ver, { cache: 'force-cache' });
+  }
+  const prog = {};  // file -> download progress 0..1
   window.fetch = async function (input, init) {
     const url = (typeof input === 'string') ? input : input.url;
-    for (const key in GZ) {
-      if (url.split('?')[0].endsWith(key) && 'DecompressionStream' in window) {
-        const parts = GZ[key].parts;
-        const mime = GZ[key].mime;
-        const base = url.substring(0, url.lastIndexOf('/') + 1);
-        const total = GZ[key].gz || 0;
-        const stream = new ReadableStream({
-          async start(controller) {
-            let got = 0;
-            const tick = (n) => { got += n; if (total && key === window.rbContentName) window.rbContent.p = Math.min(0.99, got / total); };
-            for (const p of parts) {
-              const r = await origFetch(base + p + (RB_BUILD ? '?v=' + RB_BUILD : ''), { cache: 'force-cache' });
-              if (!r.ok) { controller.error(new Error('HTTP ' + r.status + ' ' + p)); return; }
-              if (p.endsWith('.txt')) {
-                // base64 text part (for hosts that only serve web/text file types)
-                const txt = (await r.text()).replace(/\s+/g, '');
-                if (Uint8Array.fromBase64) { const u = Uint8Array.fromBase64(txt); tick(u.length); controller.enqueue(u); continue; }
-                const SL = 4 * 1024 * 1024;
-                for (let o = 0; o < txt.length; o += SL) {
-                  const bin = atob(txt.substring(o, o + SL));
-                  const u = new Uint8Array(bin.length);
-                  for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
-                  tick(u.length);
-                  controller.enqueue(u);
-                }
-                continue;
-              }
-              const reader = r.body.getReader();
-              for (;;) { const { done, value } = await reader.read(); if (done) break; tick(value.length); controller.enqueue(value); }
+    const name = url.split('?')[0];
+    const key = Object.keys(GZ).find((k) => name === k || name.endsWith('/' + k));
+    if (!key || !('DecompressionStream' in window)) return origFetch(input, init);
+    const v = variant(key);
+    const base = url.substring(0, url.lastIndexOf('/') + 1);
+    const stream = new ReadableStream({
+      async start(controller) {
+        let got = 0;
+        const tick = (n) => { got += n; if (v.z) prog[key] = Math.min(0.99, got / v.z); };
+        for (const p of v.parts) {
+          let rp = (!base && early[p]) || null;
+          if (rp) delete early[p];
+          const r = await (rp || origFetch(base + p + ver, { cache: 'force-cache' }));
+          if (!r.ok) { controller.error(new Error('HTTP ' + r.status + ' ' + p)); return; }
+          if (p.endsWith('.txt')) {
+            // base64 text part (for hosts that only serve web/text file types)
+            const txt = (await r.text()).replace(/\s+/g, '');
+            if (Uint8Array.fromBase64) { const u = Uint8Array.fromBase64(txt); tick(u.length); controller.enqueue(u); continue; }
+            const SL = 4 * 1024 * 1024;
+            for (let o = 0; o < txt.length; o += SL) {
+              const bin = atob(txt.substring(o, o + SL));
+              const u = new Uint8Array(bin.length);
+              for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
+              tick(u.length);
+              controller.enqueue(u);
             }
-            console.log('[RB] fetched ' + key + ' at ' + Math.round(performance.now()) + 'ms');
-            controller.close();
-            if (window.rbFetched) window.rbFetched(key);
+            continue;
           }
-        });
-        const inflated = stream.pipeThrough(new DecompressionStream('gzip'));
-        return new Response(inflated, { status: 200, headers: { 'Content-Type': mime } });
+          const reader = r.body.getReader();
+          for (;;) { const { done, value } = await reader.read(); if (done) break; tick(value.length); controller.enqueue(value); }
+        }
+        prog[key] = 1;
+        console.log('[RB] fetched ' + key + ' (' + v.fmt + ') at ' + Math.round(performance.now()) + 'ms');
+        controller.close();
+        fetched(key);
       }
-    }
-    return origFetch(input, init);
+    });
+    return new Response(stream.pipeThrough(new DecompressionStream(v.fmt)), { status: 200, headers: { 'Content-Type': GZ[key].mime } });
   };
-})();
-// --- streamed content: index[_mobile]_content.pck (3D models, characters, battle music) is fetched
-// once the engine and the core pack are in, while the title screen already runs, and handed to the
-// engine's file system when the game asks (scripts/autoload/content.gd: rbContentMount) ---
-window.rbContent = { state: 'none', p: 0 };
-window.rbContentName = '';
-(function () {
-  const C = window.rbContent;
+  // --- download chunks (scripts/autoload/content.gd): fetched one after another once the engine
+  // and the core pack are in, while the title screen already runs; handed to the engine's file
+  // system when the game polls rbChunks() ---
+  const C = {};
+  const list = CHUNKS.filter((c) => GZ[pack + '_' + c + '.pck']);
+  for (const c of list) C[c] = { state: 'pending', buf: null, tries: 0 };
   const done = new Set();
-  let buf = null, started = false, tries = 0;
-  function load() {
-    C.state = 'loading';
-    fetch(window.rbContentName).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
-      .then((ab) => { buf = new Uint8Array(ab); C.p = 1; C.state = 'fetched'; console.log('[RB] content fetched at ' + Math.round(performance.now()) + 'ms'); })
-      .catch((err) => { console.error('[RB] content', err); C.state = 'error'; setTimeout(load, Math.min(10000, 1500 * ++tries)); });
-  }
-  window.rbFetched = function (key) {
+  let started = false;
+  function fetched(key) {
     done.add(key);
-    const main = (typeof GODOT_CONFIG !== 'undefined' && GODOT_CONFIG.mainPack) || 'index.pck';
-    if (!started && C.state === 'pending' && done.has(main) && (done.has('index.wasm') || !(window.RB_GZ || {})['index.wasm'])) {
+    if (!started && done.has(pack + '.pck') && (done.has('index.wasm') || !GZ['index.wasm'])) {
       started = true;
-      load();
+      // first visit: one chunk at a time, so the earliest-needed one gets all the bandwidth;
+      // when every chunk is already in the service-worker cache, read them all at once
+      allCached().then((all) => { if (all) list.forEach((c, i) => load(i, false)); else load(0, true); });
     }
-  };
-  window.rbContentMount = function () {
-    if (buf && C.state === 'fetched') {
-      try { engine.copyToFS('/tmp/rb_content.pck', buf); buf = null; C.state = 'ready'; }
-      catch (e) { console.error('[RB] content mount', e); }
-    }
-    return C.state;
+  }
+  async function allCached() {
+    if (!RB_BUILD || !('caches' in window) || !navigator.serviceWorker || !navigator.serviceWorker.controller) return false;
+    try {
+      for (const c of list) if (!(await caches.match(variant(pack + '_' + c + '.pck').parts[0] + ver))) return false;
+      return true;
+    } catch (e) { return false; }
+  }
+  function load(i, chain) {
+    if (i >= list.length) return;
+    const c = list[i], file = pack + '_' + c + '.pck', s = C[c];
+    s.state = 'loading';
+    fetch(file).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+      .then((ab) => { s.buf = new Uint8Array(ab); s.state = 'fetched'; if (chain) load(i + 1, true); })
+      .catch((err) => { console.error('[RB] chunk ' + c, err); s.state = 'error'; setTimeout(() => load(i, chain), Math.min(10000, 1500 * ++s.tries)); });
+  }
+  window.rbChunks = function () {
+    if (!list.length) return 'none';
+    return list.map((c) => {
+      const s = C[c];
+      if (s.buf && s.state === 'fetched') {
+        try { engine.copyToFS('/tmp/rb_' + c + '.pck', s.buf); s.buf = null; s.state = 'ready'; }
+        catch (e) { console.error('[RB] chunk mount ' + c, e); }
+      }
+      const f = pack + '_' + c + '.pck';
+      return c + ':' + s.state + ':' + (s.state === 'ready' ? 1 : (prog[f] || 0)).toFixed(3) + ':' + (GZ[f].gz || 1);
+    }).join(';');
   };
 })();
 </script>
@@ -143,36 +189,9 @@ window.rbContentName = '';
 <script>
 const GODOT_CONFIG = $GODOT_CONFIG;
 const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
-// Phones and tablets get index_mobile.pck: the same game with GPU-compressed (ETC2) 3D textures,
-// size-capped for small screens - less to download and 4-8x less GPU memory. Only when the browser
-// can actually sample ETC2 textures; ?pack=mobile|desktop overrides for testing.
-(function () {
-  const GZ = window.RB_GZ || {};
-  const pick = (pack) => {
-    if (GZ[pack]) GODOT_CONFIG.fileSizes = Object.assign({}, GODOT_CONFIG.fileSizes, { [pack]: GZ[pack].size });
-    const c = pack.replace(/\.pck$/, '_content.pck');
-    if (GZ[c]) { window.rbContentName = c; window.rbContent.state = 'pending'; }
-  };
-  pick(GODOT_CONFIG.mainPack || 'index.pck');
-  if (!GZ['index_mobile.pck']) return;
-  const q = new URLSearchParams(location.search).get('pack');
-  const ua = navigator.userAgent;
-  const touchMac = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
-  let want = q ? q === 'mobile' : (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || touchMac);
-  if (want) {
-    try {
-      const gl = document.createElement('canvas').getContext('webgl2');
-      want = !!(gl && gl.getExtension('WEBGL_compressed_texture_etc'));
-      const lose = gl && gl.getExtension('WEBGL_lose_context');
-      if (lose) lose.loseContext();
-    } catch (e) { want = false; }
-  }
-  if (want) {
-    GODOT_CONFIG.mainPack = 'index_mobile.pck';
-    pick('index_mobile.pck');
-    console.log('[RB] mobile pack (ETC2 textures)');
-  }
-})();
+GODOT_CONFIG.mainPack = window.RB_PACK + '.pck';
+if ((window.RB_GZ || {})[GODOT_CONFIG.mainPack])
+  GODOT_CONFIG.fileSizes = Object.assign({}, GODOT_CONFIG.fileSizes, { [GODOT_CONFIG.mainPack]: window.RB_GZ[GODOT_CONFIG.mainPack].size });
 // install as an app (Android/desktop Chrome): keep the browser's prompt for the in-game button
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__rbInstall = e; });
 window.rbCanInstall = () => !!window.__rbInstall;

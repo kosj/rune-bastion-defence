@@ -1415,6 +1415,11 @@ func _on_radial_chosen(id: String) -> void:
 		return
 	var idx: int = selection["idx"]
 	var tower: Tower = towers[idx]
+	if (id == "upgrade" or id.begins_with("mastery_")) and not tower.model_ready(tower.level + 1):
+		# web, first battle: the upgraded towers are still downloading (Content, towers chunk)
+		Audio.play("error", -4.0)
+		hud.toast("업그레이드 준비 중", tr("추가 데이터를 받는 중...") + " %d%%" % int(Content.progress(["towers"]) * 100.0), "upgrade")
+		return
 	if id == "upgrade":
 		var c2 := tower.next_cost()
 		if gold < c2:

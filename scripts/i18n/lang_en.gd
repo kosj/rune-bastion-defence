@@ -441,6 +441,9 @@ const T := {
 	"획득 골드 %d": "Gold earned %d",
 	"효과음": "Sound FX",
 	"전장을 준비하는 중...": "Preparing the battlefield...",
+	"데이터를 받는 중...": "Loading data...",
+	"업그레이드 준비 중": "Upgrade not ready yet",
+	"추가 데이터를 받는 중...": "Downloading more data...",
 	"연결이 끊겼습니다. 다시 시도하는 중...": "Connection lost. Retrying...",
 }
 const C := {

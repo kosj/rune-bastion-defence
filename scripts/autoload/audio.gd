@@ -12,8 +12,11 @@ var _music_a: AudioStreamPlayer
 var _music_b: AudioStreamPlayer
 var _music_current := ""
 
+var _music_pending := ""
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	(func(): Content.chunk_ready.connect(_on_chunk_ready)).call_deferred()
 	for i in POOL_SIZE:
 		var p := AudioStreamPlayer.new()
 		p.bus = "Master"
@@ -30,12 +33,16 @@ func _get_stream(name: String, dir := SFX_DIR) -> AudioStream:
 		return _streams[key]
 	var s: AudioStream = null
 	for ext in [".ogg", ".mp3", ".wav"]:
-		if ResourceLoader.exists(dir + name + ext):
+		if ResourceLoader.exists(dir + name + ext) and Content.allows(dir + name + ext):
 			s = load(dir + name + ext)
 			break
 	if s:
 		_streams[key] = s  # a miss is not cached: the battle music arrives with the streamed content
 	return s
+
+func _on_chunk_ready(_chunk: String) -> void:
+	if _music_pending != "":
+		play_music(_music_pending)
 
 const VOICE_DIR := "res://assets/audio/voice/"
 var _voice: AudioStreamPlayer
@@ -100,6 +107,7 @@ func play_music(name: String, fade := 1.2) -> void:
 		return
 	_music_current = name
 	if name == "":
+		_music_pending = ""
 		if _music_a.playing:
 			var old := _music_a
 			var tw0 := create_tween()
@@ -108,7 +116,11 @@ func play_music(name: String, fade := 1.2) -> void:
 		return
 	var stream: AudioStream = _get_stream(name, MUSIC_DIR)
 	if stream == null:
+		# its download chunk has not arrived yet: start it when it does
+		_music_pending = name
+		_music_current = ""
 		return
+	_music_pending = ""
 	if stream is AudioStreamOggVorbis:
 		(stream as AudioStreamOggVorbis).loop = true
 	elif stream is AudioStreamMP3:

@@ -160,9 +160,9 @@ func goto_scene(path: String) -> void:
 	if _busy:
 		return
 	_busy = true
-	if path.ends_with("level.tscn") and not Content.is_ready:
-		# the battle needs the streamed 3D content (web): wait for it behind a progress card
-		await Content.wait_with_overlay()
+	if path.ends_with("level.tscn"):
+		# the battle needs its download chunks (web): wait for them behind a progress card
+		await Content.ensure(Content.level_needs(current_level), "전장을 준비하는 중...")
 	_fade_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	var tw := create_tween()
 	tw.tween_property(_fade_rect, "color:a", 1.0, 0.35)

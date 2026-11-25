@@ -48,16 +48,33 @@ jobs:
           mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           mv templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
 
-      - name: Build (import, desktop pack, mobile ETC2 pack, core/content split, gzip parts)
+      - name: Brotli cache (engine parts; tools/package_web.py)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/rb_brotli
+          key: rb-brotli-${{ github.run_id }}
+          restore-keys: rb-brotli-
+
+      - name: Build (import, desktop pack, mobile ETC2 pack, download chunks, gzip/Brotli parts)
         run: |
           export GODOT=~/godot/godot
           export BUILD_ID="$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}"
           bash tools/build_web.sh
           test -f build/web_hosted/index.html
-          # core packs + streamed content packs (tools/split_pck.py)
-          test -f build/web_hosted/index_content.pck.gz0.bin
-          test -f build/web_hosted/index_mobile_content.pck.gz0.bin
+          # core packs + download chunks (tools/split_pck.py, scripts/data/pack_chunks.gd)
+          for c in menu stage1 towers world; do
+            test -f build/web_hosted/index_${c}.pck.gz0.bin
+            test -f build/web_hosted/index_mobile_${c}.pck.gz0.bin
+          done
+          test -f build/web_hosted/index.wasm.br0.bin
           ls -la build/web_hosted
+
+      - name: Checks (fonts cover all text, scenes load only chunks they wait for)
+        run: |
+          export GODOT=~/godot/godot
+          pip install --quiet fonttools
+          python3 tools/make_fonts.py --check
+          bash tools/check_chunks.sh
 
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4

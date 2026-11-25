@@ -16,8 +16,11 @@ static func scene(name: String) -> PackedScene:
 		var p := MODEL_DIR + name + ".glb"
 		if not ResourceLoader.exists(p):
 			p = CHAR_DIR + name + ".glb"
+		if not Content.allows(p):
+			Content.miss(p)  # its download chunk has not arrived yet: not cached
+			return null
 		if not ResourceLoader.exists(p):
-			return null  # not cached: streamed content may still arrive (Content)
+			return null
 		_scenes[name] = load(p)
 	return _scenes[name]
 
@@ -161,10 +164,18 @@ static func multimesh(name: String, xforms: Array, parent: Node, shadows := true
 static func tex(name: String) -> Texture2D:
 	if not _tex.has(name):
 		var p := ICON_DIR + name + ".png"
-		_tex[name] = load(p) if ResourceLoader.exists(p) else null
+		if not Content.allows(p):
+			Content.miss(p)
+			return null  # its chunk may still arrive: not cached
+		if not ResourceLoader.exists(p):
+			return null
+		_tex[name] = load(p)
 	return _tex[name]
 
 static func tex_path(p: String) -> Texture2D:
+	if not Content.allows(p):
+		Content.miss(p)
+		return null
 	return load(p) if ResourceLoader.exists(p) else null
 
 static func font(kind := "ui") -> Font:

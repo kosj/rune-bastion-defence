@@ -74,21 +74,7 @@ async def main():
         pg.on("pageerror", lambda e: logs.append(f"[pageerror] {e}"))
         t0 = time.time()
         pg.on("requestfinished", lambda r: print("T+%.2fs got %s" % (time.time() - t0, r.url.split("/")[-1][:40])) if (".bin" in r.url or ".txt" in r.url or "index.js" in r.url) else None)
-        async def watch_content():
-            last = None
-            while True:
-                try:
-                    st = await pg.evaluate("window.rbContent ? window.rbContent.state + ' ' + window.rbContent.p.toFixed(2) : ''")
-                except Exception:
-                    return
-                if st != last:
-                    print("T+%.2fs content %s" % (time.time() - t0, st))
-                    last = st
-                if st.startswith(("ready", "none")) or not st:
-                    return
-                await asyncio.sleep(1.0)
         await pg.goto("http://127.0.0.1:8765/index.html" + ("?" + QUERY if QUERY else ""))
-        asyncio.ensure_future(watch_content())
         await pg.wait_for_timeout(2500)
         await pg.screenshot(path=out + "_loading.png")
         # wait for engine to start (status overlay removed)

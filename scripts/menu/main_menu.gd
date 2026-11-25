@@ -15,15 +15,16 @@ func _ready() -> void:
 	Game.mark("menu_build_start")
 	_build_ui()
 	Audio.play_music("menu")
-	if Content.is_ready:
+	if Content.has_all(_title_needs()):
+		_world_started = true
 		_build_world()
 		Game.mark("menu_world_built")
 	else:
-		# web, first moments: the 3D models are still streaming in (Content). Show the diorama as a
+		# web, first moments: the 3D models are still downloading (Content). Show the diorama as a
 		# pre-rendered picture of the opening camera pose and cross-fade to the live scene once it is
 		# built (tools/render_backdrops.sh renders the pictures).
 		_show_backdrop()
-		Content.content_ready.connect(_on_content_ready, CONNECT_ONE_SHOT)
+	Content.chunk_ready.connect(_on_chunk_ready)
 	Game.mark("menu_built")
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -31,9 +32,45 @@ func _ready() -> void:
 
 var _backdrop: TextureRect
 var _async_build := false
+var _world_started := false
+var TITLE_3D: Array = PackChunks.DATA["title_3d_needs"]
 
 func _backdrop_tex() -> Texture2D:
-	return Assets.tex_path("res://assets/ui/backdrop/menu_%s.jpg" % DB.hero_def()["model"])
+	var p := "res://assets/ui/backdrop/menu_%s.jpg" % DB.hero_def()["model"]
+	if not Content.allows(p):
+		p = "res://assets/ui/backdrop/menu_hero.jpg"  # in core; the others come with the menu chunk
+	return Assets.tex_path(p)
+
+func _on_chunk_ready(_chunk: String) -> void:
+	if _backdrop and _backdrop.texture != _backdrop_tex():
+		_backdrop.texture = _backdrop_tex()
+	if not _world_started and Content.has_all(_title_needs()):
+		_world_started = true
+		_on_content_ready()
+	elif _hero and _hero_pending:
+		_show_hero()
+
+## The 3D title needs its chunks plus the chosen hero's (the other heroes come with "world").
+func _title_needs() -> Array:
+	var need := TITLE_3D.duplicate()
+	need.append(PackChunks.chunk_of(Assets.CHAR_DIR + DB.hero_def()["model"] + ".glb"))
+	return need
+
+var _hero_pending := false
+
+## Dress the title hero as the chosen one, once that hero's chunk is in.
+func _show_hero() -> void:
+	var hd := DB.hero_def()
+	_hero_pending = not Content.allows(Assets.CHAR_DIR + hd["model"] + ".glb")
+	if _hero_pending:
+		return
+	_hero.setup(hd["model"], hd["scale"], Color.WHITE, hd["weapon"])
+	_hero.play("idle")
+
+## Menu screens show pictures of the menu chunk: wait for it (only in the first seconds of a
+## first visit on the web).
+func _need_menu() -> bool:
+	return await Content.ensure(["menu"])
 
 func _show_backdrop() -> void:
 	var tex := _backdrop_tex()
@@ -361,6 +398,8 @@ func _set_menu_visible(v: bool) -> void:
 # ---------------------------------------------------------------- world map
 
 func _open_select() -> void:
+	if not Content.has("menu"):
+		await _need_menu()
 	if _select:
 		_select.queue_free()
 	_set_menu_visible(false)
@@ -433,6 +472,8 @@ func _close_button(shade: Control, after := Callable()) -> Control:
 
 ## Hero roster: pick who leads the defense.
 func _open_heroes() -> void:
+	if not Content.has("menu"):
+		await _need_menu()
 	var o := _overlay("영웅 선택")
 	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
@@ -532,10 +573,8 @@ func _open_heroes() -> void:
 				Game.save()
 				Audio.play("upgrade", -4.0)
 				Audio.voice(id + "_select", 0.0, 0.5)
-				var hd := DB.hero_def()
 				if _hero:
-					_hero.setup(hd["model"], hd["scale"], Color.WHITE, hd["weapon"])
-					_hero.play("idle")
+					_show_hero()
 				if _backdrop:
 					_backdrop.texture = _backdrop_tex()
 				shade.queue_free()
@@ -663,6 +702,8 @@ func _open_talents(id: String) -> void:
 
 ## Bestiary: every enemy met so far, with stats and how to counter it.
 func _open_bestiary(tab := "enemy") -> void:
+	if not Content.has("menu"):
+		await _need_menu()
 	var o := _overlay("도감", "dark")
 	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
@@ -886,6 +927,8 @@ func _tower_codex(vb: VBoxContainer, vs: Vector2, compact: bool) -> void:
 
 ## Achievements: lifetime goals, each worth one upgrade star.
 func _open_achievements() -> void:
+	if not Content.has("menu"):
+		await _need_menu()
 	var o := _overlay(tr("업적  ★ %d / %d") % [Game.achievement_count(), DB.ACHIEVEMENTS.size()], "blue")
 	var vb: VBoxContainer = o[1]
 	var vs := get_viewport().get_visible_rect().size
@@ -953,6 +996,8 @@ func _open_achievements() -> void:
 
 ## Kingdom-Rush style upgrade tree: spend stars earned in battle on permanent bonuses.
 func _open_upgrades() -> void:
+	if not Content.has("menu"):
+		await _need_menu()
 	var o := _overlay("왕국 강화", "red")
 	var vb: VBoxContainer = o[1]
 	var vs := get_viewport().get_visible_rect().size
