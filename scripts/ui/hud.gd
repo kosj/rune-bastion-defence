@@ -111,6 +111,11 @@ func _build_top() -> void:
 	var c := _res_item("skull", "1/10", UI.TEXT, 74)
 	wave_l = c[1]
 	hb.add_child(c[0])
+	# room before the frame's right edge: "웨이브 10/10" / "Wave 10/10" ran into the border
+	var pad := Control.new()
+	pad.custom_minimum_size.x = 6
+	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hb.add_child(pad)
 	p.add_child(hb)
 	root.add_child(p)
 
@@ -396,6 +401,18 @@ func _build_vignette() -> void:
 	root.add_child(vignette)
 	root.move_child(vignette, 0)
 
+## Full-screen colour flash that fades out (the winning moment).
+func flash(col: Color, dur := 0.6) -> void:
+	var r := ColorRect.new()
+	r.color = col
+	r.set_anchors_preset(Control.PRESET_FULL_RECT)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(r)
+	var t := r.create_tween()
+	t.set_ignore_time_scale(true)
+	t.tween_property(r, "modulate:a", 0.0, dur).set_ease(Tween.EASE_OUT)
+	t.tween_callback(r.queue_free)
+
 func flash_damage(low: bool) -> void:
 	_vig_pulse = 1.0
 	_low_lives = low
@@ -630,6 +647,10 @@ func modal(title: String, build_body: Callable, wide := 520, ribbon_kind := "red
 	var sp := Control.new()
 	sp.custom_minimum_size = Vector2(0, 12 if compact else 18)
 	vb.add_child(sp)
+	# result screens animate these parts on their own (ResultFX)
+	shade.set_meta("ribbon", rib)
+	shade.set_meta("panel", p)
+	shade.set_meta("center", center)
 	build_body.call(vb)
 	shade.modulate.a = 0.0
 	var tw := shade.create_tween()

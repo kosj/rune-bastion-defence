@@ -1748,16 +1748,22 @@ func _victory() -> void:
 	Game.save()
 	Audio.voice("ann_victory", 0.0, 1.0)
 	cine.abort()
-	Engine.time_scale = 1.0
+	# the winning moment plays in slow motion, then eases back to normal speed (real-time tween)
+	Engine.time_scale = 0.3
+	var slow := create_tween()
+	slow.set_ignore_time_scale(true)
+	slow.tween_interval(0.35)
+	slow.tween_method(func(v: float): Engine.time_scale = v, 0.3, 1.0, 0.9).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	hud.flash(Color(1.0, 0.9, 0.6, 0.35))
 	_celebrate()
 	Audio.play("victory", 0.0, 0.0)
 	Audio.play_music("menu", 3.0)
 	_clear_cards()
 	if level_idx == DB.LEVELS.size() - 1 and prev_stars == 0 and not Game.endless and not Game.testing:
 		# first time the campaign is won: the epilogue plays before the results
-		get_tree().create_timer(1.8).timeout.connect(func(): cine.story(DB.STORY["epilogue"], func(): _victory_modal(stars, prev_stars)))
+		get_tree().create_timer(1.8, true, false, true).timeout.connect(func(): cine.story(DB.STORY["epilogue"], func(): _victory_modal(stars, prev_stars)))
 	else:
-		get_tree().create_timer(1.6).timeout.connect(func(): _victory_modal(stars, prev_stars))
+		get_tree().create_timer(1.6, true, false, true).timeout.connect(func(): _victory_modal(stars, prev_stars))
 
 ## Everyone still standing cheers; fireworks go up over the gate.
 func _celebrate() -> void:
@@ -1784,45 +1790,37 @@ func battle_music() -> String:
 
 func _victory_modal(stars: int, prev_stars: int) -> void:
 	var max_l: int = max_lives
+	var fx: ResultFX
+	var t0 := 0.5                                   # after the card and the ribbon have landed
+	var t_done := t0 + maxi(stars, 1) * 0.42 + 0.2  # the last star has landed
 	_modal = hud.modal("승리!", func(vb: VBoxContainer):
-		# three stars over slowly turning rays; each lands with a pop and a chime
-		var holder := Control.new()
-		holder.custom_minimum_size = Vector2(420, 132)
-		vb.add_child(holder)
-		var rays := UI.icon(UI.kit("rays"), 300)
-		rays.position = Vector2(60, -84)
-		rays.size = Vector2(300, 300)
-		rays.pivot_offset = Vector2(150, 150)
+		vb.add_theme_constant_override("separation", 14)
+		# the star stage: a fixed-width block centred in the card (it used to hug the left edge)
+		var stage := Control.new()
+		stage.custom_minimum_size = Vector2(420, 150)
+		stage.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stage.name = "StarStage"
+		vb.add_child(stage)
+		var mid := Vector2(210, 64)
+		var rays := UI.icon(UI.kit("rays"), 320)
+		rays.name = "Rays"
+		rays.size = Vector2(320, 320)
+		rays.position = mid - rays.size * 0.5
+		rays.pivot_offset = rays.size * 0.5
 		rays.modulate = Color(1, 0.9, 0.6, 0.0)
-		holder.add_child(rays)
+		stage.add_child(rays)
 		var rt := rays.create_tween().set_loops()
 		rt.set_ignore_time_scale(true)
 		rt.tween_property(rays, "rotation", TAU, 14.0).from(0.0)
-		var ft := rays.create_tween()
-		ft.set_ignore_time_scale(true)
-		ft.tween_property(rays, "modulate:a", 0.8, 0.6)
-		var spots := [[Vector2(76, 30), 84.0], [Vector2(168, 6), 104.0], [Vector2(272, 30), 84.0]]
+		var spots := [[Vector2(210 - 124, 86), 84.0], [mid, 108.0], [Vector2(210 + 124, 86), 84.0]]
 		for i in 3:
 			var sz: float = spots[i][1]
 			var base := UI.icon(Assets.tex("star_empty"), int(sz))
-			base.position = spots[i][0]
 			base.size = Vector2(sz, sz)
-			holder.add_child(base)
-			if i < stars:
-				var st := UI.icon(Assets.tex("star"), int(sz))
-				st.position = spots[i][0]
-				st.size = Vector2(sz, sz)
-				st.pivot_offset = Vector2(sz, sz) * 0.5
-				st.scale = Vector2(2.4, 2.4)
-				st.modulate.a = 0.0
-				holder.add_child(st)
-				var tw := st.create_tween()
-				tw.set_ignore_time_scale(true)
-				tw.tween_interval(0.35 + i * 0.38)
-				tw.tween_callback(func(): Audio.play_pitched("star", -3.0 + i * 1.5, 1.0 + i * 0.125))
-				tw.set_parallel(true)
-				tw.tween_property(st, "modulate:a", 1.0, 0.12)
-				tw.tween_property(st, "scale", Vector2.ONE, 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			base.position = spots[i][0] - base.size * 0.5
+			stage.add_child(base)
+		# four results; their numbers run up once the stars are in
 		var grid := GridContainer.new()
 		grid.columns = 2
 		grid.add_theme_constant_override("h_separation", 34)
@@ -1830,26 +1828,36 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 		var cg := CenterContainer.new()
 		cg.add_child(grid)
 		vb.add_child(cg)
-		grid.add_child(UI.stat("heart", tr("남은 생명 %d / %d") % [lives, max_l], 19, UI.TEXT))
-		grid.add_child(UI.stat("skull", tr("처치 %d") % run_kills, 19, UI.TEXT))
-		grid.add_child(UI.stat("coin", tr("획득 골드 %d") % run_gold, 19, UI.TEXT))
-		grid.add_child(UI.stat("st_rate", tr("전투 %d:%02d") % [int(run_time) / 60, int(run_time) % 60], 19, UI.TEXT))
+		var rows := [
+			["heart", func(v): return tr("남은 생명 %d / %d") % [v, max_l], lives],
+			["skull", func(v): return tr("처치 %d") % v, run_kills],
+			["coin", func(v): return tr("획득 골드 %d") % v, run_gold],
+			["st_rate", func(v): return tr("전투 %d:%02d") % [v / 60, v % 60], int(run_time)],
+		]
+		for r in rows:
+			var stl := UI.stat(r[0], r[1].call(r[2]), 19, UI.TEXT)
+			stl.set_meta("fmt", r[1])
+			stl.set_meta("to", r[2])
+			grid.add_child(stl)
 		var gained := maxi(stars - prev_stars, 0)
+		var notes: Array[Label] = []
 		if Game.challenge:
-			var il := UI.label("철인 도전 성공! 지역 카드에 철인 배지가 붙었습니다", 19, Color(1.0, 0.62, 0.45), 5, "ui_black")
-			il.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			vb.add_child(il)
+			notes.append(UI.label("철인 도전 성공! 지역 카드에 철인 배지가 붙었습니다", 19, Color(1.0, 0.62, 0.45), 5, "ui_black"))
 		elif gained > 0 or (Game.difficulty == 1):
-			var rw := UI.label((tr("새로 얻은 ★ %d  — 왕국 강화에 사용하세요") % gained) if gained > 0 else "영웅 난이도 클리어!", 19, UI.GOLD, 5, "ui_black")
-			rw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			vb.add_child(rw)
+			notes.append(UI.label((tr("새로 얻은 ★ %d  — 왕국 강화에 사용하세요") % gained) if gained > 0 else "영웅 난이도 클리어!", 19, UI.GOLD, 5, "ui_black"))
 		if level_idx >= DB.LEVELS.size() - 1:
-			var fl := UI.label("왕국을 지켜냈습니다! 모든 지역 정복", 21, UI.GOLD, 5, "ui_black")
-			fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			vb.add_child(fl)
+			notes.append(UI.label("왕국을 지켜냈습니다! 모든 지역 정복", 21, UI.GOLD, 5, "ui_black"))
+		for nl in notes:
+			# long lines (English especially) wrap inside the card instead of running past its edge
+			nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			nl.custom_minimum_size.x = 500
+			nl.name = "Note"
+			vb.add_child(nl)
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 10)
+		row.name = "Buttons"
 		var rb := UI.button("다시", 21, false, Vector2(120, 58), "blue")
 		rb.icon = Assets.tex("ic_retry")
 		rb.add_theme_constant_override("icon_max_width", 26)
@@ -1863,9 +1871,59 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 		if level_idx < DB.LEVELS.size() - 1:
 			var nb := UI.button("다음 지역", 24, true, Vector2(200, 58), "red")
 			nb.icon = Assets.tex("ic_play")
+			nb.name = "Next"
 			nb.pressed.connect(func(): Game.start_level(level_idx + 1))
 			row.add_child(nb)
 		vb.add_child(row), 560, "red")
+	# --- the sequence (see ResultFX): ribbon slam, stars one by one, numbers, then the buttons
+	fx = ResultFX.new(_modal, _modal.get_meta("center"))
+	_modal.set_meta("fx", fx)
+	# a tap anywhere (backdrop or card) fast-forwards the sequence
+	var skip_tap := func(e: InputEvent):
+		if (e is InputEventMouseButton and e.pressed) or (e is InputEventScreenTouch and e.pressed):
+			fx.skip()
+	_modal.gui_input.connect(skip_tap)
+	(_modal.get_meta("panel") as Control).gui_input.connect(skip_tap)
+	fx.slam(_modal.get_meta("ribbon"), 0.15)
+	var stage: Control = _modal.find_child("StarStage", true, false)
+	var spots := [[Vector2(210 - 124, 86), 84.0], [Vector2(210, 64), 108.0], [Vector2(210 + 124, 86), 84.0]]
+	for i in stars:
+		fx.star(stage, spots[i][0], spots[i][1], t0 + i * 0.42, i)
+	# (a lambda's assignments stay inside it: the parts built there are looked up by name)
+	var rays: Control = stage.get_node("Rays")
+	var rt := fx.tween(rays)
+	rt.tween_property(rays, "modulate:a", 0.45 + 0.15 * stars, 0.5).set_delay(t0 + 0.2)
+	if stars >= 3:
+		# a perfect clear gets the full celebration
+		var ct := fx.tween(_modal)
+		ct.tween_interval(t_done - 0.1)
+		ct.tween_callback(func():
+			Audio.play("levelup", -4.0)
+			fx.flash(stage, Vector2(210, 64), 360.0, Color(1.0, 0.9, 0.55)))
+		fx.confetti(70, t_done - 0.1)
+	var k := 0
+	for stl in _modal.find_children("*", "HBoxContainer", true, false):
+		if not stl.has_meta("fmt"):
+			continue
+		fx.reveal(stl, t_done + k * 0.08)
+		var l: Label = stl.get_child(1)
+		fx.count_up(l, stl.get_meta("fmt"), int(stl.get_meta("to")), t_done + k * 0.08, 0.7)
+		k += 1
+	for nl in _modal.find_children("Note", "Label", true, false):
+		fx.reveal(nl, t_done + 0.55)
+		var nt := fx.tween(nl)
+		nt.tween_interval(t_done + 0.55)
+		nt.tween_callback(func(): Audio.play("coin", -6.0))
+	var btns: Control = _modal.find_child("Buttons", true, false)
+	var bi := 0
+	for b in btns.get_children():
+		fx.reveal(b, t_done + 0.75 + bi * 0.09)
+		bi += 1
+	var nb: Control = btns.get_node_or_null("Next")
+	if nb:
+		var pt := fx.tween(nb)
+		pt.tween_interval(t_done + 1.2)
+		pt.tween_callback(func(): ResultFX.breathe(nb))
 
 const DEFEAT_TIPS := [
 	"오크 돌격병은 방어력이 높아요. 마법 탑으로 녹이세요.",

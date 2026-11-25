@@ -243,6 +243,9 @@ func _process(delta: float) -> void:
 							(b as Button).pressed.emit()
 							break)
 			"victory":
+				if args.has("wave_shown"):
+					# the top bar as at the end of a real run (e.g. wave_shown=10 -> "웨이브 10/10")
+					L2.hud.set_wave(int(args["wave_shown"]), L2.waves.size())
 				L2._victory()
 			"defeat":
 				L2._defeat()
