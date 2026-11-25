@@ -32,7 +32,7 @@ func _get_stream(name: String, dir := SFX_DIR) -> AudioStream:
 	if _streams.has(key):
 		return _streams[key]
 	var s: AudioStream = null
-	for ext in [".ogg", ".mp3", ".wav"]:
+	for ext in [".ogg", ".wav"]:
 		if ResourceLoader.exists(dir + name + ext) and Content.allows(dir + name + ext):
 			s = load(dir + name + ext)
 			break
@@ -121,10 +121,10 @@ func play_music(name: String, fade := 1.2) -> void:
 		_music_current = ""
 		return
 	_music_pending = ""
-	if stream is AudioStreamOggVorbis:
-		(stream as AudioStreamOggVorbis).loop = true
-	elif stream is AudioStreamMP3:
-		(stream as AudioStreamMP3).loop = true
+	if "loop" in stream:
+		# Ogg (and MP3, if ever used) streams: set by name, so no script depends on a decoder module
+		# that the size-optimized web engine leaves out (tools/engine)
+		stream.set("loop", true)
 	var old := _music_a
 	var nw := _music_b
 	_music_a = nw

@@ -1,0 +1,78 @@
+# Size-optimized web export template (tools/engine): built from the Godot source at the same
+# version as the editor, with the features this game never uses left out. Cached by
+# tools/engine/template_key.sh, so it is only rebuilt when the engine version, Emscripten, the
+# build flags or the text server change (~40 min); otherwise this takes a minute.
+# Called by "Build & deploy web"; run it by hand to try the other text server.
+name: Web engine template
+
+on:
+  workflow_dispatch:
+    inputs:
+      text_server:
+        description: "advanced or fallback (empty: TEXT_SERVER of tools/engine/web_template.env)"
+        required: false
+        default: ""
+  workflow_call:
+    inputs:
+      text_server:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  template:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configuration
+        id: cfg
+        run: |
+          source tools/engine/web_template.env
+          ts="${{ inputs.text_server }}"
+          [ -n "$ts" ] || ts="$TEXT_SERVER"
+          echo "ts=$ts" >> "$GITHUB_OUTPUT"
+          echo "ref=$GODOT_REF" >> "$GITHUB_OUTPUT"
+          echo "em=$EM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "key=$(bash tools/engine/template_key.sh "$ts")" >> "$GITHUB_OUTPUT"
+
+      - name: Cached template
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/rb-template
+          key: ${{ steps.cfg.outputs.key }}
+
+      - name: Godot source ${{ steps.cfg.outputs.ref }}
+        uses: actions/checkout@v4
+        with:
+          repository: godotengine/godot
+          ref: ${{ steps.cfg.outputs.ref }}
+          path: godot-src
+
+      - name: Class check (the game must not use what the template leaves out)
+        run: python3 tools/engine/check_classes.py godot-src . "${{ steps.cfg.outputs.ts }}"
+
+      - name: Emscripten ${{ steps.cfg.outputs.em }}
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ steps.cfg.outputs.em }}
+          actions-cache-folder: emsdk-cache
+
+      - name: Build the template
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          pip install --quiet scons
+          bash tools/engine/build_template.sh godot-src ~/rb-template/web_nothreads_release.zip "${{ steps.cfg.outputs.ts }}"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-template-${{ steps.cfg.outputs.ts }}
+          path: ~/rb-template/web_nothreads_release.zip
+          retention-days: 30
