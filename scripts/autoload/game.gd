@@ -160,6 +160,7 @@ func goto_scene(path: String) -> void:
 	if _busy:
 		return
 	_busy = true
+	Content.warm_cancel()  # the next scene loads what it needs itself
 	if path.ends_with("level.tscn"):
 		# the battle needs its download chunks (web): wait for them behind a progress card
 		await Content.ensure(Content.level_needs(current_level), "전장을 준비하는 중...")

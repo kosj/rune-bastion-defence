@@ -161,6 +161,45 @@ static func multimesh(name: String, xforms: Array, parent: Node, shadows := true
 	parent.add_child(mmi)
 	return mmi
 
+## Load a model into the cache without instancing it (Content.warm); quiet when its chunk has not
+## arrived or it does not exist.
+static func warm_one(name: String) -> void:
+	if _scenes.has(name):
+		return
+	for d in [MODEL_DIR, CHAR_DIR]:
+		var p: String = d + name + ".glb"
+		if Content.allows(p) and ResourceLoader.exists(p):
+			_scenes[name] = load(p)
+			return
+
+static func is_cached(name: String) -> bool:
+	return _scenes.has(name)
+
+## Models a battle on `level` loads in its first minute: the level-1 towers with their crews and
+## shots, the build plots, portal and castle, the hero and the level's enemies.
+static func battle_models(level: int) -> Array:
+	var out: Array = ["plot", "portal", "castle", "p_arrow", "p_bomb", "mortar", "mage_crystal", "meteor",
+		"archer_unit", "mage_unit", "footman", "w_sword", "w_axe", "w_club", "w_dagger"]
+	for t in DB.TOWERS:
+		out.append(DB.TOWERS[t]["levels"][0]["model"])
+	var hd := DB.hero_def()
+	out.append(hd["model"])
+	if str(hd.get("weapon", "")) != "":
+		out.append(hd["weapon"])
+	if level >= 0 and level < DB.LEVELS.size():
+		for w in DB.LEVELS[level]["waves"]:
+			for e in w:
+				var ed: Dictionary = DB.ENEMIES.get(e[0], {})
+				if ed.has("model"):
+					out.append(ed["model"])
+				if e[0] == "shaman":
+					out.append("shaman_crystal")
+	var uniq: Array = []
+	for n in out:
+		if not uniq.has(n):
+			uniq.append(n)
+	return uniq
+
 static func tex(name: String) -> Texture2D:
 	if not _tex.has(name):
 		var p := ICON_DIR + name + ".png"

@@ -113,6 +113,12 @@ func _ready() -> void:
 			if u["id"] == id and budget >= int(u["cost"]):
 				budget -= int(u["cost"])
 				Game.upgrades[id] = true
+	if args.has("prewarm"):
+		# what the briefing card preloads (Content.warm), done up front: first-use hitch comparison
+		var t0 := Time.get_ticks_msec()
+		for n in Assets.battle_models(Game.current_level):
+			Assets.warm_one(n)
+		print("PREWARM %d ms" % (Time.get_ticks_msec() - t0))
 	var ps: PackedScene = load("res://scenes/level.tscn")
 	level = ps.instantiate()
 	get_tree().root.add_child.call_deferred(level)

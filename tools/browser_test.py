@@ -12,7 +12,8 @@ PLAY = "--play" in sys.argv
 EARLY = "--early" in sys.argv
 NOSW = "--nosw" in sys.argv
 REVISIT = "--revisit" in sys.argv
-SMOKE = "--smoke" in sys.argv  # exit 1 on page errors, engine errors or missing milestones (CI)  # after the title screen, load the page again (service-worker cache)  # no service worker: its requests bypass the network throttle  # press start before the streamed content has arrived (wait card)
+SMOKE = "--smoke" in sys.argv
+CARD_WAIT = float(next((a.split("=")[1] for a in sys.argv if a.startswith("--card-wait=")), "1.5"))  # s on the briefing card  # exit 1 on page errors, engine errors or missing milestones (CI)  # after the title screen, load the page again (service-worker cache)  # no service worker: its requests bypass the network throttle  # press start before the streamed content has arrived (wait card)
 MOBILE = "--mobile" in sys.argv
 QUERY = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--query=")), "")
 LOCALE = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--locale=")), "ko-KR")
@@ -130,7 +131,7 @@ async def main():
             await pg.wait_for_timeout(2500)
             await pg.screenshot(path=out + "_select.png")
             await pg.mouse.click(384, 407)
-            await pg.wait_for_timeout(1500)
+            await pg.wait_for_timeout(int(CARD_WAIT * 1000))
             await pg.screenshot(path=out + "_card.png")
             t_click = time.time() - t0
             await pg.mouse.click(745, 530)

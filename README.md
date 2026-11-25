@@ -37,7 +37,9 @@ Kingdom Rush · Bloons TD 6 계열(경로형 타워 디펜스 + 영웅 + 스킬 
   - 셸은 엔진과 core만 받으면 게임을 시작하고, 나머지는 순서대로 이어서 받습니다. 게임은 도착하는 대로 `ProjectSettings.load_resource_pack()`으로 붙입니다(`scripts/autoload/content.gd`).
   - 3D 타이틀 장면이 오기 전에는 같은 구도로 미리 렌더링한 그림(`assets/ui/backdrop`, `tools/render_backdrops.sh`)을 보여 주다가, 장면을 몇 프레임에 나눠 지은 뒤 교차 페이드로 바꿉니다.
   - 아직 오지 않은 청크가 필요한 화면을 열거나 출전을 누르면 진행 막대 카드가 떠서 기다립니다. 첫 전투(1레벨·카엘)는 menu+stage1만 있으면 시작합니다. 타워 업그레이드는 towers가 오기 전이면 "업그레이드 준비 중"을 띄웁니다.
-  - 20Mbps 회선: 타이틀 41.6초 → 7.3초, 첫 전투 가능 41.6초 → 24.9초. 엔진은 Safari·Firefox에 Brotli(6.9MB, gzip 10.1MB)로 보냅니다.
+  - 20Mbps 회선: 타이틀 41.6초 → 약 6.8초, 첫 전투 가능 41.6초 → 약 25초.
+  - 엔진은 이 게임이 쓰지 않는 기능을 뺀 경량 템플릿(`tools/engine`, CI에서 빌드·캐시)입니다. wasm 39.5MB → 28.8MB이고, gzip 7.3MB 또는 Safari·Firefox에는 Brotli 5.0MB로 보냅니다.
+  - 게시 전에 헤드리스 크롬이 페이지를 실제로 실행해 확인합니다.
   - 자세한 지침과 측정은 `docs/PERFORMANCE.md`에 있습니다.
 - **두 가지 데이터 팩**: 데스크톱은 `index.pck`(WebP 텍스처), 폰·태블릿은 `index_mobile.pck`(ETC2/EAC GPU 압축 텍스처, 화면 크기에 맞춘 해상도 상한)를 받습니다. 셸이 기기와 `WEBGL_compressed_texture_etc` 지원을 확인해서 고르고, `?pack=mobile|desktop`으로 강제할 수 있습니다. GPU 메모리를 4~8배 덜 씁니다.
 - **폰 전용 메시**: 모바일 팩에는 타워 12종·성·포털을 삼각형 35~45% 수준으로 다시 만든 버전(`mobile/models`, 노멀맵 재베이크)이 들어갑니다. `tools/build_web.sh`가 모바일 팩을 만들 때 바꿔 넣고, 데스크톱 빌드는 `.gdignore`로 무시합니다.

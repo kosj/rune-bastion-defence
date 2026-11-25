@@ -372,6 +372,8 @@ func _card_shell(title: String, ribbon_kind := "red") -> VBoxContainer:
 
 func _open_card(i: int) -> void:
 	var d: Dictionary = DB.LEVELS[i]
+	# while the player reads the briefing, load what this battle needs first (Content.warm)
+	Content.warm(Assets.battle_models(i))
 	var compact := size.y < 600.0
 	var vb := _card_shell("%d. %s" % [i + 1, tr(d["name"])])
 	var row := HBoxContainer.new()

@@ -102,14 +102,42 @@ func _all() -> void:
 		if not _have.has(c):
 			_have[c] = true
 			chunk_ready.emit(c)
-	set_process(false)
+	if _warm.is_empty():
+		set_process(false)
 
 func _process(delta: float) -> void:
 	_t += delta
 	if _simulating:
 		_tick_sim()
-	else:
+	elif not all_ready():
 		_poll()
+	_warm_tick()
+	if _warm.is_empty() and (all_ready() or (not _simulating and _state.is_empty())):
+		set_process(false)
+
+## Preload on intent: models the next scene will need, one every other frame while the player
+## looks at a menu (the briefing card), so the battle builds faster and the first tower or enemy
+## of a kind does not stall it. Only what is downloaded already; a scene change cancels the rest.
+var _warm: Array = []
+var _warm_wait := 0.0
+var _warm_frame := 0
+
+func warm(names: Array, delay := 0.4) -> void:
+	for n in names:
+		if not _warm.has(n) and not Assets.is_cached(n):
+			_warm.append(n)
+	_warm_wait = _t + delay
+	set_process(true)
+
+func warm_cancel() -> void:
+	_warm.clear()
+
+func _warm_tick() -> void:
+	if _warm.is_empty() or _t < _warm_wait or Game._busy:
+		return
+	_warm_frame += 1
+	if _warm_frame % 2 == 0:
+		Assets.warm_one(_warm.pop_front())
 
 func _tick_sim() -> void:
 	for c in _sim:
@@ -125,7 +153,8 @@ func _poll() -> void:
 	# name:state:progress:bytes;...  ("none" when the page streams no chunks)
 	var st := str(JavaScriptBridge.eval("window.rbChunks ? window.rbChunks() : 'none'", true))
 	if st == "none" or st == "":
-		set_process(false)
+		if _warm.is_empty():
+			set_process(false)
 		return
 	failed = false
 	for item in st.split(";", false):
@@ -145,7 +174,7 @@ func _poll() -> void:
 		if _state.get(c, "") != "ready":
 			break
 		_mount(c)
-	if all_ready():
+	if all_ready() and _warm.is_empty():
 		set_process(false)
 
 func _mount(c: String) -> void:
