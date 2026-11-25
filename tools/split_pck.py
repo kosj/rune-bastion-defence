@@ -65,6 +65,15 @@ def read_pack(path):
     return d[:base], entries
 
 
+def texture_gaps(a_path, b_path):
+    """Textures (.png/.jpg imports) in pack A that pack B lacks. The phone pack is the same project
+    with ETC2 textures and phone meshes swapped in, so it must have every texture the desktop pack
+    has; a swapped-in model whose maps were not re-extracted shows up here (and untextured in game)."""
+    def tex(path):
+        return {e["path"] for e in read_pack(path)[1] if re.search(r"\.(png|jpg|jpeg|webp)\.import$", e["path"])}
+    return sorted(tex(a_path) - tex(b_path))
+
+
 def write_pack(path, header, entries):
     base = len(header)
     blob = bytearray()
@@ -90,6 +99,13 @@ def write_pack(path, header, entries):
 
 
 def main():
+    if sys.argv[1] == "--texture-gaps":
+        # split_pck.py --texture-gaps <desktop.pck> <mobile.pck>: run before splitting
+        gaps = texture_gaps(sys.argv[2], sys.argv[3])
+        if gaps:
+            sys.exit("split_pck: %s lacks textures of %s:\n  " % (sys.argv[3], sys.argv[2]) + "\n  ".join(gaps[:40]))
+        print("texture sets match:", sys.argv[2], sys.argv[3])
+        return
     src = sys.argv[1]
     here = os.path.dirname(os.path.abspath(__file__))
     man_path = os.path.join(here, "..", "scripts", "data", "pack_chunks.gd")

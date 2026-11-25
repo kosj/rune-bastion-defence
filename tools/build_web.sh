@@ -59,6 +59,9 @@ if [ "${MOBILE_PACK:-1}" = "1" ]; then
       n=$(basename "$g" .glb)
       cp "$g" "assets/models/$n.glb"
       rm -f assets/models/${n}_albedo.png* assets/models/${n}_normal.png* assets/models/${n}_orm.png*
+      # a GLB identical to the desktop one keeps its import hash: drop the cached import too, or its
+      # maps are never extracted again and the model ships untextured
+      rm -f .godot/imported/$n.glb-*
     done
     timeout 1800 $GODOT --headless --path . --import >/dev/null 2>&1 || true
     python3 tools/patch_imports.py --mobile
@@ -71,6 +74,9 @@ if [ "${MOBILE_PACK:-1}" = "1" ]; then
   rm -rf "$TMP"
 fi
 echo "== split into download chunks: core (title) / menu / stage1 / towers / world"
+if [ -f build/web/index_mobile.pck ]; then
+  python3 tools/split_pck.py --texture-gaps build/web/index.pck build/web/index_mobile.pck
+fi
 for pk in build/web/index.pck build/web/index_mobile.pck; do
   if [ -f "$pk" ]; then python3 tools/split_pck.py "$pk"; fi
 done

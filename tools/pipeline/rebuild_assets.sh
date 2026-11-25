@@ -5,7 +5,10 @@
 # triangles show as dented silhouettes and torn foliage up close; more are invisible there and the
 # engine's automatic LODs drop them when zoomed out. Phones: "e1.6" (smaller, 0.8-scaled view).
 #   structures: high-poly regen (dl_hq) -> decimate + weighted normals + normal/AO bake
-#   props:      phase-2 raw meshes      -> same pipeline, smaller budgets
+#   props:      high-poly regen (dl_hq_props, 30k-60k) -> same pipeline. Props are drawn as
+#               MultiMeshes, so the many-instance ones carry caps (e1.0/10000); past the 1 px target
+#               the leaf bumps live on in the baked normal map. ALBEDO_REF keeps the colours of the
+#               first-generation props (the regenerated pine came out a lot lighter).
 #   characters: rigged per-animation GLBs -> merged clips, AO bake in rest pose, cleaned ORM
 # usage: rebuild_assets.sh OUT_DIR   (then copy OUT_DIR/*.glb into assets/models|characters)
 set -e
@@ -21,11 +24,12 @@ blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq" "$OUT/models" "$M" \
  artillery_1:tower:3.2:e1.0:1024:512:hard:256 artillery_2:tower:3.4:e1.0:1024:512:hard:256 artillery_3:tower:3.6:e1.0:1024:512:hard:256 \
  castle:foot:10.5:e1.0:2048:1024:hard:512 portal:foot:7.0:e1.0:1024:1024:hard:512 plot:foot:3.6:e1.0:1024:512:hard:256 \
  2>&1 | grep -E "^(BAKE|DONE|AO|ORM)|Traceback|Error"
-blender -b -P "$H/process_hq.py" -- "$RAW/props_in" "$OUT/models" "$M" \
- tree_round_v:height:4.6:e1.0:1024:512:soft:256 tree_pine_v:height:5.2:e1.0:1024:512:soft:256 rocks_v:foot:2.2:e1.0:512:256:soft:256 \
- bush:foot:1.9:e1.0:512:256:soft:256 house:foot:4.6:e1.0:1024:512:hard:256 lamp:height:2.7:e1.0:512:256:hard:256 \
- barrels:foot:1.9:e1.0:512:256:hard:256 crystals:height:1.7:e1.0:512:256:hard:256 fence:foot:2.8:e1.0:512:256:hard:256 \
- bridge:foot:8.0:e1.0:1024:512:hard:256 flowers:foot:1.3:e1.0:512:256:soft:256 \
+ALBEDO_REF="$RAW/props_in" blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq_props" "$OUT/models" "$M" \
+ tree_round_v:height:4.6:e1.0/10000:1024:512:soft:256 tree_pine_v:height:5.2:e1.0/8000:1024:512:soft:256 \
+ rocks_v:foot:2.2:e1.0/3500:512:256:soft:256 bush:foot:1.9:e1.0/6000:512:256:soft:256 \
+ house:foot:4.6:e1.0/10000:1024:512:hard:256 lamp:height:2.7:e1.0:512:256:hard:256 \
+ barrels:foot:1.9:e1.0/5000:512:256:hard:256 crystals:height:1.7:e1.0:512:256:hard:256 fence:foot:2.8:e1.0:512:256:hard:256 \
+ bridge:foot:8.0:e1.0:1024:512:hard:256 flowers:foot:1.3:e1.0/5000:512:256:soft:256 \
  2>&1 | grep -E "^(BAKE|DONE|AO|ORM)|Traceback|Error"
 # held props and small set pieces (VARCO image-to-3D, grip/centre pivot + yaw so blades face +X and
 # the mortar's muzzle faces +Z in Godot): name:mode:size:tris:albedo:normal:style:orm:pivot:yaw
@@ -45,13 +49,16 @@ blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq" "$MOB" "$MOB/meta.json" \
  artillery_1:tower:3.2:e1.6:512:256:hard:256 artillery_2:tower:3.4:e1.6:512:256:hard:256 artillery_3:tower:3.6:e1.6:512:256:hard:256 \
  castle:foot:10.5:e1.6:1024:512:hard:256 portal:foot:7.0:e1.6:1024:512:hard:256 \
  2>&1 | grep -E "^(DONE)|Traceback|Error"
-# props are drawn as MultiMeshes (no engine LOD): phones get their own lighter copies too
-blender -b -P "$H/process_hq.py" -- "$RAW/props_in" "$MOB" "$MOB/meta.json" \
- tree_round_v:height:4.6:e1.6:1024:512:soft:256 tree_pine_v:height:5.2:e1.6:1024:512:soft:256 rocks_v:foot:2.2:e1.6:512:256:soft:256 \
- bush:foot:1.9:e1.6:512:256:soft:256 house:foot:4.6:e1.6:1024:512:hard:256 lamp:height:2.7:e1.6:512:256:hard:256 \
- barrels:foot:1.9:e1.6:512:256:hard:256 crystals:height:1.7:e1.6:512:256:hard:256 fence:foot:2.8:e1.6:512:256:hard:256 \
- bridge:foot:8.0:e1.6:1024:512:hard:256 flowers:foot:1.3:e1.6:512:256:soft:256 \
+# props are drawn as MultiMeshes (one LOD choice for all instances): phones get lighter copies too
+ALBEDO_REF="$RAW/props_in" blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq_props" "$MOB" "$MOB/meta.json" \
+ tree_round_v:height:4.6:e1.6/6500:1024:512:soft:256 tree_pine_v:height:5.2:e1.6/8000:1024:512:soft:256 \
+ rocks_v:foot:2.2:e1.6/3500:512:256:soft:256 bush:foot:1.9:e1.6/6000:512:256:soft:256 \
+ house:foot:4.6:e1.6/10000:1024:512:hard:256 lamp:height:2.7:e1.6:512:256:hard:256 \
+ barrels:foot:1.9:e1.6/5000:512:256:hard:256 crystals:height:1.7:e1.6:512:256:hard:256 fence:foot:2.8:e1.6:512:256:hard:256 \
+ bridge:foot:8.0:e1.6:1024:512:hard:256 flowers:foot:1.3:e1.6/5000:512:256:soft:256 \
  2>&1 | grep -E "^(DONE)|Traceback|Error"
+# a capped prop can come out the same for phones; keep only the copies that differ
+for g in "$MOB"/*.glb; do cmp -s "$g" "$OUT/models/$(basename "$g")" && rm "$g"; done
 A4=$RAW/varco/anim_v4; A=$RAW/varco/anim; A5=$RAW/varco/anim_v5; D2=$RAW/dl_v2; D3=$RAW/dl_v3; C="$OUT/characters"
 mc() { local np=$1; shift; NORMAL_PX=$np blender -b -P "$H/merge_character.py" -- "$@" 2>&1 | grep -E "^(WROTE|AO|ORM)|Traceback|Error"; }
 mc 256 $C/footman.glb 1024 idle=$A/footman_idle.glb run=$A/footman_run.glb attack=$A/footman_attack.glb death=$A/footman_death.glb hit=$A5/footman_hit.glb cheer=$A5/footman_cheer.glb

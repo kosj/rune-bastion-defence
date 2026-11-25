@@ -11,6 +11,8 @@ generate-high / reduce / bake workflow):
 
 blender -b -P process_hq.py -- IN_DIR OUT_DIR META_JSON name:mode:size:tris:albedo:normal:style[:orm[:pivot[:yaw]]] ...
   mode  foot|tower|height   style  hard|soft
+  ALBEDO_REF=<dir>: match each albedo's colour statistics to <dir>/<name>.glb (regenerated models
+        keep the palette of the ones they replace)
   tris  a triangle count, or eN[/cap]: the smallest count whose deviation from the high-poly stays
         under N px at the closest game zoom (PX_PER_M, default 81.7 = 16 m away at 900 px)
 """
@@ -104,7 +106,8 @@ def budget_for_error(high, target_px, cap):
     """Smallest reduction of `high` (within 8 %) whose deviation stays under target_px, trying the
     seam-welded and the split mesh: returns (requested tris, welded?, actual tris, error px).
     Welding wins unless it needs over 10 % more triangles (some AI props are open shells that
-    collapse badly once welded)."""
+    collapse badly once welded). With a cap that stops both short of the target, welding wins
+    unless its error is over 15 % larger."""
     dg = bpy.context.evaluated_depsgraph_get()
     hb = BVHTree.FromObject(high, dg)
     pts = _sample(high, 12000)
@@ -143,7 +146,69 @@ def budget_for_error(high, target_px, cap):
     ok_w, ok_s = w[3] <= target_px, sp[3] <= target_px
     if ok_w and (not ok_s or w[2] <= sp[2] * 1.1):
         return w
-    return sp if ok_s else min(out, key=lambda r: r[3])
+    if ok_s:
+        return sp
+    # both capped short of the target: keep the crack-free welded mesh unless it is clearly worse
+    return w if w[3] <= sp[3] * 1.15 else sp
+
+
+
+def _srgb_to_lab(rgb):
+    a = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    m = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
+    xyz = a @ m.T / np.array([0.9505, 1.0, 1.089])
+    f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16.0 / 116.0)
+    return np.stack([116 * f[:, 1] - 16, 500 * (f[:, 0] - f[:, 1]), 200 * (f[:, 1] - f[:, 2])], 1)
+
+
+def _lab_to_srgb(lab):
+    fy = (lab[:, 0] + 16) / 116
+    fx = fy + lab[:, 1] / 500
+    fz = fy - lab[:, 2] / 200
+    f = np.stack([fx, fy, fz], 1)
+    xyz = np.where(f > 0.2069, f ** 3, (f - 16.0 / 116.0) / 7.787) * np.array([0.9505, 1.0, 1.089])
+    m = np.array([[3.2406, -1.5372, -0.4986], [-0.9689, 1.8758, 0.0415], [0.0557, -0.2040, 1.0570]])
+    a = np.clip(xyz @ m.T, 0.0, 1.0)
+    return np.where(a <= 0.0031308, a * 12.92, 1.055 * a ** (1 / 2.4) - 0.055)
+
+
+def glb_albedo_pixels(path):
+    """sRGB pixels (N x 3, 0..1) of the base colour texture of a GLB, read without importing it."""
+    import struct
+    import tempfile
+    with open(path, "rb") as f:
+        f.read(12)
+        n, _ = struct.unpack("<II", f.read(8))
+        js = json.loads(f.read(n))
+        f.read(8)
+        binc = f.read()
+    tex = js["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"]["index"]
+    im = js["images"][js["textures"][tex]["source"]]
+    bv = js["bufferViews"][im["bufferView"]]
+    data = binc[bv.get("byteOffset", 0):bv.get("byteOffset", 0) + bv["byteLength"]]
+    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    tmp.write(data)
+    tmp.close()
+    img = bpy.data.images.load(tmp.name)
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)[:, :3]
+    bpy.data.images.remove(img)
+    os.unlink(tmp.name)
+    return px
+
+
+def match_albedo(img, ref_px):
+    """Keep an established palette when a model is regenerated: move the new albedo's colour
+    statistics (mean / spread of L, a, b) onto those of the asset it replaces."""
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)
+    lab = _srgb_to_lab(px[:, :3].astype(np.float64))
+    ref = _srgb_to_lab(ref_px.astype(np.float64))
+    mu, sd = lab.mean(0), lab.std(0) + 1e-6
+    rmu, rsd = ref.mean(0), ref.std(0)
+    lab = (lab - mu) / sd * rsd + rmu
+    px[:, :3] = _lab_to_srgb(lab)
+    img.pixels.foreach_set(px.ravel())
+    img.update()
+    print("ALBEDO matched: L %.1f -> %.1f, a %.1f -> %.1f, b %.1f -> %.1f" % (mu[0], rmu[0], mu[1], rmu[1], mu[2], rmu[2]))
 
 
 for spec in specs:
@@ -353,6 +418,12 @@ for spec in specs:
 
     # 6. export
     tex_roles.finalize_images({"albedo": albedo_px, "normal": normal_px, "orm": orm_px}, ao=ao_img)
+    ref = os.path.join(os.environ.get("ALBEDO_REF", ""), name + ".glb")
+    if os.environ.get("ALBEDO_REF") and os.path.exists(ref):
+        alb = bpy.data.images.get("albedo")
+        if alb is not None:
+            match_albedo(alb, glb_albedo_pixels(ref))
+            alb.pack()
     only(low)
     bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, name + ".glb"), export_format="GLB", use_selection=True,
                               export_yup=True, export_image_format="AUTO", export_tangents=True,

@@ -252,7 +252,7 @@ static func soft_dot() -> Texture2D:
 	return gt
 
 
-static var _env_shader: Shader
+static var _env_shaders := {}
 static var _snow_overlay: ShaderMaterial
 
 ## Theme material for textured decor: optional colorize of green foliage (autumn/night) and snow caps.
@@ -262,12 +262,37 @@ static func env_material(m: Mesh, colorize: Color, snow: float) -> Material:
 	var src := m.surface_get_material(0)
 	if not (src is StandardMaterial3D) or (src as StandardMaterial3D).albedo_texture == null:
 		return null
-	if _env_shader == null:
-		_env_shader = Shader.new()
-		_env_shader.code = """
+	var sm0 := src as StandardMaterial3D
+	# imported props are double-sided (open leaf shells): the recolour keeps that, or holes show
+	var two_sided := sm0.cull_mode == BaseMaterial3D.CULL_DISABLED
+	if not _env_shaders.has(two_sided):
+		var sh := Shader.new()
+		# the themed recolour also keeps the prop's normal map and ORM (baked AO, roughness):
+		# without them the scenery of every themed map lost its leaf and stone relief
+		sh.code = ENV_SHADER.replace("RB_CULL", "cull_disabled" if two_sided else "cull_back")
+		_env_shaders[two_sided] = sh
+	var sm := ShaderMaterial.new()
+	sm.shader = _env_shaders[two_sided]
+	sm.set_shader_parameter("albedo_tex", sm0.albedo_texture)
+	if sm0.normal_enabled and sm0.normal_texture != null:
+		sm.set_shader_parameter("normal_tex", sm0.normal_texture)
+		sm.set_shader_parameter("use_normal", true)
+	var orm_tex: Texture2D = sm0.ao_texture if sm0.ao_enabled and sm0.ao_texture != null else sm0.roughness_texture
+	if orm_tex != null:
+		sm.set_shader_parameter("orm_tex", orm_tex)
+		sm.set_shader_parameter("use_orm", true)
+	sm.set_shader_parameter("colorize", colorize)
+	sm.set_shader_parameter("snow", snow)
+	return sm
+
+const ENV_SHADER := """
 shader_type spatial;
-render_mode diffuse_burley, specular_schlick_ggx;
-uniform sampler2D albedo_tex : source_color, filter_linear_mipmap;
+render_mode diffuse_burley, specular_schlick_ggx, RB_CULL;
+uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic;
+uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap_anisotropic;
+uniform sampler2D orm_tex : hint_default_white, filter_linear_mipmap;
+uniform bool use_normal = false;
+uniform bool use_orm = false;
 uniform vec4 colorize = vec4(0.0);
 uniform float snow = 0.0;
 varying vec3 wnorm;
@@ -280,15 +305,20 @@ void fragment() {
 	float cap = smoothstep(0.35, 0.75, wnorm.y) * snow;
 	c = mix(c, vec3(0.92, 0.95, 1.0), cap);
 	ALBEDO = c;
-	ROUGHNESS = mix(0.85, 0.6, cap);
+	float rough = 0.85;
+	if (use_orm) {
+		vec3 orm = texture(orm_tex, UV).rgb;
+		rough = orm.g;
+		AO = mix(orm.r, 1.0, cap);
+		AO_LIGHT_AFFECT = 0.4;
+	}
+	ROUGHNESS = mix(rough, 0.6, cap);
+	if (use_normal) {
+		NORMAL_MAP = texture(normal_tex, UV).rgb;
+		NORMAL_MAP_DEPTH = 1.0 - 0.6 * cap;
+	}
 }
 """
-	var sm := ShaderMaterial.new()
-	sm.shader = _env_shader
-	sm.set_shader_parameter("albedo_tex", (src as StandardMaterial3D).albedo_texture)
-	sm.set_shader_parameter("colorize", colorize)
-	sm.set_shader_parameter("snow", snow)
-	return sm
 
 ## Overlay pass that dusts any mesh (towers, castle, characters) with snow on upward faces.
 static func snow_overlay() -> ShaderMaterial:
