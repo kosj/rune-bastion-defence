@@ -1,6 +1,7 @@
 """Build scripts/i18n/lang_en.gd from tools/i18n/en_*.txt (tab-separated: Korean source<TAB>English).
 Keys are written exactly as they appear in the GDScript source (escapes such as \\n kept), so the
-runtime strings match. Reports source strings that have no translation yet."""
+runtime strings match. Reports source strings that have no translation yet.
+--check: change nothing; fail if the table is stale or a string has no English (run in CI)."""
 import glob
 import json
 import subprocess
@@ -36,6 +37,13 @@ out.append("const C := {")
 for c in sorted(ctxs):
     out.append("\t%s: {%s}," % (q(c), ", ".join("%s: %s" % (q(k), q(v)) for k, v in sorted(ctxs[c].items()))))
 out.append("}")
-open("scripts/i18n/lang_en.gd", "w", encoding="utf-8").write("\n".join(out) + "\n")
+text = "\n".join(out) + "\n"
+if "--check" in sys.argv:
+    # CI: the generated table must match its sources (a hand edit there is lost on the next build)
+    # and every Korean string in the code must have an English line
+    if open("scripts/i18n/lang_en.gd", encoding="utf-8").read() != text:
+        sys.exit("scripts/i18n/lang_en.gd differs from tools/i18n/en_*.txt: add the strings there and run tools/i18n_build.py")
+    sys.exit(subprocess.run([sys.executable, "tools/i18n_extract.py", "--missing", "--strict"]).returncode)
+open("scripts/i18n/lang_en.gd", "w", encoding="utf-8").write(text)
 print("wrote", len(rows), "strings")
 subprocess.run([sys.executable, "tools/i18n_extract.py", "--missing"])

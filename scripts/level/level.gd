@@ -1675,6 +1675,18 @@ func _pause() -> void:
 		hq.add_theme_font_override("font", Assets.font("ui_black"))
 		hq.toggled.connect(func(v): Game.high_quality = v; Game.apply_quality(); Game.save())
 		vb.add_child(hq)
+		# language: labels switch at once; the menu is rebuilt so its own lines follow
+		vb.add_child(UI.choice("언어", UI.LANGUAGES, Game.language, func(v):
+			if str(v) == Game.language:
+				return
+			Game.language = v
+			Lang.apply(v)
+			Game.save()
+			hud.refresh_language()
+			if _modal:
+				_modal.queue_free()
+				_modal = null
+			_pause(), 92.0))
 		if not Game.is_mobile and not compact:
 			var keys := UI.label("단축키  Esc 일시정지 · Space 다음 웨이브 · F 배속\n1 · 2 주문 · H 영웅 선택 · Q 영웅 스킬", 15, UI.MUTED, 3)
 			keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1684,7 +1696,7 @@ func _volume_row(label: String, v: float, cb: Callable) -> HBoxContainer:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 12)
 	var l := UI.label(label, 21, UI.TEXT, 4, "ui_black")
-	l.custom_minimum_size.x = 84
+	l.custom_minimum_size.x = 112  # "Sound FX" too, so both sliders line up in either language
 	hb.add_child(l)
 	var s := HSlider.new()
 	s.min_value = 0.0

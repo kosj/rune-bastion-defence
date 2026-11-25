@@ -453,3 +453,25 @@ static func with_close(panel: Control, on_close: Callable, sz := 50) -> Control:
 	panel.resized.connect(fit)
 	fit.call_deferred()
 	return holder
+
+## A labelled row of option buttons (the chosen one gold), e.g. the UI size or language setting.
+## options: [[value, caption], ...]; cb gets the picked value.
+static func choice(label_text: String, options: Array, current: Variant, cb: Callable, btn_w := 98.0) -> HBoxContainer:
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 6)
+	var l := label(label_text, 19, TEXT, 4, "ui_black")
+	l.custom_minimum_size.x = 92
+	hb.add_child(l)
+	for op in options:
+		var sel: bool = str(op[0]) == str(current) or (op[0] is float and current is float and absf(float(op[0]) - float(current)) < 0.01)
+		var b := button(op[1], 17, false, Vector2(btn_w, 46), "gold" if sel else "gray")
+		var v: Variant = op[0]
+		b.pressed.connect(func():
+			Audio.play("click", -4.0)
+			cb.call(v))
+		hb.add_child(b)
+	return hb
+
+## The language options shown in the settings (title screen and battle pause menu).
+const LANGUAGES := [["", "자동"], ["ko", "한국어"], ["en", "English"]]
+

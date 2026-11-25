@@ -28,8 +28,8 @@ Kingdom Rush · Bloons TD 6 계열(경로형 타워 디펜스 + 영웅 + 스킬 
 | 조작 | PC: 클릭, 드래그(이동), 휠(줌), 단축키. 모바일: 탭, 드래그, 핀치 줌. 폰에서는 UI가 자동으로 커집니다 |
 
 ## 다국어
-- 코드의 문자열은 한국어 원문이고, 영어는 `scripts/i18n/lang_en.gd`(원문 → 번역)로 런타임 `Translation`을 만들어 씁니다. 언어는 브라우저/OS 언어를 따르고 설정에서 바꿀 수 있습니다.
-- 번역 원본은 `tools/i18n/en_*.txt`(탭 구분)입니다. 텍스트를 추가했다면 `python3 tools/i18n_build.py`로 테이블을 다시 만들고 빠진 문자열을 확인한 다음, `python3 tools/make_fonts.py`로 폰트 서브셋을 다시 만듭니다.
+- 코드의 문자열은 한국어 원문이고, 영어는 `scripts/i18n/lang_en.gd`(원문 → 번역)로 런타임 `Translation`을 만들어 씁니다. 언어는 브라우저/OS 언어를 따르고, 타이틀의 설정과 전투 중 일시 정지 메뉴에서 자동·한국어·English로 바꿀 수 있습니다(전투 중에는 그 자리에서 바로 바뀝니다).
+- 번역 원본은 `tools/i18n/en_*.txt`(탭 구분)입니다. `lang_en.gd`는 생성 파일이라 직접 고치면 다음 빌드에서 사라집니다. 텍스트를 추가했다면 `python3 tools/i18n_build.py`로 테이블을 다시 만들고 빠진 문자열을 확인한 다음, `python3 tools/make_fonts.py`로 폰트 서브셋을 다시 만듭니다. CI의 `i18n_build.py --check`가 영어가 빠진 문자열과 손으로 고친 테이블을 잡습니다.
 
 ## 웹 배포 (모바일·PWA)
 - **장면 단위로 나눠 받는 데이터 (첫 로딩)**: 각 팩을 장면별 청크 5개로 나눕니다(`scripts/data/pack_chunks.gd`, `tools/split_pck.py`).

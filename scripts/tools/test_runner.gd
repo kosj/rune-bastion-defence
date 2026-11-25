@@ -233,6 +233,15 @@ func _process(delta: float) -> void:
 				L2._select_hero()
 			"pause":
 				L2._pause()
+			"pause_lang":
+				# pause, then press a language button in the pause menu (lang_to=en|ko|auto)
+				L2._pause()
+				L2.get_tree().create_timer(0.6).timeout.connect(func():
+					var want := {"en": "English", "ko": "한국어", "auto": "자동"}.get(args.get("lang_to", "en"), "English") as String
+					for b in L2._modal.find_children("*", "Button", true, false):
+						if (b as Button).text == want:
+							(b as Button).pressed.emit()
+							break)
 			"victory":
 				L2._victory()
 			"defeat":

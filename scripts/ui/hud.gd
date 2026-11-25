@@ -481,8 +481,16 @@ func set_lives(l: int) -> void:
 		lives_l.scale = Vector2(1.4, 1.4)
 		tw.tween_property(lives_l, "scale", Vector2.ONE, 0.3)
 
+var _wave_shown := [0, 0]
+
 func set_wave(cur: int, total: int) -> void:
+	_wave_shown = [cur, total]
 	wave_l.text = (tr("웨이브 %d/%d") % [cur, total]) if total > 0 else (tr("웨이브 %d/∞") % cur)
+
+## After a language switch in the pause menu: labels and buttons follow on their own, the lines
+## formatted once (tr("...%d") % n) are written again.
+func refresh_language() -> void:
+	set_wave(_wave_shown[0], _wave_shown[1])
 
 var _toasts := 0
 

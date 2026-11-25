@@ -1159,7 +1159,7 @@ func _open_settings() -> void:
 		Game.set_ui_scale(v)
 		shade.queue_free()
 		(func(): _open_settings()).call_deferred()))
-	right.add_child(_choice("언어", [["", "자동"], ["ko", "한국어"], ["en", "English"]], Game.language, func(v):
+	right.add_child(_choice("언어", UI.LANGUAGES, Game.language, func(v):
 		Game.language = v
 		Lang.apply(v)
 		Game.save()
@@ -1239,20 +1239,7 @@ func _toggle(text: String, on: bool, cb: Callable) -> CheckButton:
 
 ## Row of segmented buttons; options are [value, label] pairs.
 func _choice(label: String, options: Array, current: Variant, cb: Callable) -> Control:
-	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 6)
-	var l := UI.label(label, 19, UI.TEXT, 4, "ui_black")
-	l.custom_minimum_size.x = 92
-	hb.add_child(l)
-	for op in options:
-		var sel: bool = str(op[0]) == str(current) or (op[0] is float and current is float and absf(float(op[0]) - float(current)) < 0.01)
-		var b := UI.button(op[1], 17, false, Vector2(98, 46), "gold" if sel else "gray")
-		var v: Variant = op[0]
-		b.pressed.connect(func():
-			Audio.play("click", -4.0)
-			cb.call(v))
-		hb.add_child(b)
-	return hb
+	return UI.choice(label, options, current, cb)
 
 ## Save transfer: export shows the code (also copied to the clipboard / downloadable on the web),
 ## import takes a pasted code (the browser's own prompt on the web: it supports paste on phones).

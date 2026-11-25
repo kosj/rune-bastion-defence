@@ -1,6 +1,6 @@
 """List every Korean string literal in the GDScript sources (the source language), with the files
 that use it, and report which ones are still missing from the English table (scripts/i18n/lang_en.gd).
-usage: python3 tools/i18n_extract.py [--missing] [--json out.json]"""
+usage: python3 tools/i18n_extract.py [--missing] [--strict] [--json out.json]   (--strict: exit 1 if any is missing)"""
 import glob
 import json
 import re
@@ -42,3 +42,5 @@ if __name__ == "__main__":
         for s in miss:
             print(json.dumps(s, ensure_ascii=False), "  #", found[s][0])
     print("strings:", len(found), "translated:", len(found) - len(miss), "missing:", len(miss), file=sys.stderr)
+    if "--strict" in sys.argv and miss:
+        sys.exit(1)

@@ -7,6 +7,7 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
 - 웹 빌드 전체: `./tools/build_web.sh`. 빠른 확인은 `godot --headless --path . --export-release "Web" build/web/index.html` → `python3 tools/split_pck.py build/web/index.pck` → `python3 tools/package_web.py build/web build/web_hosted --build-id t1`
 - 브라우저 타임라인: `python3 tools/browser_test.py build/web_hosted /tmp/x 1280 720 --play --throttle=20 --nosw` (`--early`, `--revisit`)
 - 검사(모두 CI에서도 돎):
+  - `python3 tools/i18n_build.py --check`: 모든 한국어 문자열에 영어가 있는지
   - `python3 tools/make_fonts.py --check`: 쓰인 글자가 폰트에 있는지
   - `tools/check_chunks.sh`: 화면이 기다리지 않는 청크의 에셋을 부르는지
   - 셀프 테스트: `test_runner.tscn -- selftest=1`
@@ -25,6 +26,6 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
 - **메시 예산은 화면 오차로 정합니다**: `tools/pipeline/rebuild_assets.sh`의 `e1.0`(가장 가까운 줌에서 원본과 1px, 폰 `e1.6`). 숫자를 손으로 낮추지 않습니다(MultiMesh 소품만 `e1.0/상한`). 모델을 다시 생성하면 `ALBEDO_REF`로 이전 색을 유지합니다. GLB를 바꾸면 추출된 `<이름>_albedo/normal/orm.png*`를 지우고 다시 임포트합니다(내용이 같은 GLB는 `.godot/imported/<이름>.glb-*`도 지워야 다시 추출됩니다).
 - **경량 엔진 템플릿**(`tools/engine/web_template.env`)은 물리·내비게이션·XR·네트워크·RegEx·mp3 등을 뺍니다. 그런 클래스를 쓰려면 env에서 해당 옵션을 지웁니다. 그러면 CI가 템플릿을 다시 빌드합니다. `python3 tools/engine/check_classes.py <godot 소스>`가 빠진 클래스 사용을 잡습니다.
 - **게시 전 브라우저 스모크 테스트**(`browser_test.py --smoke`)가 실패하면 배포되지 않습니다.
-- **텍스트를 추가하면** `python3 tools/make_fonts.py`로 폰트를 다시 만듭니다.
+- **텍스트를 추가하면** 영어를 `tools/i18n/en_*.txt`에 넣고 `python3 tools/i18n_build.py`를 돌립니다(`lang_en.gd`는 생성 파일). 그다음 `python3 tools/make_fonts.py`로 폰트를 다시 만듭니다. CI가 `i18n_build.py --check`로 빠진 영어를 잡습니다.
 - **타이틀 디오라마를 바꾸면** `tools/render_backdrops.sh`(화면 필요, Xvfb)로 타이틀 그림을 다시 렌더링합니다.
 - **커밋 메시지·문서**: 저장소 문서는 한국어로 씁니다.
