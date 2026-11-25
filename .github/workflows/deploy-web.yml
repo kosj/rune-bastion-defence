@@ -48,12 +48,15 @@ jobs:
           mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           mv templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
 
-      - name: Build (import, desktop pack, mobile ETC2 pack, gzip parts)
+      - name: Build (import, desktop pack, mobile ETC2 pack, core/content split, gzip parts)
         run: |
           export GODOT=~/godot/godot
           export BUILD_ID="$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}"
           bash tools/build_web.sh
           test -f build/web_hosted/index.html
+          # core packs + streamed content packs (tools/split_pck.py)
+          test -f build/web_hosted/index_content.pck.gz0.bin
+          test -f build/web_hosted/index_mobile_content.pck.gz0.bin
           ls -la build/web_hosted
 
       - name: Publish to gh-pages

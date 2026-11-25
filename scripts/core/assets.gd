@@ -16,7 +16,9 @@ static func scene(name: String) -> PackedScene:
 		var p := MODEL_DIR + name + ".glb"
 		if not ResourceLoader.exists(p):
 			p = CHAR_DIR + name + ".glb"
-		_scenes[name] = load(p) if ResourceLoader.exists(p) else null
+		if not ResourceLoader.exists(p):
+			return null  # not cached: streamed content may still arrive (Content)
+		_scenes[name] = load(p)
 	return _scenes[name]
 
 static func instance(name: String) -> Node3D:
@@ -136,7 +138,8 @@ static func mesh(name: String, node_name := "Body") -> Mesh:
 			result = (n as MeshInstance3D).mesh
 			fix_mesh(result)
 		inst.free()
-	_meshes[key] = result
+	if result:
+		_meshes[key] = result
 	return result
 
 static func multimesh(name: String, xforms: Array, parent: Node, shadows := true) -> MultiMeshInstance3D:

@@ -61,9 +61,23 @@ func _ready() -> void:
 			if args.get("progress_max", "0") == "1":
 				Game.stats["iron_1"] = 1
 			Game._check_achievements()
+		if args.has("hero"):
+			Game.hero_id = args["hero"]
+			var need_m := int((DB.HEROES.get(Game.hero_id, {}) as Dictionary).get("unlock", -1))
+			if need_m >= 0 and Game.stars[need_m] == 0:
+				Game.stars[need_m] = 1
 		_menu = (load("res://scenes/main_menu.tscn") as PackedScene).instantiate()
 		get_tree().root.add_child.call_deferred(_menu)
 		_shots_at = [3.0, 6.0]
+		if args.has("backdrop"):
+			# title backdrop for the streamed start: the diorama at the opening camera pose, no UI
+			_shots_at = []
+			get_tree().create_timer(3.0).timeout.connect(_render_backdrop)
+		if args.has("start_at"):
+			# press start on level 1 from the title screen (streamed content: before it has arrived);
+			# the menu is made the current scene so the scene change frees it as in the game
+			(func(): get_tree().current_scene = _menu).call_deferred()
+			get_tree().create_timer(float(args["start_at"])).timeout.connect(func(): Game.start_level(0))
 		if args.has("open"):
 			get_tree().create_timer(4.0).timeout.connect(func(): _menu.call(args["open"]))
 		if args.has("map_card"):
@@ -106,9 +120,28 @@ func _ready() -> void:
 		for s in (args["shot_times"] as String).split(","):
 			_shots_at.append(float(s))
 
+var _hitch_us := 0
+var _hitch_log: Array = []
+
 func _process(delta: float) -> void:
 	t += delta / maxf(Engine.time_scale, 0.01)
 	var mode: String = args.get("mode", "auto")
+	if args.has("hitch"):
+		# hitch=<ms>: log every frame slower than that (first-use loads / shader compiles)
+		var now := Time.get_ticks_usec()
+		if _hitch_us > 0 and LevelMain.I:
+			var ms := (now - _hitch_us) / 1000.0
+			if ms > float(args["hitch"]):
+				var L := LevelMain.I
+				var kinds := {}
+				for e in L.enemies:
+					kinds[(e as Enemy).type] = true
+				var tws := {}
+				for k in L.towers:
+					tws["%s%d" % [(L.towers[k] as Tower).type, (L.towers[k] as Tower).level]] = true
+				print("HITCH t=%.1f %.0fms enemies=%s towers=%s" % [t, ms, ",".join(kinds.keys()), ",".join(tws.keys())])
+				_hitch_log.append(ms)
+		_hitch_us = now
 	if args.has("dbg_anim") and t >= float(args["dbg_anim"]) and not has_meta("dbg_anim") and LevelMain.I:
 		set_meta("dbg_anim", true)
 		for bl in get_tree().root.find_children("*", "BlobLayer", true, false):
@@ -315,8 +348,10 @@ func _process(delta: float) -> void:
 			LevelMain.I.cam_rig._pos = LevelMain.I.cam_rig.target
 			await get_tree().process_frame
 		_shot()
+	if has_meta("texab_done") and not has_meta("texab_fin"):
+		return  # the texture A/B probe is still shooting
 	if mode == "menu":
-		if t > 7.0:
+		if t > float(args.get("max_t", "7.0")):
 			get_tree().quit()
 		return
 	if level == null or not is_instance_valid(level) or LevelMain.I == null:
@@ -761,6 +796,21 @@ func _lod_probe() -> void:
 		await RenderingServer.frame_post_draw
 	print("NO-SHADOW primitives=%d (base %d)" % [Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), base])
 
+func _render_backdrop() -> void:
+	_menu.ui.visible = false
+	_menu._t = 0.0
+	for i in 4:
+		await get_tree().process_frame
+	_menu._t = 0.0
+	await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	img.convert(Image.FORMAT_RGB8)
+	img.save_png(args["backdrop"])
+	print("BACKDROP ", args["backdrop"], " ", img.get_size())
+	get_tree().quit()
+
+
 func _shot() -> void:
 	var dir: String = args.get("shots", "/tmp/shots")
 	DirAccess.make_dir_recursive_absolute(dir)
@@ -770,6 +820,106 @@ func _shot() -> void:
 	shot_i += 1
 	img.save_png(p)
 	print("SHOT ", p)
+	if args.has("texab") and not has_meta("texab_done"):
+		set_meta("texab_done", true)
+		await _texab(p)
+
+
+## texab=normal:0.5,orm:0.5,c_albedo:0.5,castle_albedo:0.5 — texture-size A/B probe.  After the
+## normal shot (A) the tree is paused, a second shot (A2) measures what still moves (shader time),
+## then every matching model / character texture is resized in place (cubic, as the importer's
+## size_limit does) and shot again (B).  Keys: role (albedo|normal|orm), m_<role> / c_<role> for
+## models / characters only, or a texture name such as castle_normal.
+func _texab(p: String) -> void:
+	# freeze everything, shader time included (it advances by the scaled frame step)
+	get_tree().paused = true
+	Engine.time_scale = 0.0
+	for i in 3:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(p.replace(".png", "_a2.png"))
+	for i in 2:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(p.replace(".png", "_a3.png"))
+	var stage := 0
+	for spec in (args["texab"] as String).split("|"):
+		stage += 1
+		var rules := {}
+		for r in spec.split(","):
+			var kv := r.split(":")
+			rules[kv[0]] = float(kv[1])
+		var swapped := {}
+		var stack: Array[Node] = [get_tree().root]
+		while not stack.is_empty():
+			var n: Node = stack.pop_back()
+			stack.append_array(n.get_children())
+			var mats: Array = []
+			if n is GeometryInstance3D and (n as GeometryInstance3D).material_override:
+				mats.append((n as GeometryInstance3D).material_override)
+			var mesh: Mesh = null
+			if n is MeshInstance3D:
+				mesh = (n as MeshInstance3D).mesh
+				for s in (n as MeshInstance3D).get_surface_override_material_count():
+					if (n as MeshInstance3D).get_surface_override_material(s):
+						mats.append((n as MeshInstance3D).get_surface_override_material(s))
+			elif n is MultiMeshInstance3D and (n as MultiMeshInstance3D).multimesh:
+				mesh = (n as MultiMeshInstance3D).multimesh.mesh
+			if mesh:
+				for s in mesh.get_surface_count():
+					if mesh.surface_get_material(s):
+						mats.append(mesh.surface_get_material(s))
+			for m in mats:
+				if m is BaseMaterial3D:
+					for tp in [BaseMaterial3D.TEXTURE_ALBEDO, BaseMaterial3D.TEXTURE_NORMAL, BaseMaterial3D.TEXTURE_ORM,
+							BaseMaterial3D.TEXTURE_ROUGHNESS, BaseMaterial3D.TEXTURE_METALLIC, BaseMaterial3D.TEXTURE_AMBIENT_OCCLUSION, BaseMaterial3D.TEXTURE_EMISSION]:
+						var nt := _texab_swap((m as BaseMaterial3D).get_texture(tp), rules, swapped)
+						if nt:
+							(m as BaseMaterial3D).set_texture(tp, nt)
+				elif m is ShaderMaterial and (m as ShaderMaterial).shader:
+					for u in (m as ShaderMaterial).shader.get_shader_uniform_list():
+						var v = (m as ShaderMaterial).get_shader_parameter(u["name"])
+						if v is Texture2D:
+							var nt2 := _texab_swap(v, rules, swapped)
+							if nt2:
+								(m as ShaderMaterial).set_shader_parameter(u["name"], nt2)
+		print("TEXAB stage ", stage, " swapped ", swapped.size(), " ", swapped.keys())
+		for i in 3:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		var pb := p.replace(".png", "_b%d.png" % stage)
+		get_viewport().get_texture().get_image().save_png(pb)
+		print("SHOT ", pb)
+	set_meta("texab_fin", true)
+
+
+func _texab_swap(tx: Texture2D, rules: Dictionary, swapped: Dictionary) -> Texture2D:
+	if tx == null or tx is ImageTexture or tx.resource_path == "":
+		return null
+	var path := tx.resource_path
+	if swapped.has(path):
+		return swapped[path]
+	var nm := path.get_file().get_basename()
+	var role := nm.get_slice("_", nm.get_slice_count("_") - 1)
+	var grp := "c_" if path.contains("/characters/") else ("m_" if path.contains("/models/") else "x_")
+	var f := -1.0
+	for k in [nm, grp + role, role]:
+		if rules.has(k):
+			f = rules[k]
+			break
+	if f <= 0.0 or f >= 1.0:
+		return null
+	var img := tx.get_image()
+	if img == null:
+		return null
+	if img.is_compressed():
+		img.decompress()
+	img.clear_mipmaps()
+	img.resize(maxi(1, int(img.get_width() * f)), maxi(1, int(img.get_height() * f)), Image.INTERPOLATE_CUBIC)
+	img.generate_mipmaps(role == "normal")
+	var nt := ImageTexture.create_from_image(img)
+	swapped[path] = nt
+	return nt
 
 
 ## perf=START,DUR: from START (test seconds) sample DUR seconds of frames and print one summary line:

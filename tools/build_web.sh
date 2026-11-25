@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build pipeline: import -> role-aware texture settings -> Web export (desktop pack) ->
-# mobile pack (ETC2 textures, built in a throw-away copy of the project) -> gzip/split for hosting.
+# mobile pack (ETC2 textures, built in a throw-away copy of the project) -> core / content split of
+# each pack (tools/split_pck.py) -> gzip/split for hosting.
 #   GODOT=<binary>   Godot 4.7 editor binary (default: godot)
 #   MOBILE_PACK=0    skip the mobile pack
 #   BUILD_ID=<id>    cache-busting id for the part URLs (default: timestamp + git hash)
@@ -46,6 +47,10 @@ if [ "${MOBILE_PACK:-1}" = "1" ]; then
   timeout 1800 $GODOT --headless --path "$MP" --export-pack "WebMobile" "$ROOT/build/web/index_mobile.pck" 2>&1 | grep -vE "ALSA|audio" | tail -3 || true
   rm -rf "$TMP"
 fi
+echo "== split: small core pack (menus, UI, audio) + streamed content pack (3D models, battle music)"
+for pk in build/web/index.pck build/web/index_mobile.pck; do
+  if [ -f "$pk" ]; then python3 tools/split_pck.py "$pk"; fi
+done
 ls -la build/web
 
 echo "== package for static hosting (build $BUILD_ID)"

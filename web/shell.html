@@ -70,28 +70,34 @@ const RB_BUILD = "$RB_BUILD_ID";
         const parts = GZ[key].parts;
         const mime = GZ[key].mime;
         const base = url.substring(0, url.lastIndexOf('/') + 1);
+        const total = GZ[key].gz || 0;
         const stream = new ReadableStream({
           async start(controller) {
+            let got = 0;
+            const tick = (n) => { got += n; if (total && key === window.rbContentName) window.rbContent.p = Math.min(0.99, got / total); };
             for (const p of parts) {
               const r = await origFetch(base + p + (RB_BUILD ? '?v=' + RB_BUILD : ''), { cache: 'force-cache' });
               if (!r.ok) { controller.error(new Error('HTTP ' + r.status + ' ' + p)); return; }
               if (p.endsWith('.txt')) {
                 // base64 text part (for hosts that only serve web/text file types)
                 const txt = (await r.text()).replace(/\s+/g, '');
-                if (Uint8Array.fromBase64) { controller.enqueue(Uint8Array.fromBase64(txt)); continue; }
+                if (Uint8Array.fromBase64) { const u = Uint8Array.fromBase64(txt); tick(u.length); controller.enqueue(u); continue; }
                 const SL = 4 * 1024 * 1024;
                 for (let o = 0; o < txt.length; o += SL) {
                   const bin = atob(txt.substring(o, o + SL));
                   const u = new Uint8Array(bin.length);
                   for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
+                  tick(u.length);
                   controller.enqueue(u);
                 }
                 continue;
               }
               const reader = r.body.getReader();
-              for (;;) { const { done, value } = await reader.read(); if (done) break; controller.enqueue(value); }
+              for (;;) { const { done, value } = await reader.read(); if (done) break; tick(value.length); controller.enqueue(value); }
             }
+            console.log('[RB] fetched ' + key + ' at ' + Math.round(performance.now()) + 'ms');
             controller.close();
+            if (window.rbFetched) window.rbFetched(key);
           }
         });
         const inflated = stream.pipeThrough(new DecompressionStream('gzip'));
@@ -99,6 +105,37 @@ const RB_BUILD = "$RB_BUILD_ID";
       }
     }
     return origFetch(input, init);
+  };
+})();
+// --- streamed content: index[_mobile]_content.pck (3D models, characters, battle music) is fetched
+// once the engine and the core pack are in, while the title screen already runs, and handed to the
+// engine's file system when the game asks (scripts/autoload/content.gd: rbContentMount) ---
+window.rbContent = { state: 'none', p: 0 };
+window.rbContentName = '';
+(function () {
+  const C = window.rbContent;
+  const done = new Set();
+  let buf = null, started = false, tries = 0;
+  function load() {
+    C.state = 'loading';
+    fetch(window.rbContentName).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+      .then((ab) => { buf = new Uint8Array(ab); C.p = 1; C.state = 'fetched'; console.log('[RB] content fetched at ' + Math.round(performance.now()) + 'ms'); })
+      .catch((err) => { console.error('[RB] content', err); C.state = 'error'; setTimeout(load, Math.min(10000, 1500 * ++tries)); });
+  }
+  window.rbFetched = function (key) {
+    done.add(key);
+    const main = (typeof GODOT_CONFIG !== 'undefined' && GODOT_CONFIG.mainPack) || 'index.pck';
+    if (!started && C.state === 'pending' && done.has(main) && (done.has('index.wasm') || !(window.RB_GZ || {})['index.wasm'])) {
+      started = true;
+      load();
+    }
+  };
+  window.rbContentMount = function () {
+    if (buf && C.state === 'fetched') {
+      try { engine.copyToFS('/tmp/rb_content.pck', buf); buf = null; C.state = 'ready'; }
+      catch (e) { console.error('[RB] content mount', e); }
+    }
+    return C.state;
   };
 })();
 </script>
@@ -111,6 +148,12 @@ const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
 // can actually sample ETC2 textures; ?pack=mobile|desktop overrides for testing.
 (function () {
   const GZ = window.RB_GZ || {};
+  const pick = (pack) => {
+    if (GZ[pack]) GODOT_CONFIG.fileSizes = Object.assign({}, GODOT_CONFIG.fileSizes, { [pack]: GZ[pack].size });
+    const c = pack.replace(/\.pck$/, '_content.pck');
+    if (GZ[c]) { window.rbContentName = c; window.rbContent.state = 'pending'; }
+  };
+  pick(GODOT_CONFIG.mainPack || 'index.pck');
   if (!GZ['index_mobile.pck']) return;
   const q = new URLSearchParams(location.search).get('pack');
   const ua = navigator.userAgent;
@@ -126,7 +169,7 @@ const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
   }
   if (want) {
     GODOT_CONFIG.mainPack = 'index_mobile.pck';
-    GODOT_CONFIG.fileSizes = Object.assign({}, GODOT_CONFIG.fileSizes, { 'index_mobile.pck': GZ['index_mobile.pck'].size });
+    pick('index_mobile.pck');
     console.log('[RB] mobile pack (ETC2 textures)');
   }
 })();
@@ -203,6 +246,7 @@ const engine = new Engine(GODOT_CONFIG);
     },
   }).then(() => {
     clearInterval(tipTimer);
+    console.log('[RB] engine started at ' + Math.round(performance.now()) + 'ms');
     status.classList.add('hide');
     setTimeout(() => status.remove(), 700);
   }, fail);

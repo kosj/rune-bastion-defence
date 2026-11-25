@@ -12,9 +12,77 @@ func _ready() -> void:
 	Engine.time_scale = 1.0
 	get_tree().paused = false
 	get_viewport().disable_3d = false
-	_build_world()
+	Game.mark("menu_build_start")
 	_build_ui()
 	Audio.play_music("menu")
+	if Content.is_ready:
+		_build_world()
+		Game.mark("menu_world_built")
+	else:
+		# web, first moments: the 3D models are still streaming in (Content). Show the diorama as a
+		# pre-rendered picture of the opening camera pose and cross-fade to the live scene once it is
+		# built (tools/render_backdrops.sh renders the pictures).
+		_show_backdrop()
+		Content.content_ready.connect(_on_content_ready, CONNECT_ONE_SHOT)
+	Game.mark("menu_built")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	Game.mark("menu_first_frame")
+
+var _backdrop: TextureRect
+var _async_build := false
+
+func _backdrop_tex() -> Texture2D:
+	return Assets.tex_path("res://assets/ui/backdrop/menu_%s.jpg" % DB.hero_def()["model"])
+
+func _show_backdrop() -> void:
+	var tex := _backdrop_tex()
+	if tex == null:
+		return
+	_backdrop = TextureRect.new()
+	_backdrop.texture = tex
+	_backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	# the camera keeps its vertical field of view, so a centred, height-filling crop of the wide
+	# picture is exactly what the live camera sees at any aspect up to 2.4:1
+	_backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(_backdrop)
+	ui.move_child(_backdrop, 0)
+
+func _on_content_ready() -> void:
+	if Game._busy or not is_inside_tree():
+		return  # already on the way into a battle (the content arrived behind its wait card)
+	# build in small steps (one new model per frame) so the menu stays responsive meanwhile
+	_async_build = true
+	await _build_world()
+	_async_build = false
+	if not is_inside_tree() or Game._busy:
+		return
+	Game.mark("menu_world_built")
+	# the world map covers the screen with 3D switched off; wait until the diorama is on screen
+	while is_inside_tree() and get_viewport().disable_3d:
+		await get_tree().process_frame
+	# first frames compile the new materials and upload the textures, still under the picture
+	for i in 3:
+		if not is_inside_tree():
+			return
+		await get_tree().process_frame
+	_t = 0.0
+	if _backdrop:
+		var tw := create_tween()
+		tw.tween_property(_backdrop, "modulate:a", 0.0, 0.9).set_trans(Tween.TRANS_SINE)
+		tw.tween_callback(_backdrop.queue_free)
+		_backdrop = null
+
+## Async build: wait a frame; false when the menu is being left (stop building).
+func _step() -> bool:
+	if not _async_build:
+		return true
+	if Game._busy or not is_inside_tree():
+		return false
+	await get_tree().process_frame
+	return is_inside_tree() and not Game._busy
 
 func _build_world() -> void:
 	var env := Environment.new()
@@ -79,12 +147,14 @@ func _build_world() -> void:
 	path.position = Vector3(0, 0.01, 2)
 	path.rotation_degrees.y = 20
 	add_child(path)
+	if not await _step(): return
 	var castle := Assets.instance("castle")
 	castle.position = Vector3(-2.0, 0, -9)
 	castle.rotation_degrees.y = 12
 	add_child(castle)
 	var spots := [["archer_3", Vector3(-8.5, 0, -1.0)], ["mage_3", Vector3(7.5, 0, -3.5)], ["artillery_2", Vector3(-11.0, 0, 5.5)], ["barracks_3", Vector3(11.0, 0, 3.0)]]
 	for sp in spots:
+		if not await _step(): return
 		var t := Assets.instance(sp[0])
 		t.position = sp[1]
 		t.rotation_degrees.y = -sign((sp[1] as Vector3).x) * 18.0
@@ -110,12 +180,16 @@ func _build_world() -> void:
 		var pos := Vector3(cos(a) * r, 0, sin(a) * r)
 		if pos.z > 6 and absf(pos.x) < 7:
 			continue
+		if i < 5:
+			if not await _step(): return
 		var tr := Assets.instance(["tree_pine_v", "tree_round_v", "tree_round_v", "tree_pine_v", "rocks_v"][i % 5])
 		tr.position = pos
 		tr.rotation.y = rng.randf() * TAU
 		tr.scale = Vector3.ONE * rng.randf_range(0.8, 1.3)
 		add_child(tr)
 	for i in 12:
+		if i < 3:
+			if not await _step(): return
 		var b2 := Assets.instance(["bush", "flowers", "lamp"][i % 3])
 		var a2 := rng.randf() * TAU
 		b2.position = Vector3(cos(a2), 0, sin(a2)) * rng.randf_range(3.5, 9.0)
@@ -132,12 +206,14 @@ func _build_world() -> void:
 	var hero_root := Node3D.new()
 	add_child(hero_root)
 	hero_root.position = Vector3(2.0, 0, 5.5)
+	if not await _step(): return
 	_hero = CharacterModel.new()
 	hero_root.add_child(_hero)
 	var hd := DB.hero_def()
 	_hero.setup(hd["model"], hd["scale"], Color.WHITE, hd["weapon"])
 	_hero.rotation_degrees.y = 15
 	_hero.play("idle")
+	if not await _step(): return
 	for i in 3:
 		var fm := CharacterModel.new()
 		add_child(fm)
@@ -145,6 +221,7 @@ func _build_world() -> void:
 		fm.position = Vector3(-0.2 + i * 2.2, 0, 3.4 - absf(i - 1) * 0.5)
 		fm.rotation_degrees.y = 10
 		fm.play("idle", randf_range(0.8, 1.1))
+	if not await _step(): return
 	_troll = CharacterModel.new()
 	add_child(_troll)
 	_troll.setup("troll", 4.2, Color.WHITE, "w_club")
@@ -152,7 +229,10 @@ func _build_world() -> void:
 	_troll.rotation_degrees.y = 160
 	_troll.visible = false
 	_troll.play("roar", 0.8)
+	if not await _step(): return
 	for i in 5:
+		if i < 2:
+			if not await _step(): return
 		var g := CharacterModel.new()
 		add_child(g)
 		g.setup(["goblin", "orc", "goblin", "goblin", "orc"][i], [1.25, 2.2, 1.25, 1.25, 2.2][i], Color.WHITE, ["w_dagger", "w_axe", "w_dagger", "w_dagger", "w_axe"][i])
@@ -166,6 +246,8 @@ func _build_world() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	if cam == null:
+		return
 	var a := sin(_t * 0.07) * 0.28
 	var r := 9.5
 	cam.position = Vector3(1.5 + sin(a) * r, 2.3 + sin(_t * 0.15) * 0.2, 5.5 + cos(a) * r)
@@ -451,8 +533,11 @@ func _open_heroes() -> void:
 				Audio.play("upgrade", -4.0)
 				Audio.voice(id + "_select", 0.0, 0.5)
 				var hd := DB.hero_def()
-				_hero.setup(hd["model"], hd["scale"], Color.WHITE, hd["weapon"])
-				_hero.play("idle")
+				if _hero:
+					_hero.setup(hd["model"], hd["scale"], Color.WHITE, hd["weapon"])
+					_hero.play("idle")
+				if _backdrop:
+					_backdrop.texture = _backdrop_tex()
 				shade.queue_free()
 				_open_heroes())
 		brow.add_child(b)

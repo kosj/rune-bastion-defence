@@ -81,6 +81,10 @@ func base_3d_scale() -> float:
 
 var res_guard: ResGuard
 
+## Startup / loading timing marks for the browser console (ms since the engine started).
+func mark(what: String) -> void:
+	print("RB_MARK %s %d" % [what, Time.get_ticks_msec()])
+
 func apply_quality() -> void:
 	var vp := get_tree().root
 	vp.msaa_3d = Viewport.MSAA_4X if high_quality else Viewport.MSAA_DISABLED
@@ -156,6 +160,9 @@ func goto_scene(path: String) -> void:
 	if _busy:
 		return
 	_busy = true
+	if path.ends_with("level.tscn") and not Content.is_ready:
+		# the battle needs the streamed 3D content (web): wait for it behind a progress card
+		await Content.wait_with_overlay()
 	_fade_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	var tw := create_tween()
 	tw.tween_property(_fade_rect, "color:a", 1.0, 0.35)

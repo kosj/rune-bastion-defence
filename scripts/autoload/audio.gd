@@ -33,7 +33,8 @@ func _get_stream(name: String, dir := SFX_DIR) -> AudioStream:
 		if ResourceLoader.exists(dir + name + ext):
 			s = load(dir + name + ext)
 			break
-	_streams[key] = s
+	if s:
+		_streams[key] = s  # a miss is not cached: the battle music arrives with the streamed content
 	return s
 
 const VOICE_DIR := "res://assets/audio/voice/"

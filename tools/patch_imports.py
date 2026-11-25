@@ -7,7 +7,8 @@ WebGL2 GPU):
   *_orm.*     lossless                  - occlusion/roughness/metal in separate channels
   other 3D    lossy WebP (legacy)
 All 3D textures get mipmaps.
-UI kit (assets/ui/kit, authored at 2x) and the painted world map: lossy WebP + mipmaps so they
+UI kit (assets/ui/kit, authored at 2x), the painted world map and the pre-rendered title backdrops
+(assets/ui/backdrop, no mipmaps): lossy WebP + mipmaps so they
 minify cleanly when the canvas is drawn below their native size. Other UI images stay lossless.
 
 --mobile  (used on a throw-away copy of the project for index_mobile.pck):
@@ -66,13 +67,14 @@ for f in glob.glob("assets/**/*.import", recursive=True):
         s = re.sub(r"mipmaps/generate=\w+", "mipmaps/generate=true", s)
         if role == "normal":
             s = re.sub(r"compress/normal_map=\d", "compress/normal_map=1", s)
-    elif "/ui/kit/" in f or base.startswith(("world_map", "level_", "loading_bg", "portrait_")):
-        # painted art (map, region thumbnails, loading screen, portraits): lossy WebP is invisible
-        # at these sizes and a fraction of the lossless size
-        q = 0.85 if base.startswith(("world_map", "level_", "loading_bg")) else 0.92
+    elif "/ui/kit/" in f or "/ui/backdrop/" in f or base.startswith(("world_map", "level_", "loading_bg", "portrait_")):
+        # painted art (map, region thumbnails, loading screen, portraits, title backdrops): lossy
+        # WebP is invisible at these sizes and a fraction of the lossless size
+        q = 0.85 if base.startswith(("world_map", "level_", "loading_bg")) else 0.82 if "/backdrop/" in f else 0.92
         s = re.sub(r"compress/mode=\d", "compress/mode=1", s)
         s = re.sub(r"compress/lossy_quality=[0-9.]+", "compress/lossy_quality=%.2f" % q, s)
-        s = re.sub(r"mipmaps/generate=\w+", "mipmaps/generate=true", s)
+        # full-screen backdrops are never drawn much below their size: no mipmaps
+        s = re.sub(r"mipmaps/generate=\w+", "mipmaps/generate=%s" % ("false" if "/backdrop/" in f else "true"), s)
     s = re.sub(r"detect_3d/compress_to=\d", "detect_3d/compress_to=0", s)
     if s != o:
         open(f, "w").write(s)

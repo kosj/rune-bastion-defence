@@ -55,6 +55,7 @@ var _logged := false
 
 func _ready() -> void:
 	I = self
+	Game.mark("level_build_start")
 	get_viewport().disable_3d = false
 	level_idx = Game.current_level
 	def = DB.LEVELS[level_idx]
@@ -151,6 +152,8 @@ func _ready() -> void:
 	cine = Cinematics.new()
 	add_child(cine)
 	cine.setup(self)
+	Game.mark("level_built")
+	get_tree().process_frame.connect(func(): Game.mark("level_first_frame"), CONNECT_ONE_SHOT)
 	var intro_key := "intro_%d" % level_idx
 	var first := not Game.testing and not Game.endless and int(Game.stats.get(intro_key, 0)) == 0
 	if first:

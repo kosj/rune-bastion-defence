@@ -440,6 +440,8 @@ const T := {
 	"황혼의 협곡. 트롤 군주 그롬이 직접 진군합니다.": "A gorge at dusk. Grom the Troll Lord marches in person.",
 	"획득 골드 %d": "Gold earned %d",
 	"효과음": "Sound FX",
+	"전장을 준비하는 중...": "Preparing the battlefield...",
+	"연결이 끊겼습니다. 다시 시도하는 중...": "Connection lost. Retrying...",
 }
 const C := {
 	"difficulty": {"쉬움": "Casual", "영웅": "Heroic", "일반": "Normal"},

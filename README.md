@@ -32,13 +32,14 @@ Kingdom Rush · Bloons TD 6 계열(경로형 타워 디펜스 + 영웅 + 스킬 
 - 번역 원본은 `tools/i18n/en_*.txt`(탭 구분)입니다. 텍스트를 추가했다면 `python3 tools/i18n_build.py`로 테이블을 다시 만들고 빠진 문자열을 확인한 다음, `python3 tools/make_fonts.py`로 폰트 서브셋을 다시 만듭니다.
 
 ## 웹 배포 (모바일·PWA)
+- **나눠 받는 데이터 (첫 로딩)**: 각 팩은 작은 **코어 팩**(스크립트·UI·폰트·효과음·음성·메뉴 음악·타이틀 배경, 약 9MB)과 **콘텐츠 팩**(`*_content.pck`: 3D 모델·캐릭터·전투 음악, 약 61MB)으로 나뉩니다(`tools/split_pck.py`). 셸은 엔진과 코어 팩만 받으면 바로 게임을 시작하고, 타이틀 화면이 떠 있는 동안 콘텐츠 팩을 이어서 받습니다. 게임은 도착하는 즉시 `ProjectSettings.load_resource_pack()`으로 붙입니다(`scripts/autoload/content.gd`). 그 사이 타이틀에는 같은 카메라 구도로 미리 렌더링한 디오라마 그림(`assets/ui/backdrop`, `tools/render_backdrops.sh`)이 깔리고, 콘텐츠가 붙으면 3D 장면을 몇 프레임에 나눠 짓고 나서 교차 페이드로 바꿉니다. 콘텐츠가 오기 전에 출전을 누르면 진행 막대가 있는 ‘전장을 준비하는 중’ 카드가 떠서 기다립니다. 20Mbps 회선에서 타이틀 화면까지 41.6초 → 10.5초입니다. 다시 방문하면 서비스 워커 캐시에서 둘 다 바로 읽습니다.
 - **두 가지 데이터 팩**: 데스크톱은 `index.pck`(WebP 텍스처), 폰·태블릿은 `index_mobile.pck`(ETC2/EAC GPU 압축 텍스처, 화면 크기에 맞춘 해상도 상한)를 받습니다. 셸이 기기와 `WEBGL_compressed_texture_etc` 지원을 확인해서 고르고, `?pack=mobile|desktop`으로 강제할 수 있습니다. GPU 메모리를 4~8배 덜 씁니다.
 - **폰 전용 메시**: 모바일 팩에는 타워 12종·성·포털을 삼각형 35~45% 수준으로 다시 만든 버전(`mobile/models`, 노멀맵 재베이크)이 들어갑니다. `tools/build_web.sh`가 모바일 팩을 만들 때 바꿔 넣고, 데스크톱 빌드는 `.gdignore`로 무시합니다.
 - **LOD**: Godot의 자동 메시 LOD를 씁니다(캐릭터). 저사양 설정(모바일 기본값)에서는 LOD 허용 오차를 4px로 늘리고 3D 해상도 80%, 그림자 1단계로 그립니다.
 - **삼각형 예산**: 타워·성·포털·나무·소품은 UV가 잘게 나뉜 베이크 메시라 엔진이 LOD를 만들지 못합니다. 그래서 게임 카메라에서 보이는 크기(가장 가까운 줌에서 타워 100~200px)에 맞춰 타워 7.5k~10k, 성 14k, 포털 11k, 나무 1.5k~2.4k, 무기 0.6k~0.9k로 직접 줄였습니다(`rebuild_assets.sh`). 가장 가까운 줌의 스크린샷에서 이전 메시와 차이가 나지 않는 선입니다. 장면 전체 삼각형이 약 40% 줄었습니다.
 - **프레임 비용**: 화면 밖 유닛은 스켈레톤 애니메이션을 멈추고(`VisibleOnScreenEnabler3D`), 저사양의 유닛 발밑 그림자는 하나의 MultiMesh로 그립니다(`BlobLayer`, 유닛 수만큼이던 드로우 콜이 1개로). 파티클은 30Hz로 시뮬레이션하고 보간합니다.
 - **해상도 자동 조절**: 프레임이 계속 목표의 80% 아래면 3D 해상도만(UI는 그대로) 10%씩 낮추고, 여유가 생기면 설정값까지 되돌립니다(`ResGuard`, 최저 60%). 해상도를 낮춰도 빨라지지 않으면(GPU가 병목이 아니면) 바로 되돌리므로 충분히 빠른 기기에서는 아무것도 바뀌지 않습니다.
-- **측정**: `test_runner.tscn -- perf=시작,초`가 프레임 시간·스크립트 시간·드로우 콜·삼각형 수를, `lodprobe=초 groups=1`이 메시별 삼각형·드로우 콜을 출력합니다.
+- **측정**: `browser_test.py <폴더> <출력> --play --throttle=20 --nosw`가 회선 속도를 제한한 브라우저에서 엔진 시작·타이틀·콘텐츠 도착·전투 시작 시각을 찍습니다(`--early`: 콘텐츠가 오기 전에 출전). 네이티브에서는 `test_runner.tscn -- mode=menu content_pack=<콘텐츠 팩> content_delay=초`로 늦게 도착하는 콘텐츠를 흉내 냅니다. `test_runner.tscn -- perf=시작,초`가 프레임 시간·스크립트 시간·드로우 콜·삼각형 수를, `lodprobe=초 groups=1`이 메시별 삼각형·드로우 콜을 출력합니다.
 - **PWA**: `manifest.webmanifest`와 서비스 워커(`web/sw.js`)로 홈 화면에 설치하고 오프라인으로 실행할 수 있습니다. 데이터 파일은 빌드 ID(`?v=`)로 버전을 매겨 캐시에서 바로 읽고, 새 버전을 배포하면 자동으로 교체됩니다.
 - **자동 배포**: `.github/workflows/deploy-web.yml`이 `main`에 푸시될 때마다 Godot으로 빌드해 `gh-pages`에 올립니다.
 
@@ -70,10 +71,11 @@ Kingdom Rush · Bloons TD 6 계열(경로형 타워 디펜스 + 영웅 + 스킬 
 
 ## 빌드
 ```
-./tools/build_web.sh       # 임포트 → 역할별 텍스처 설정 → Web 내보내기 → 모바일 팩(ETC2) → gzip 패키징
+./tools/build_web.sh       # 임포트 → 역할별 텍스처 설정 → Web 내보내기 → 모바일 팩(ETC2) → 코어/콘텐츠 분할 → gzip 패키징
+./tools/render_backdrops.sh  # 타이틀 디오라마가 바뀌면: 영웅별 배경 그림 다시 렌더링 (화면 필요, 예: Xvfb)
 ./tools/deploy_pages.sh    # build/web_hosted → gh-pages 브랜치 (GitHub Pages, 수동 배포용)
 ```
-- `build/web`: 일반 Godot 웹 빌드와 `index_mobile.pck`입니다.
+- `build/web`: 일반 Godot 웹 빌드와 `index_mobile.pck`, 그리고 각각의 콘텐츠 팩(`*_content.pck`)입니다.
 - `build/web_hosted`: wasm과 pck를 gzip으로 압축해 15MB 단위로 나눈 버전입니다. 브라우저가 DecompressionStream으로 압축을 풉니다.
 - 밸런스 테스트: `tools/balance.sh smart 0`(AI가 각 지역을 플레이). `skill=casual`을 붙이면 처음 하는 사람처럼 플레이합니다(느린 판단, 절반은 무작위 타워, 무작위 부지와 전문화, 특수 능력 안 삼, 주문 드물게, 영웅 조작 안 함). 난이도 인자는 0 일반, 1 영웅, 2 쉬움입니다. 화면 테스트: `tools/browser_test.py`.
 - 플레이 기록 분석: 설정 → ‘플레이 기록 보내기’에서 받은 코드를 `python3 tools/playlog_decode.py <코드>`로 풀면 판마다 도달 웨이브, 웨이브별로 잃은 생명, 새어 나간 적, 지은 타워가 나옵니다.

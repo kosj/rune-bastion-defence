@@ -3,7 +3,8 @@ The custom HTML shell inflates them in the browser with DecompressionStream.
 Usage: package_web.py <export_dir> <out_dir> [--b64] [--build-id ID] [--no-mobile]
 
 Packs: index.pck (desktop textures) and, when present, index_mobile.pck (ETC2 textures, picked by
-the shell on phones/tablets). Part URLs carry ?v=<build id> so browser / service-worker caches can
+the shell on phones/tablets); each may come with a streamed <pack>_content.pck (tools/split_pck.py)
+that the shell fetches after the core pack. Part URLs carry ?v=<build id> so browser / service-worker caches can
 keep them forever and a new deploy is always fetched fresh. PWA files (manifest, service worker,
 icons) and the loading-screen art are copied from web/."""
 import base64
@@ -27,7 +28,7 @@ os.makedirs(dst, exist_ok=True)
 gzmap = {}
 for name in sorted(os.listdir(src)):
     p = os.path.join(src, name)
-    if NO_MOBILE and name == "index_mobile.pck":
+    if NO_MOBILE and name.startswith("index_mobile"):
         continue
     if name.endswith((".wasm", ".pck")):
         data = open(p, "rb").read()
@@ -41,7 +42,7 @@ for name in sorted(os.listdir(src)):
                 pn = "%s.gz%d.bin" % (name, i // CHUNK)
                 open(os.path.join(dst, pn), "wb").write(comp[i:i + CHUNK])
             parts.append(pn)
-        gzmap[name] = {"parts": parts, "size": len(data),
+        gzmap[name] = {"parts": parts, "size": len(data), "gz": len(comp),
                        "mime": "application/wasm" if name.endswith(".wasm") else "application/octet-stream"}
         print(f"{name}: {len(data)/1e6:.1f} MB -> {len(comp)/1e6:.1f} MB gz in {len(parts)} part(s)")
     elif name.endswith(".html"):
