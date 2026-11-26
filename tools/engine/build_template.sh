@@ -14,6 +14,17 @@ TEXT_SERVER=${3:-${TEXT_SERVER:-advanced}}
 if [ "$TEXT_SERVER" = "fallback" ]; then
   flags="$flags module_text_server_adv_enabled=no module_text_server_fb_enabled=yes"
 fi
+# engine patches (tools/engine/patches/*.patch, each explained in its own header and in
+# docs/PERFORMANCE.md); skipped when already applied, so a second build on the same tree works
+for p in "$here"/patches/*.patch; do
+  [ -e "$p" ] || continue
+  if git -C "$SRC" apply --reverse --check "$p" 2>/dev/null; then
+    echo "== patch already applied: $(basename "$p")"
+  else
+    git -C "$SRC" apply "$p"
+    echo "== patch applied: $(basename "$p")"
+  fi
+done
 echo "== emcc $(emcc --version | head -1)"
 echo "== scons $flags"
 cd "$SRC"

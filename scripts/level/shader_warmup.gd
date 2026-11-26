@@ -20,6 +20,9 @@ const LIT_FRAMES := 3
 const DARK_FRAMES := 2
 ## Frames of the whole-map view (the first lit, the rest unlit).
 const OVERVIEW_FRAMES := 2
+## Measuring only (test_runner warmstaged=1): draw each group on its own frames and print a
+## NEWTHING line before it, so tools/perf/glc_sum.py can say which group compiles what.
+static var staged := false
 
 static func run(L: LevelMain) -> void:
 	if L == null or not is_instance_valid(L) or not L.is_inside_tree():
@@ -69,36 +72,45 @@ static func run(L: LevelMain) -> void:
 		elif k == 2 and e.model.body:
 			e.model.body.material_overlay = L.fx.frost_overlay()
 		k += 1
+	var spawned: Array = [root]
+	await _stage(L, tree, "warm:enemies", world_before, fx_before, spawned)
 	# every tower at levels 1-3 and each specialisation with its ability, as far as downloaded
 	var towers: Array = []
+	var groups: Array = [["warm:towers-1", [[1, ""]]], ["warm:towers-2-3", [[2, ""], [3, ""]]], ["warm:masteries", []]]
 	for type in ["archer", "barracks", "mage", "artillery"]:
-		var configs: Array = [[1, ""], [2, ""], [3, ""]]
 		for m in DB.TOWERS[type]["masteries"]:
-			configs.append([4, m["id"]])
-		for cf in configs:
-			var probe := Tower.new()
-			probe.type = type
-			var ready := probe.model_ready(mini(int(cf[0]), 3))
-			probe.free()
-			if not ready:
-				continue
-			var p: Vector3 = spots[si % spots.size()]
-			si += 1
-			var tw := Tower.new()
-			root.add_child(tw)
-			tw.setup(type, Vector2(p.x, p.z))
-			for i in mini(int(cf[0]), 3) - 1:
-				tw.upgrade()
-			if cf[1] != "":
-				tw.apply_mastery(cf[1])
-				tw.buy_ability()
-			tw.process_mode = Node.PROCESS_MODE_DISABLED
-			towers.append(tw)
-			if dummy:
-				_shoot(L, tw, dummy)
+			if not (groups[2][1] as Array).has([4, m["id"]]):
+				groups[2][1].append([4, m["id"]])
+	for g in groups:
+		for type in ["archer", "barracks", "mage", "artillery"]:
+			for cf in g[1]:
+				if cf[1] != "" and not DB.TOWERS[type]["masteries"].any(func(m): return m["id"] == cf[1]):
+					continue
+				var probe := Tower.new()
+				probe.type = type
+				var ready := probe.model_ready(mini(int(cf[0]), 3))
+				probe.free()
+				if not ready:
+					continue
+				var p: Vector3 = spots[si % spots.size()]
+				si += 1
+				var tw := Tower.new()
+				root.add_child(tw)
+				tw.setup(type, Vector2(p.x, p.z))
+				for i in mini(int(cf[0]), 3) - 1:
+					tw.upgrade()
+				if cf[1] != "":
+					tw.apply_mastery(cf[1])
+					tw.buy_ability()
+				tw.process_mode = Node.PROCESS_MODE_DISABLED
+				towers.append(tw)
+				if dummy:
+					_shoot(L, tw, dummy)
+		await _stage(L, tree, g[0], world_before, fx_before, spawned)
 	# meteors (the spell) and every effect
 	Projectile.meteor(spots[0], 0.0, 2.5, 0.0)
 	_effects(L, spots, dummy)
+	await _stage(L, tree, "warm:effects", world_before, fx_before, spawned)
 	# the build ring, its range circle and the tower card (2D programs as well as 3D)
 	if not L.plots.is_empty():
 		var tut := L.tutorial_step
@@ -108,20 +120,9 @@ static func run(L: LevelMain) -> void:
 		L.tutorial_step = tut
 	if L.hero:
 		L.hero.set_selected(true)
-	# shots and soldiers were spawned into the world: hold them still, keep their trails drawing.
-	# Only what was spawned here is removed afterwards (anything else added meanwhile stays).
-	var spawned: Array = [root]
-	for c in L.world.get_children():
-		if world_before.has(c) or c == root:
-			continue
-		spawned.append(c)
-		if c is Projectile:
-			c.process_mode = Node.PROCESS_MODE_DISABLED
-			for pt in c.find_children("*", "CPUParticles3D", true, false):
-				pt.process_mode = Node.PROCESS_MODE_ALWAYS
-	for c in L.fx.get_children():
-		if not fx_before.has(c):
-			spawned.append(c)
+	_collect(L, world_before, fx_before, spawned, root)
+	if staged:
+		print("NEWTHING t=0.0 warm:rings")
 	var omni := OmniLight3D.new()
 	omni.omni_range = 40.0
 	omni.light_energy = 0.4
@@ -133,6 +134,8 @@ static func run(L: LevelMain) -> void:
 	if not _alive(L):
 		_finish(tree, t0, was_paused, was_muted, hits_before)
 		return
+	if staged:
+		print("NEWTHING t=0.0 warm:unlit")
 	omni.visible = false
 	# short effects (lightning, sparks) are gone by now: fire them again for the unlit variants
 	_effects(L, spots, dummy)
@@ -146,6 +149,8 @@ static func run(L: LevelMain) -> void:
 		return
 	# the whole map from above, lit and unlit: things away from the start view (map event markers,
 	# decor at the far end) compile now too, not when the camera first pans to them
+	if staged:
+		print("NEWTHING t=0.0 warm:overview")
 	var rig := L.cam_rig
 	var keep := [rig.target, rig.zoom, rig.free]
 	var b: Rect2 = rig.bounds
@@ -179,6 +184,30 @@ static func run(L: LevelMain) -> void:
 		L.fx.process_mode = fx_mode
 		L.cam_rig._shake = 0.0
 	_finish(tree, t0, was_paused, was_muted, hits_before)
+
+## Shots and soldiers spawned into the world are held still (their trails keep drawing) and
+## remembered for removal; only what the warm-up spawned is removed, anything else added
+## meanwhile stays.
+static func _collect(L: LevelMain, world_before: Dictionary, fx_before: Dictionary, spawned: Array, root: Node) -> void:
+	for c in L.world.get_children():
+		if world_before.has(c) or c == root or spawned.has(c):
+			continue
+		spawned.append(c)
+		if c is Projectile:
+			c.process_mode = Node.PROCESS_MODE_DISABLED
+			for pt in c.find_children("*", "CPUParticles3D", true, false):
+				pt.process_mode = Node.PROCESS_MODE_ALWAYS
+	for c in L.fx.get_children():
+		if not fx_before.has(c) and not spawned.has(c):
+			spawned.append(c)
+
+static func _stage(L: LevelMain, tree: SceneTree, label: String, world_before: Dictionary, fx_before: Dictionary, spawned: Array) -> void:
+	if not staged:
+		return
+	_collect(L, world_before, fx_before, spawned, spawned[0])
+	print("NEWTHING t=0.0 " + label)
+	for i in LIT_FRAMES:
+		await tree.process_frame
 
 static func _alive(L: Object) -> bool:
 	return is_instance_valid(L) and L.is_inside_tree()

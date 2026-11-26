@@ -148,9 +148,16 @@ func _process(delta: float) -> void:
 		set_meta("warm_started", true)
 		set_meta("warm_busy", true)
 		print("NEWTHING t=%.1f warmup" % t)
+		ShaderWarmup.staged = args.get("warmstaged", "0") == "1"
 		await ShaderWarmup.run(LevelMain.I)
 		print("NEWTHING t=%.1f after-warmup" % t)
 		remove_meta("warm_busy")
+		if args.get("warmonly", "0") == "1":
+			# measuring the warm-up alone: one more frame drawn after it, then stop
+			await get_tree().process_frame
+			await get_tree().process_frame
+			get_tree().quit()
+			return
 	if has_meta("warm_busy"):
 		return  # as in the game: nothing happens behind the loading fade
 	if args.has("herocam") and LevelMain.I and LevelMain.I.hero:

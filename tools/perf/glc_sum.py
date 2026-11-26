@@ -5,6 +5,12 @@ The test runner (newlog=1) prints "NEWTHING t=<s> <what>" when something shows f
 (an enemy kind, a tower level, a wave); the GL shim prints "GLC link <ms>" per program. Programs
 are counted against the last NEWTHING line before them. "In battle" is everything after the
 warm-up (after-warmup), or after loading when the run had no warm-up.
+
+usage: glc_sum.py <log> [<GLSHIM_DUMP dir>]
+With the shader sources (GLSHIM_DUMP), it also counts the programs compiled with the default
+specialization: the native editor compiles them when a shader is first bound, the game's web
+engine does not (tools/engine/patches/gles3-lazy-shader-variants.patch), so the web pays only for
+the rest.
 """
 import re
 import sys
@@ -42,3 +48,22 @@ print("in battle: %d programs, %.0f ms (%s)" % (n, ms, "after the warm-up" if wa
 for line in open(log, errors="ignore"):
     if "RB_WARMUP" in line or line.startswith("RESULT"):
         print(line.strip())
+if len(sys.argv) > 2:
+    import os
+    d = sys.argv[2]
+    srcs, progs = [], []
+    for line in open(log, errors="ignore"):
+        m = re.match(r"GLC src (\w+)", line)
+        if m:
+            srcs.append(m.group(1))
+        elif line.startswith("GLC link") and srcs:
+            progs.append(srcs[-1])
+    default = 0
+    for h in progs:
+        f = os.path.join(d, h + ".glsl")
+        if not os.path.exists(f):
+            continue
+        defs = set(re.findall(r"^#define (\w+)", open(f, errors="ignore").read(), re.M))
+        if {"BASE_PASS", "USE_RADIANCE_MAP", "APPLY_TONEMAPPING", "DISABLE_REFLECTION_PROBE"} <= defs and not defs & {"DISABLE_LIGHTMAP", "DISABLE_FOG", "RENDER_SHADOWS", "DISABLE_LIGHT_OMNI"}:
+            default += 1
+    print("default-specialization programs (not compiled by the web engine): %d of %d" % (default, len(progs)))
