@@ -86,6 +86,8 @@ index.html ─┬─ index.wasm (경량 엔진, gzip 7.3MB / Brotli 5.0MB) ┐ �
 - **Godot 4.7 PCK(형식 4)**: 헤더 112바이트이고, 디렉터리 오프셋은 절대값, 파일 오프셋은 데이터 시작 기준이며 16바이트 정렬입니다. 경로에 `res://` 접두사가 없습니다. 내보낸 팩에는 원본 대신 `.import` 리맵과 `.godot/imported/*` 파일이 들어갑니다.
 - **테마 맵의 소품 재질(`Assets.env_material`)이 노멀맵·ORM·양면 렌더링을 버리고 있었습니다.** 가을·눈·밤·폐허·늪·네크로 맵(10개 중 6개)의 배경 소품이 평평하게 보이고, 열린 잎 껍질의 뒷면이 비었습니다. 지금은 원래 재질의 노멀맵, AO·거칠기(ORM), 양면 여부를 그대로 씁니다.
 - **폰 팩에 넣는 GLB가 데스크톱 것과 똑같으면 텍스처가 빠졌습니다.** 모바일 팩은 프로젝트 복사본에서 추출 텍스처를 지우고 다시 임포트하는데, 내용이 같은 GLB는 임포트 해시가 같아 다시 추출되지 않았습니다. `build_web.sh`가 `.godot/imported/<이름>.glb-*`도 지우고, 쪼개기 전에 `split_pck.py --texture-gaps`가 두 팩의 텍스처 목록을 비교해 빠진 것이 있으면 빌드를 멈춥니다. 데스크톱과 같은 폰 메시는 `rebuild_assets.sh`가 지웁니다.
+- **Tween: `tween_interval()` 뒤에 `set_parallel(true)`를 쓰면 대기 시간과도 병렬이 됩니다.** 기다렸다 시작해야 할 단계가 바로 시작합니다. 바로 앞 단계와만 묶을 때는 `parallel()`을 씁니다(`ResultFX.star`).
+- **GDScript 람다 안에서 바깥 지역 변수에 대입해도 바깥에는 반영되지 않습니다**(값으로 캡처). `hud.modal(..., func(vb): ...)` 안에서 만든 노드는 이름을 붙여 두고 나중에 `find_child`로 찾습니다.
 - **웹에서는 `mobile` 기능 태그가 없습니다.** `size.mobile=1024` 같은 프로젝트 설정 오버라이드는 폰 브라우저에서도 적용되지 않습니다. 폰은 `web_android`, `web_ios`로 구분합니다(`Game.is_mobile`도 그렇게 판단합니다).
 - **WebGL은 GPU 이름을 "WebKit WebGL"로 가립니다.** 그래서 Godot가 모바일 GPU(Mali·Adreno·PowerVR·Apple)에서 끄는 깊이 프리패스가 폰 브라우저에서는 켜져 있었습니다. 타일 기반 모바일 GPU는 가려진 픽셀을 스스로 걸러서 프리패스가 불투명 메시를 한 번 더 그리는 비용만 됩니다. `project.godot`에서 `driver/depth_prepass/enable.web_android=false`, `.web_ios=false`로 끕니다. 데스크톱은 그대로 둡니다(Godot 문서는 위에서 내려다보는 게임이면 데스크톱에서도 꺼 볼 만하다고 하지만, 실제 GPU에서 재 보기 전에는 바꾸지 않습니다).
 - **임포트된 텍스처의 밉맵은 레벨마다 따로 WebP로 저장됩니다.** 노멀맵은 밉이 전체 용량의 약 36%입니다.
