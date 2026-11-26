@@ -90,13 +90,14 @@ jobs:
           test -f build/web_hosted/index.wasm.br0.bin
           ls -la build/web_hosted
 
-      - name: Checks (every string has English, fonts cover all text, scenes load only chunks they wait for)
+      - name: Checks (every string has English, fonts cover all text, scenes load only chunks they wait for, every dialog closes)
         run: |
           export GODOT=~/godot/godot
           pip install --quiet fonttools
           python3 tools/i18n_build.py --check
           python3 tools/make_fonts.py --check
           bash tools/check_chunks.sh
+          bash tools/check_sheets.sh
 
       - name: Browser smoke test (headless Chrome plays the built page; nothing is published if it fails)
         run: |

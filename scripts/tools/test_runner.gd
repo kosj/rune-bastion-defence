@@ -18,6 +18,12 @@ func _ready() -> void:
 		var kv := a.split("=")
 		if kv.size() == 2:
 			args[kv[0]] = kv[1]
+	if args.has("win"):
+		# win=WxH: the window shape without a display (headless runs have a 64x64 window), for
+		# layout tests in either orientation
+		var wh: PackedStringArray = (args["win"] as String).split("x")
+		get_tree().root.size = Vector2i(int(wh[0]), int(wh[1]))
+		Game._fit_ui()
 	if args.get("cine", "0") == "1":
 		Game.testing = false  # review runs: keep the level intro / boss cinematics
 	var mode: String = args.get("mode", "auto")
@@ -91,6 +97,10 @@ func _ready() -> void:
 						wm._open_card(int(args["map_card"])))
 		if args.has("shot_times"):
 			_shots_at = Array((args["shot_times"] as String).split(",")).map(func(x): return float(x))
+		if args.has("closetest"):
+			# closetest=1: every sheet opened and closed the three ways a player closes it
+			_shots_at = []
+			get_tree().create_timer(4.0).timeout.connect(_close_test_menu)
 		return
 	Game.current_level = int(args.get("level", "0"))
 	if args.get("intro", "1") == "0":
@@ -131,6 +141,9 @@ var _hitch_log: Array = []
 
 func _process(delta: float) -> void:
 	t += delta / maxf(Engine.time_scale, 0.01)
+	if args.has("closetest") and LevelMain.I and t >= 3.0 and not has_meta("ct_started"):
+		set_meta("ct_started", true)
+		_close_test_level()
 	if args.has("rotate_at") and t >= float(args["rotate_at"]) and not has_meta("rotated"):
 		# turn the "phone": swap the window's width and height (layout_changed screens)
 		set_meta("rotated", true)
@@ -1088,4 +1101,129 @@ func _perf_split() -> void:
 		line += " %s=-%.2f" % [k, res["base"] - res[k]]
 	print(line, " groups: soldier=", get_tree().get_nodes_in_group("soldier").size(), " projectile=", get_tree().get_nodes_in_group("projectile").size(),
 		" mixers=", L.find_children("*", "AnimationMixer", true, false).size(), " cpuparticles=", L.find_children("*", "CPUParticles3D", true, false).size())
+	get_tree().quit()
+
+
+# ---------------------------------------------------------------- closetest (sheets close)
+
+var _ct_fails := 0
+
+func _ct_wait(sec: float) -> void:
+	await get_tree().create_timer(sec, true, false, true).timeout
+
+func _ct_click(canvas_pos: Vector2) -> void:
+	# events enter in window pixels; the UI lays out on the stretched canvas
+	var pos: Vector2 = get_tree().root.get_final_transform() * canvas_pos
+	for down in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = down
+		ev.position = pos
+		ev.global_position = pos
+		get_viewport().push_input(ev)
+		await get_tree().process_frame
+
+func _ct_key(k: Key) -> void:
+	for down in [true, false]:
+		var ev := InputEventKey.new()
+		ev.keycode = k
+		ev.physical_keycode = k
+		ev.pressed = down
+		get_viewport().push_input(ev)
+		await get_tree().process_frame
+
+## Closes sheet `sh` by "button" (its close button), "backdrop" (a tap beside it) or "esc".
+func _ct_close(sh: Control, how: String) -> void:
+	match how:
+		"button":
+			var x := sh.find_child("Close", true, false) as Control
+			if x == null:
+				print("CLOSETEST   no close button")
+				return
+			await _ct_click(x.get_global_rect().get_center())
+		"backdrop":
+			await _ct_click(Vector2(6, 6))
+		"esc":
+			await _ct_key(KEY_ESCAPE)
+
+func _ct_top(parent: Node) -> Control:
+	var kids := parent.get_children()
+	for i in range(kids.size() - 1, -1, -1):
+		if kids[i].has_meta("body") and not kids[i].has_meta("closing"):
+			return kids[i]
+	return null
+
+func _ct_check(name: String, how: String, sh: Control) -> void:
+	await _ct_wait(0.6)
+	var still := is_instance_valid(sh) and sh.is_inside_tree()
+	print("CLOSETEST %-22s %-9s %s" % [name, how, "FAIL" if still else "ok"])
+	if still:
+		_ct_fails += 1
+		sh.queue_free()
+
+func _close_test_menu() -> void:
+	get_viewport().disable_3d = true  # only the UI matters here (and software GL draws 3D slowly)
+	print("CLOSETEST window %s tall=%s" % [get_tree().root.size, Game.tall])
+	var ui: Control = _menu.get("ui")
+	for how in ["button", "backdrop", "esc"]:
+		for op in ["_open_heroes", "_open_bestiary", "_open_achievements", "_open_upgrades", "_open_settings", "_test_talents", "_test_save", "_test_playlog"]:
+			_menu.call(op)
+			await _ct_wait(0.6)
+			var sh := _ct_top(ui)
+			if sh == null:
+				print("CLOSETEST %-22s %-9s FAIL (did not open)" % [op, how])
+				_ct_fails += 1
+				continue
+			await _ct_close(sh, how)
+			await _ct_check(op, how, sh)
+	# the map's briefing cards, and the map itself on Esc
+	_menu.call("_open_select")
+	await _ct_wait(1.0)
+	var wm: Node = _menu.get("_select")
+	for how in ["button", "backdrop", "esc"]:
+		for which in ["card", "endless"]:
+			if which == "card":
+				wm.call("_open_card", 0)
+			else:
+				wm.call("_open_endless_card")
+			await _ct_wait(0.6)
+			var sh := _ct_top(wm)
+			if sh == null:
+				print("CLOSETEST %-22s %-9s FAIL (did not open)" % [which, how])
+				_ct_fails += 1
+				continue
+			await _ct_close(sh, how)
+			await _ct_check(which, how, sh)
+	# a menu sheet opened from the map dock closes before the map does
+	_menu.call("_open_upgrades")
+	await _ct_wait(0.6)
+	var up := _ct_top(_menu.get("ui"))
+	await _ct_key(KEY_ESCAPE)
+	await _ct_check("upgrades over map", "esc", up)
+	var map_open: bool = _menu.get("_select") != null
+	print("CLOSETEST %-22s %-9s %s" % ["map stays", "", "ok" if map_open else "FAIL"])
+	if not map_open:
+		_ct_fails += 1
+	await _ct_key(KEY_ESCAPE)
+	await _ct_wait(0.4)
+	var map_closed: bool = _menu.get("_select") == null
+	print("CLOSETEST %-22s %-9s %s" % ["map", "esc", "ok" if map_closed else "FAIL"])
+	if not map_closed:
+		_ct_fails += 1
+	print("CLOSETEST DONE fails=%d" % _ct_fails)
+	get_tree().quit()
+
+func _close_test_level() -> void:
+	var L: LevelMain = LevelMain.I
+	for how in ["button", "backdrop", "esc"]:
+		L._pause()
+		await _ct_wait(0.6)
+		var sh: Control = L._modal
+		await _ct_close(sh, how)
+		await _ct_wait(0.6)
+		var ok: bool = not get_tree().paused and L._modal == null and not (is_instance_valid(sh) and sh.is_inside_tree())
+		print("CLOSETEST %-22s %-9s %s" % ["pause", how, "ok" if ok else "FAIL"])
+		if not ok:
+			_ct_fails += 1
+	print("CLOSETEST DONE fails=%d" % _ct_fails)
 	get_tree().quit()

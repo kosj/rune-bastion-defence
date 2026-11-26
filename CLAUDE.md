@@ -10,6 +10,7 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
   - `python3 tools/i18n_build.py --check`: 모든 한국어 문자열에 영어가 있는지
   - `python3 tools/make_fonts.py --check`: 쓰인 글자가 폰트에 있는지
   - `tools/check_chunks.sh`: 화면이 기다리지 않는 청크의 에셋을 부르는지
+  - `tools/check_sheets.sh`: 모든 팝업이 닫기 버튼·바깥 탭·Esc로 닫히는지(가로·세로)
   - 셀프 테스트: `test_runner.tscn -- selftest=1`
   - AI 플레이: `LEVELS="0 4 8" tools/balance.sh smart 0`
   - 엔진 클래스: `python3 tools/engine/check_classes.py <godot 4.7.2 소스>`
@@ -31,6 +32,7 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
 - **타이틀 디오라마를 바꾸면** `tools/render_backdrops.sh`(화면 필요, Xvfb)로 타이틀 그림을 다시 렌더링합니다.
 - **UI**(`docs/UI.md`):
   - 팝업은 `UI.sheet()`로 만들고, 내용 폭은 `UI.sheet_w()`에서 계산합니다. 고정 폭을 쓰지 않습니다.
+  - `on_close`에 넘기는 람다는 시트를 인자로 받습니다(`func(s): UI.dismiss(s)`). GDScript 람다는 지역 변수를 만들어질 때의 값으로 잡아서, 시트를 담을 변수를 미리 잡으면 null이 됩니다(이 때문에 메뉴 팝업이 닫히지 않았음).
   - 버튼은 역할로 고릅니다: 진행은 `primary`(금, 오른쪽), 그 밖은 `secondary`/`ghost`.
   - 리본은 결과 화면에만 씁니다.
   - 새 화면은 `Game.tall`(세로)에서도 배치하고, `tools/ui_shots.sh`로 PC·폰 세로·폰 가로를 찍어 확인합니다.

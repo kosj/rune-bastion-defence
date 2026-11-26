@@ -477,10 +477,21 @@ func _refresh_select() -> void:
 ## A dialog sheet over the title or the map (UI.sheet). Returns [shade, body VBox, body width].
 ## `width` is the width on a wide screen; an upright one gives the sheet the full width.
 func _overlay(title: String, width := 760.0, aside: Control = null) -> Array:
-	var shade: Control
-	shade = UI.sheet(ui, title, {"width": width, "aside": aside, "on_close": func():
-		UI.dismiss(shade, _refresh_select)})
+	var shade := UI.sheet(ui, title, {"width": width, "aside": aside, "on_close": func(s: Control):
+		UI.dismiss(s, _refresh_select)})
 	return [shade, shade.get_meta("body"), UI.sheet_w(shade)]
+
+## Esc / Back: the top sheet closes first (a briefing card on the map, then a menu sheet), then
+## the map itself.
+func _unhandled_input(ev: InputEvent) -> void:
+	if not ev.is_action_pressed("ui_cancel"):
+		return
+	if UI.close_top(ui) or (_select and UI.close_top(_select)):
+		get_viewport().set_input_as_handled()
+		return
+	if _select:
+		_close_select()
+		get_viewport().set_input_as_handled()
 
 ## Switch from one sheet to another without the exit animation in between.
 func _swap(shade: Control, open: Callable) -> void:

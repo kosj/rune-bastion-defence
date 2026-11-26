@@ -685,7 +685,16 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 		grip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		col.add_child(grip)
 		col.add_theme_constant_override("separation", 10)
-	var on_close: Callable = opts.get("on_close", Callable())
+	# on_close may take the backdrop as its argument: a caller's lambda cannot capture the sheet
+	# it is being passed to (GDScript captures locals by value, when the lambda is made)
+	var on_close_cb: Callable = opts.get("on_close", Callable())
+	var on_close := Callable()
+	if on_close_cb.is_valid():
+		on_close = func():
+			if on_close_cb.get_argument_count() >= 1:
+				on_close_cb.call(shade)
+			else:
+				on_close_cb.call()
 	var rib: Control = null
 	if ribbon_kind != "":
 		rib = ribbon(title_text, 36, ribbon_kind, minf(420.0, w - 40.0))
@@ -742,6 +751,8 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 		shade.gui_input.connect(func(ev: InputEvent):
 			if (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) or (ev is InputEventScreenTouch and ev.pressed):
 				on_close.call())
+	if on_close.is_valid():
+		shade.set_meta("close", on_close)  # Esc / Back closes the top sheet (UI.close_top)
 	shade.set_meta("body", body)
 	shade.set_meta("sheet", p)
 	shade.set_meta("panel", p)
@@ -808,3 +819,15 @@ static func action_row(btns: Array, gap := 10.0) -> HBoxContainer:
 		c.custom_minimum_size.x = 0
 		hb.add_child(c)
 	return hb
+
+
+## Esc / the phone's Back: closes the topmost sheet under `parent` that can be closed. Returns
+## whether one was closed.
+static func close_top(parent: Node) -> bool:
+	var kids := parent.get_children()
+	for i in range(kids.size() - 1, -1, -1):
+		var c: Node = kids[i]
+		if c.has_meta("close") and not c.has_meta("closing") and c.is_inside_tree():
+			(c.get_meta("close") as Callable).call()
+			return true
+	return false

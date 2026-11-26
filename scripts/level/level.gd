@@ -1616,6 +1616,9 @@ func hotkey(k: int) -> bool:
 		elif targeting != "" and k == KEY_ESCAPE:
 			targeting = ""
 			hud.target_hint.text = ""
+		elif k == KEY_ESCAPE and _modal == null and hud.radial.visible:
+			# Esc closes what is open first (the build / upgrade ring), then pauses
+			_deselect()
 		elif _modal == null:
 			_pause()
 		return true
