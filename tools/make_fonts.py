@@ -44,9 +44,11 @@ def subset_ttf(src, out):
     ft.save(out)
     print(out, os.path.basename(src), os.path.getsize(out))
 os.makedirs('assets/fonts', exist_ok=True)
-extract('/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', 'Noto Sans CJK KR', 'assets/fonts/ui.ttf')
+# body text in Medium (Bold everywhere read heavy and cramped at 16-18 px); buttons, numbers and
+# row titles ("ui_black") in Bold
+extract('/usr/share/fonts/opentype/noto/NotoSansCJK-Medium.ttc', 'Noto Sans CJK KR', 'assets/fonts/ui.ttf')
 extract('/usr/share/fonts/opentype/noto/NotoSerifCJK-Black.ttc', 'Noto Serif CJK KR', 'assets/fonts/title_kr.ttf')
-extract('/usr/share/fonts/opentype/noto/NotoSansCJK-Black.ttc', 'Noto Sans CJK KR', 'assets/fonts/ui_black.ttf')
+extract('/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', 'Noto Sans CJK KR', 'assets/fonts/ui_black.ttf')
 # the Latin title face: full Cardo has ~3000 glyphs (348 KB); the game uses a few hundred
 subset_ttf('/usr/share/fonts/truetype/google-fonts/ofl/cardo/Cardo-Bold.ttf', 'assets/fonts/title.ttf')
 print('glyphs', len(txt))

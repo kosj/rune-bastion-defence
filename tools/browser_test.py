@@ -126,28 +126,29 @@ async def main():
         if MOBILE:
             # phones use the compact 960x540 canvas (expanded to the screen aspect): map canvas -> CSS px
             k = H / 540.0
-            await pg.touchscreen.tap(238 * k, 256 * k)          # 게임 시작
+            await pg.touchscreen.tap(248 * k, 377 * k)          # 게임 시작
             await pg.wait_for_timeout(2500)
             await pg.screenshot(path=out + "_select.png")
             await pg.touchscreen.tap(351 * k, 350 * k)          # flag 1 on the world map
             await pg.wait_for_timeout(1500)
             await pg.screenshot(path=out + "_card.png")
-            await pg.touchscreen.tap(687 * k, 418 * k)          # 출전
+            await pg.keyboard.press("Enter")                    # 출전 (the briefing's default action)
             await pg.wait_for_timeout(12000)
             await pg.screenshot(path=out + "_level.png")
             await pg.touchscreen.tap(W * 0.55, H * 0.5)
             await pg.wait_for_timeout(1500)
             await pg.screenshot(path=out + "_tap.png")
         if PLAY:
-            # 게임 시작 -> world map flag 1 -> briefing card 출전
-            await pg.mouse.click(238, 436)
+            # 게임 시작 -> world map flag 1 -> briefing card 출전 (the card's default action: Enter
+            # presses it wherever the sheet's layout puts it)
+            await pg.mouse.click(248, 557)
             await pg.wait_for_timeout(2500)
             await pg.screenshot(path=out + "_select.png")
             await pg.mouse.click(384, 407)
             await pg.wait_for_timeout(int(CARD_WAIT * 1000))
             await pg.screenshot(path=out + "_card.png")
             t_click = time.time() - t0
-            await pg.mouse.click(745, 530)
+            await pg.keyboard.press("Enter")
             if EARLY:
                 await pg.wait_for_timeout(1500)
                 await pg.screenshot(path=out + "_wait.png")

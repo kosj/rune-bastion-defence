@@ -214,7 +214,7 @@ func ensure(chunks: Array, label := "데이터를 받는 중...") -> bool:
 	var lb := UI.label(label, 26)
 	lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(lb)
-	var bar := UI.bar("gold", 420.0, 18.0)
+	var bar := UI.bar("gold", minf(420.0, cc.get_viewport_rect().size.x - 100.0), 18.0)
 	bar.max_value = 100.0
 	vb.add_child(bar)
 	var pct := UI.label("0%", 20, UI.MUTED)

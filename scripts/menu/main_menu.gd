@@ -311,68 +311,108 @@ func _build_ui() -> void:
 	grad.stretch_mode = TextureRect.STRETCH_SCALE
 	grad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(grad)
-	var title := UI.title("RUNE BASTION", 96, "title", 14)
+	_build_title(true)
+	Game.layout_changed.connect(_on_layout_changed)
+
+var _title_root: Control
+
+## The title screen's own parts: logo, the start button with the three menu buttons under it
+## (bottom-left on a wide screen, across the bottom on an upright one, under the thumb) and the
+## settings gear in the corner, where people look for it.
+func _build_title(first := false) -> void:
+	if _title_root:
+		_title_root.queue_free()
+	var t := Game.tall
+	var vs := get_viewport().get_visible_rect().size
+	_title_root = Control.new()
+	_title_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_title_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(_title_root)
+	ui.move_child(_title_root, 2 if _backdrop else 1)
+	var title := UI.title("RUNE BASTION", 52 if t else 96, "title", 9 if t else 14)
 	title.anchor_left = 0.0
 	title.anchor_right = 1.0
-	title.offset_top = 22
+	title.offset_top = 48 if t else 22
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ui.add_child(title)
-	var sub := UI.ribbon("룬 바스티온 · 왕국 수호전", 26, "red", 460)
+	_title_root.add_child(title)
+	var rw := 360.0 if t else 460.0
+	var sub := UI.ribbon("룬 바스티온 · 왕국 수호전", 20 if t else 26, "red", rw)
 	sub.anchor_left = 0.5
 	sub.anchor_right = 0.5
-	sub.offset_left = -230
-	sub.offset_right = 230
-	sub.offset_top = 132
-	ui.add_child(sub)
+	sub.offset_left = -rw * 0.5
+	sub.offset_right = rw * 0.5
+	sub.offset_top = 124 if t else 132
+	_title_root.add_child(sub)
+	var gear := UI.round_button(Assets.tex("ic_gear"), 52 if t else 60)
+	gear.anchor_left = 1.0
+	gear.anchor_right = 1.0
+	gear.offset_left = -(52 if t else 60) - 16
+	gear.offset_right = -16
+	gear.offset_top = 16
+	gear.tooltip_text = tr("설정")
+	gear.pressed.connect(_open_settings)
+	_title_root.add_child(gear)
+	var cw := (vs.x - 48.0) if t else 400.0
 	var vb := VBoxContainer.new()
-	vb.anchor_left = 0.0
-	vb.anchor_right = 0.0
+	vb.add_theme_constant_override("separation", 12)
 	vb.anchor_top = 1.0
 	vb.anchor_bottom = 1.0
-	vb.offset_left = 48
-	vb.offset_right = 428
-	vb.offset_top = -330
-	vb.add_theme_constant_override("separation", 12)
-	ui.add_child(vb)
-	var play := UI.button("게임 시작", 38, true, Vector2(380, 92), "red")
+	vb.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	if t:
+		vb.anchor_left = 0.5
+		vb.anchor_right = 0.5
+		vb.offset_left = -cw * 0.5
+		vb.offset_right = cw * 0.5
+		vb.offset_bottom = -64
+	else:
+		vb.offset_left = 48
+		vb.offset_right = 48 + cw
+		vb.offset_bottom = -60
+	_title_root.add_child(vb)
+	var play := UI.button("게임 시작", 34, true, Vector2(cw, 84), "primary")
 	play.icon = Assets.tex("ic_play")
 	play.pressed.connect(_open_select)
 	vb.add_child(play)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	# Enter / Space starts (the default action of the screen)
+	play.grab_focus.call_deferred()
+	var btns: Array = []
 	for it in [["영웅", "ic_hero", _open_heroes], ["도감", "ic_book", _open_bestiary], ["업적", "ic_trophy", _open_achievements]]:
-		var b := UI.button(it[0], 22, false, Vector2(121, 66), "blue")
+		var b := UI.button(it[0], 20, false, Vector2(0, 58), "secondary")
 		b.icon = Assets.tex(it[1])
-		b.add_theme_constant_override("icon_max_width", 30)
 		var fn: Callable = it[2]
 		b.pressed.connect(func(): fn.call())
 		if it[0] == "영웅" and DB.unspent_talents() > 0:
-			# unspent talent points: same red badge the upgrade dock uses for unspent stars
+			# unspent talent points: the same badge the map dock uses for unspent stars
 			var bd := UI.badge(str(DB.unspent_talents()), 28, 15)
-			bd.position = Vector2(97, -8)
+			bd.anchor_left = 1.0
+			bd.anchor_right = 1.0
+			bd.offset_left = -22
+			bd.offset_top = -10
 			b.add_child(bd)
-		row.add_child(b)
-	vb.add_child(row)
-	var settings := UI.button("설정", 24, false, Vector2(380, 62), "blue")
-	settings.icon = Assets.tex("ic_gear")
-	settings.add_theme_constant_override("icon_max_width", 30)
-	settings.pressed.connect(_open_settings)
-	vb.add_child(settings)
-	var credit := UI.label("3D 애셋: NCSOFT VARCO 3D 생성형 AI  ·  파이프라인: Blender  ·  엔진: Godot 4", 15, UI.MUTED, 4)
+		btns.append(b)
+	vb.add_child(UI.action_row(btns))
+	var credit := UI.label("3D 애셋: NCSOFT VARCO 3D 생성형 AI  ·  파이프라인: Blender  ·  엔진: Godot 4", 14, UI.MUTED, 3)
 	credit.anchor_left = 0.0
 	credit.anchor_right = 1.0
 	credit.anchor_top = 1.0
 	credit.anchor_bottom = 1.0
-	credit.offset_top = -30
+	credit.offset_left = 16
+	credit.offset_right = -16
+	credit.offset_top = -(44 if t else 30)
 	credit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ui.add_child(credit)
-	_menu_items = [title, sub, vb, credit]
-	# entrance: title drops in, ribbon unfurls, buttons slide from the left
+	credit.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_title_root.add_child(credit)
+	_menu_items = [_title_root]
+	if _select:
+		_title_root.visible = false
+	if not first:
+		return
+	# entrance: title drops in, ribbon unfurls, the buttons fade up in turn
 	title.modulate.a = 0.0
 	title.position.y -= 40
 	var tw := title.create_tween().set_parallel(true)
 	tw.tween_property(title, "modulate:a", 1.0, 0.8)
-	tw.tween_property(title, "position:y", title.position.y + 40, 0.9).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(title, "position:y", title.position.y + 40, 0.9).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	sub.scale = Vector2(0.2, 1.0)
 	sub.modulate.a = 0.0
 	(func():
@@ -381,13 +421,23 @@ func _build_ui() -> void:
 		t2.tween_property(sub, "scale", Vector2.ONE, 0.5).set_delay(0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		t2.tween_property(sub, "modulate:a", 1.0, 0.3).set_delay(0.35)).call_deferred()
 	var k := 0
-	for c in [play, row, settings]:
+	for c in [play, btns[0].get_parent(), gear]:
 		var cc := c as Control
 		cc.modulate.a = 0.0
 		var t3 := cc.create_tween()
 		t3.tween_interval(0.5 + k * 0.08)
 		t3.tween_property(cc, "modulate:a", 1.0, 0.25)
 		k += 1
+
+## The phone was turned: dialogs laid out for the other orientation close, the title rebuilds
+## (the world map lays itself out again on its own).
+func _on_layout_changed() -> void:
+	if not is_inside_tree():
+		return
+	for c in ui.get_children():
+		if c.has_meta("body"):
+			c.queue_free()
+	_build_title()
 
 var _menu_items: Array = []
 
@@ -424,49 +474,18 @@ func _refresh_select() -> void:
 
 # ---------------------------------------------------------------- overlay shell
 
-## Dimmed screen + ribbon-titled enamel panel. Returns [shade, body VBox].
-func _overlay(title: String, ribbon_kind := "red") -> Array:
-	var shade := ColorRect.new()
-	shade.color = Color(0, 0, 0, 0.7)
-	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
-	shade.mouse_filter = Control.MOUSE_FILTER_STOP
-	ui.add_child(shade)
-	var c := CenterContainer.new()
-	c.set_anchors_preset(Control.PRESET_FULL_RECT)
-	shade.add_child(c)
-	var wrap := VBoxContainer.new()
-	wrap.add_theme_constant_override("separation", -30)
-	c.add_child(wrap)
-	var compact := get_viewport().get_visible_rect().size.y < 600.0
-	var rib := UI.ribbon(title, 28 if compact else 34, ribbon_kind, 440)
-	rib.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	rib.z_index = 1
-	wrap.add_child(rib)
-	var p := UI.framed("dark", 14 if compact else 18)
-	var holder := UI.with_close(p, func():
-		shade.queue_free()
-		_refresh_select())
-	holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	wrap.add_child(holder)
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 8 if compact else 10)
-	p.add_child(vb)
-	var sp := Control.new()
-	sp.custom_minimum_size = Vector2(0, 16)
-	vb.add_child(sp)
-	(func(): UI.pop_in(wrap)).call_deferred()
-	return [shade, vb]
+## A dialog sheet over the title or the map (UI.sheet). Returns [shade, body VBox, body width].
+## `width` is the width on a wide screen; an upright one gives the sheet the full width.
+func _overlay(title: String, width := 760.0, aside: Control = null) -> Array:
+	var shade: Control
+	shade = UI.sheet(ui, title, {"width": width, "aside": aside, "on_close": func():
+		UI.dismiss(shade, _refresh_select)})
+	return [shade, shade.get_meta("body"), UI.sheet_w(shade)]
 
-func _close_button(shade: Control, after := Callable()) -> Control:
-	var cc := CenterContainer.new()
-	var close := UI.button("닫기", 22, false, Vector2(220, 54), "blue")
-	close.pressed.connect(func():
-		shade.queue_free()
-		_refresh_select()
-		if after.is_valid():
-			after.call())
-	cc.add_child(close)
-	return cc
+## Switch from one sheet to another without the exit animation in between.
+func _swap(shade: Control, open: Callable) -> void:
+	shade.queue_free()
+	open.call()
 
 # ---------------------------------------------------------------- heroes
 
@@ -474,42 +493,48 @@ func _close_button(shade: Control, after := Callable()) -> Control:
 func _open_heroes() -> void:
 	if not Content.has("menu"):
 		await _need_menu()
-	var o := _overlay("영웅 선택")
+	var o := _overlay("영웅 선택", 1240.0)
 	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
-	var vs := get_viewport().get_visible_rect().size
-	var compact := vs.y < 600.0
-	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 16)
-	hb.alignment = BoxContainer.ALIGNMENT_CENTER
-	# three cards side by side when they fit; on narrow (phone) canvases they scroll sideways
+	var w: float = o[2]
 	var n_h := DB.HEROES.size()
-	var cw := minf((vs.x - 120.0 - 16.0 * (n_h - 1)) / n_h, 430.0)
-	if cw >= 340.0:
-		vb.add_child(hb)
+	# side by side when they fit; upright, one under the other (the sheet scrolls); a phone held
+	# sideways scrolls the row
+	var cw := floorf((w - 16.0 * (n_h - 1)) / n_h)
+	var box: BoxContainer
+	if cw >= 330.0:
+		box = HBoxContainer.new()
+		vb.add_child(box)
+	elif Game.tall:
+		cw = w
+		box = VBoxContainer.new()
+		vb.add_child(box)
 	else:
-		cw = 380.0
+		cw = 360.0
+		box = HBoxContainer.new()
 		var sc := ScrollContainer.new()
 		sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		sc.custom_minimum_size = Vector2(vs.x - 110.0, 0)
-		sc.add_child(hb)
+		sc.custom_minimum_size = Vector2(w, 0)
+		sc.add_child(box)
 		vb.add_child(sc)
+	box.add_theme_constant_override("separation", 16 if box is HBoxContainer else 12)
 	for id in DB.HEROES:
 		var h: Dictionary = DB.HEROES[id]
 		var unlocked := Game.hero_unlocked(id)
 		var chosen: bool = Game.hero_id == id
-		var p := UI.framed("parch", 10 if compact else 14)
+		var p := PanelContainer.new()
+		p.add_theme_stylebox_override("panel", UI.well_on(12) if chosen else UI.frame("well", 12))
 		p.custom_minimum_size = Vector2(cw, 0)
 		var cv := VBoxContainer.new()
-		cv.add_theme_constant_override("separation", 4 if compact else 6)
+		cv.add_theme_constant_override("separation", 8)
 		p.add_child(cv)
 		var top := HBoxContainer.new()
-		top.add_theme_constant_override("separation", 12)
+		top.add_theme_constant_override("separation", 14)
 		var slot := Panel.new()
-		var psz := 104 if not compact else 78
+		var psz := 92
 		slot.custom_minimum_size = Vector2(psz, psz)
-		slot.add_theme_stylebox_override("panel", UI.hd("slot_%s_normal" % ("red" if chosen else "navy"), Vector4(48, 48, 48, 48), Vector4(3, 3, 3, 3)))
-		var inner := psz * 0.84
+		slot.add_theme_stylebox_override("panel", UI.flat(UI.RIDGE, psz * 0.5, Vector4.ZERO))
+		var inner := psz * 0.92
 		var por := UI.portrait(Assets.tex(h["portrait"]), inner)
 		por.position = Vector2.ONE * (psz - inner) * 0.5
 		por.size = Vector2(inner, inner)
@@ -519,32 +544,35 @@ func _open_heroes() -> void:
 		top.add_child(slot)
 		var nv := VBoxContainer.new()
 		nv.add_theme_constant_override("separation", 0)
-		nv.add_child(UI.ink(h["name"], 25 if not compact else 22, UI.INK if unlocked else UI.INK_SOFT, "title_kr"))
-		nv.add_child(UI.ink(h["title"], 17, Color(0.55, 0.18, 0.1), "ui_black"))
+		nv.alignment = BoxContainer.ALIGNMENT_CENTER
+		nv.add_child(UI.ink(h["name"], 24, UI.INK if unlocked else UI.INK_SOFT, "title_kr"))
+		nv.add_child(UI.ink(h["title"], UI.T_SMALL, UI.GOLD, "ui_black"))
 		var kind := tr("원거리 · 사거리 %.1f") % float(h["range"]) if h.get("ranged", false) else "근접 · 적을 막아섬"
-		nv.add_child(UI.ink(kind, 16, UI.INK_SOFT))
+		nv.add_child(UI.ink(kind, UI.T_SMALL, UI.INK_SOFT))
 		top.add_child(nv)
 		cv.add_child(top)
-		var d := UI.ink(h["desc"], 16 if not compact else 15, UI.INK)
+		var d := UI.ink(h["desc"], UI.T_SMALL, UI.INK)
 		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		d.custom_minimum_size = Vector2(cw - 40, 0)
 		cv.add_child(d)
 		var sr := HFlowContainer.new()
-		sr.add_theme_constant_override("h_separation", 14)
+		sr.add_theme_constant_override("h_separation", 16)
 		sr.add_child(UI.stat("heart", "%d" % h["hp"], 17))
 		sr.add_child(UI.stat("st_dmg", "%d-%d" % [h["dmg"][0], h["dmg"][1]], 17))
 		sr.add_child(UI.stat("st_armor", "%d%%" % int(float(h["armor"]) * 100), 17))
 		cv.add_child(sr)
 		var sk := HBoxContainer.new()
-		sk.add_theme_constant_override("separation", 6)
+		sk.add_theme_constant_override("separation", 8)
 		sk.add_child(UI.icon(Assets.tex(h["skill_icon"]), 30))
-		sk.add_child(UI.ink(tr("%s · 재사용 %d초") % [tr(h["skill_name"]), int(h["skill_cd"])], 16, UI.INK, "ui_black"))
+		var skn := UI.ink(h["skill_name"], 17, UI.INK, "ui_black")
+		skn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sk.add_child(skn)
+		sk.add_child(UI.ink(tr("재사용 %d초") % int(h["skill_cd"]), UI.T_SMALL, UI.INK_SOFT))
 		cv.add_child(sk)
 		# persistent rank (lifetime XP) -> talent points
 		var rk := HBoxContainer.new()
 		rk.add_theme_constant_override("separation", 8)
-		var rb := UI.badge(str(DB.hero_rank(id)), 30, 16)
-		rk.add_child(rb)
+		rk.add_child(UI.badge(str(DB.hero_rank(id)), 30, 16))
 		var prog: Array = DB.hero_rank_progress(id)
 		var rbar := UI.bar("gold", 0, 12)
 		rbar.max_value = maxf(float(prog[1]), 1.0)
@@ -553,21 +581,19 @@ func _open_heroes() -> void:
 		rbar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		rk.add_child(rbar)
 		var pts := DB.talent_points(id)
-		rk.add_child(UI.ink(tr("재능 포인트 %d") % pts, 16, Color(0.6, 0.16, 0.08) if pts > 0 else UI.INK_SOFT, "ui_black"))
+		rk.add_child(UI.ink(tr("재능 포인트 %d") % pts, UI.T_SMALL, UI.GOLD if pts > 0 else UI.INK_SOFT, "ui_black"))
 		cv.add_child(rk)
-		var brow := HBoxContainer.new()
-		brow.add_theme_constant_override("separation", 8)
 		var b: Button
-		var bw := cw - 40 - (128 if unlocked else 0)
 		if not unlocked:
-			b = UI.button(tr("%d번째 지역 클리어 시 해금") % (int(h.get("unlock", 0)) + 1), 17, false, Vector2(bw, 50), "gray")
+			b = UI.button(tr("%d번째 지역 클리어 시 해금") % (int(h.get("unlock", 0)) + 1), 17, false, Vector2(0, 52), "ghost")
 			b.icon = Assets.tex("lock")
 			b.disabled = true
 		elif chosen:
-			b = UI.button("출전 중", 21, false, Vector2(bw, 50), "gold")
+			b = UI.button("출전 중", 20, false, Vector2(0, 52), "ghost")
 			b.icon = Assets.tex("check")
+			b.disabled = true
 		else:
-			b = UI.button("이 영웅으로 출전", 21, true, Vector2(bw, 50), "red")
+			b = UI.button("이 영웅으로 출전", 20, true, Vector2(0, 52), "primary")
 			b.pressed.connect(func():
 				Game.hero_id = id
 				Game.save()
@@ -577,69 +603,81 @@ func _open_heroes() -> void:
 					_show_hero()
 				if _backdrop:
 					_backdrop.texture = _backdrop_tex()
-				shade.queue_free()
-				_open_heroes())
-		brow.add_child(b)
+				_swap(shade, _open_heroes))
+		var brow: Array = []
 		if unlocked:
-			var tb := UI.button("재능", 20, false, Vector2(120, 50), "purple")
+			var tb := UI.button("재능", 20, false, Vector2(0, 52), "special")
 			tb.icon = Assets.tex("ht_skill")
-			tb.add_theme_constant_override("icon_max_width", 26)
 			if pts > 0:
 				var bd := UI.badge(str(pts), 26, 14)
-				bd.position = Vector2(98, -8)
+				bd.anchor_left = 1.0
+				bd.anchor_right = 1.0
+				bd.offset_left = -20
+				bd.offset_top = -10
 				tb.add_child(bd)
-			tb.pressed.connect(func():
-				shade.queue_free()
-				_open_talents(id))
-			brow.add_child(tb)
-		cv.add_child(brow)
-		hb.add_child(p)
+			tb.pressed.connect(func(): _swap(shade, func(): _open_talents(id)))
+			brow.append(tb)
+		brow.append(b)
+		var ar := UI.action_row(brow)
+		b.size_flags_stretch_ratio = 2.0
+		# side by side, the cards share one height and their buttons one line
+		var push := Control.new()
+		push.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		cv.add_child(push)
+		cv.add_child(ar)
+		box.add_child(p)
 
 ## Hero talents: rank points (from lifetime battle XP) bought into four 3-step talents.
 func _open_talents(id: String) -> void:
 	var h: Dictionary = DB.HEROES[id]
-	var o := _overlay(tr("재능 · %s") % tr(h["name"]), "dark")
+	var o := _overlay(tr("%s의 재능") % tr(h["name"]), 720.0)
 	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
-	var compact := get_viewport().get_visible_rect().size.y < 600.0
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 12)
-	head.add_child(UI.bust(Assets.tex(h["portrait"]), 70 if not compact else 56, 1.4, Vector2(0.5, 0.38)))
+	head.add_theme_constant_override("separation", 14)
+	head.add_child(UI.bust(Assets.tex(h["portrait"]), 64, 1.4, Vector2(0.5, 0.38)))
 	var hv := VBoxContainer.new()
-	hv.add_theme_constant_override("separation", 2)
+	hv.add_theme_constant_override("separation", 4)
 	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var rank_l := UI.label("", 22, UI.GOLD, 5, "ui_black")
-	hv.add_child(rank_l)
-	var bar := UI.bar("gold", 0, 14)
+	hv.alignment = BoxContainer.ALIGNMENT_CENTER
+	var rl := HBoxContainer.new()
+	var rank_l := UI.ink("", 20, UI.INK, "ui_black")
+	rank_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rl.add_child(rank_l)
+	var pts_l := UI.ink("", 18, UI.GOLD, "ui_black")
+	rl.add_child(pts_l)
+	hv.add_child(rl)
+	var bar := UI.bar("gold", 0, 12)
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hv.add_child(bar)
-	var xp_l := UI.label("", 15, UI.MUTED, 3)
+	var xp_l := UI.ink("", UI.T_SMALL, UI.MUTED)
 	hv.add_child(xp_l)
 	head.add_child(hv)
-	head.custom_minimum_size = Vector2(640, 0)
 	vb.add_child(head)
 	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 6 if compact else 8)
+	rows.add_theme_constant_override("separation", 8)
 	vb.add_child(rows)
 	var refresh: Callable
 	var cells := []
 	for td in DB.HERO_TALENTS:
-		var cp := UI.framed("slim", 2)
+		var cp := UI.framed("well", 6)
 		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 10)
+		hb.add_theme_constant_override("separation", 12)
 		cp.add_child(hb)
-		hb.add_child(UI.icon(Assets.tex(td["icon"]), 50 if not compact else 42))
+		hb.add_child(UI.icon(Assets.tex(td["icon"]), 46))
 		var tv := VBoxContainer.new()
 		tv.add_theme_constant_override("separation", 0)
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tv.add_child(UI.label(td["name"], 20, UI.TEXT, 4, "ui_black"))
-		tv.add_child(UI.label(td["desc"], 15, UI.MUTED, 3))
-		hb.add_child(tv)
+		tv.add_child(UI.ink(td["name"], 19, UI.INK, "ui_black"))
+		var dl := UI.ink(td["desc"], UI.T_SMALL, UI.MUTED)
+		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tv.add_child(dl)
 		var pips := HBoxContainer.new()
 		pips.add_theme_constant_override("separation", 2)
-		pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		hb.add_child(pips)
-		var bt := UI.button("+1", 20, false, Vector2(72, 48), "gold")
+		tv.add_child(pips)
+		hb.add_child(tv)
+		var bt := UI.button("+1", 20, false, Vector2(68, 48), "primary")
+		bt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hb.add_child(bt)
 		var tid: String = td["id"]
 		bt.pressed.connect(func():
@@ -658,7 +696,8 @@ func _open_talents(id: String) -> void:
 	refresh = func():
 		var r := DB.hero_rank(id)
 		var prog: Array = DB.hero_rank_progress(id)
-		rank_l.text = tr("등급 %d  ·  재능 포인트 %d") % [r, DB.talent_points(id)]
+		rank_l.text = tr("등급 %d") % r
+		pts_l.text = tr("재능 포인트 %d") % DB.talent_points(id)
 		bar.max_value = maxf(float(prog[1]), 1.0)
 		bar.value = float(prog[0]) if float(prog[1]) > 0.0 else bar.max_value
 		xp_l.text = tr("다음 등급까지 경험치 %d") % int(float(prog[1]) - float(prog[0])) if float(prog[1]) > 0.0 else tr("최고 등급 달성!")
@@ -668,35 +707,23 @@ func _open_talents(id: String) -> void:
 			for ch in pp.get_children():
 				ch.queue_free()
 			for k in DB.TALENT_MAX:
-				var st := UI.icon(Assets.tex("star" if k < lv else "star_empty"), 24)
-				pp.add_child(st)
+				pp.add_child(UI.icon(Assets.tex("star" if k < lv else "star_empty"), 20))
 			(c[2] as Button).disabled = lv >= DB.TALENT_MAX or DB.talent_points(id) <= 0
 	refresh.call()
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
-	var back := UI.button("영웅 목록", 20, false, Vector2(170, 52), "blue")
-	back.icon = Assets.tex("ic_hero")
-	back.add_theme_constant_override("icon_max_width", 26)
-	back.pressed.connect(func():
-		shade.queue_free()
-		_open_heroes())
-	row.add_child(back)
-	var rs := UI.button("재능 초기화", 20, false, Vector2(170, 52), "gray")
+	var hint := UI.ink("전투에서 얻은 경험치가 쌓여 등급이 오르고, 등급마다 재능 포인트 1을 받습니다.", UI.T_SMALL, UI.MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(hint)
+	var rs := UI.button("재능 초기화", 19, false, Vector2(0, 52), "ghost")
 	rs.icon = Assets.tex("ic_retry")
-	rs.add_theme_constant_override("icon_max_width", 24)
 	rs.pressed.connect(func():
 		Game.hero_talents[id] = {}
 		Game.save()
 		Audio.play("sell", -4.0)
 		refresh.call())
-	row.add_child(rs)
-	vb.add_child(row)
-	var hint := UI.label("전투에서 얻은 경험치가 쌓여 등급이 오르고, 등급마다 재능 포인트 1을 받습니다.", 15, UI.MUTED, 3)
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.custom_minimum_size = Vector2(640, 0)
-	vb.add_child(hint)
+	var back := UI.button("영웅 목록", 19, false, Vector2(0, 52), "secondary")
+	back.icon = Assets.tex("ic_hero")
+	back.pressed.connect(func(): _swap(shade, _open_heroes))
+	vb.add_child(UI.action_row([rs, back]))
 
 # ---------------------------------------------------------------- bestiary
 
@@ -704,153 +731,185 @@ func _open_talents(id: String) -> void:
 func _open_bestiary(tab := "enemy") -> void:
 	if not Content.has("menu"):
 		await _need_menu()
-	var o := _overlay("도감", "dark")
+	var o := _overlay("도감", 1000.0)
 	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
-	var vs := get_viewport().get_visible_rect().size
-	var compact := vs.y < 600.0
+	var w: float = o[2]
 	# tabs: enemies / towers
 	var tabs := HBoxContainer.new()
-	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
 	tabs.add_theme_constant_override("separation", 8)
 	for tb in [["enemy", "적"], ["tower", "타워"]]:
-		var b := UI.button(tb[1], 19, false, Vector2(140, 44), "gold" if tab == tb[0] else "gray")
+		var b := UI.button(tb[1], 18, false, Vector2(120, 44), "primary" if tab == tb[0] else "ghost")
 		var id: String = tb[0]
 		b.pressed.connect(func():
 			if id != tab:
 				Audio.play("click", -4.0)
-				shade.queue_free()
-				_open_bestiary(id))
+				_swap(shade, func(): _open_bestiary(id)))
 		tabs.add_child(b)
 	vb.add_child(tabs)
 	if tab == "tower":
-		_tower_codex(vb, vs, compact)
+		_tower_codex(vb, w)
 		return
-	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 16)
-	vb.add_child(hb)
-	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 8)
-	hb.add_child(left)
+	# wide: the list on the left, the page on the right; upright: the page on top, the list under it
+	var cell := 74
+	var box: BoxContainer = VBoxContainer.new() if Game.tall else HBoxContainer.new()
+	box.add_theme_constant_override("separation", 16)
 	var grid := GridContainer.new()
-	grid.columns = 4 if vs.x >= 1100.0 else 3
+	grid.columns = int((w + 6.0) / (cell + 6.0)) if Game.tall else (4 if w >= 900.0 else 3)
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 8)
 	left.add_child(grid)
-	var detail := UI.framed("parch", 12)
-	detail.custom_minimum_size = Vector2(minf(vs.x * 0.38, 440.0), minf(vs.y - 200.0, 400.0))
+	var dw := w if Game.tall else w - grid.columns * (cell + 6.0) - 16.0
+	var detail := UI.framed("well", 10)
+	detail.custom_minimum_size = Vector2(dw, 0 if Game.tall else 360)
+	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var dv := VBoxContainer.new()
-	dv.add_theme_constant_override("separation", 8)
+	dv.add_theme_constant_override("separation", 10)
 	detail.add_child(dv)
-	hb.add_child(detail)
+	if Game.tall:
+		box.add_child(detail)
+		box.add_child(left)
+	else:
+		box.add_child(left)
+		box.add_child(detail)
+	vb.add_child(box)
 	var show := func(t: String):
 		for c in dv.get_children():
 			c.queue_free()
 		var e: Dictionary = DB.ENEMIES[t]
 		var top := HBoxContainer.new()
-		top.add_theme_constant_override("separation", 10)
-		top.add_child(UI.bust(Assets.tex("portrait_" + t), 96 if not compact else 76, 1.25))
+		top.add_theme_constant_override("separation", 12)
+		top.add_child(UI.bust(Assets.tex("portrait_" + t), 88, 1.25))
 		var nv := VBoxContainer.new()
-		nv.add_child(UI.ink(e["name"], 25, UI.INK, "title_kr"))
+		nv.alignment = BoxContainer.ALIGNMENT_CENTER
+		nv.add_theme_constant_override("separation", 6)
+		nv.add_child(UI.ink(e["name"], 24, UI.INK, "title_kr"))
 		var tags := []
 		if e.get("boss", false): tags.append("보스")
 		if e.get("flying", false): tags.append("비행")
 		if float(e["armor"]) >= 0.3: tags.append("중장갑")
 		if float(e["mr"]) >= 0.3: tags.append("마법 저항")
 		if float(e["speed"]) >= 3.0: tags.append("고속")
-		nv.add_child(UI.ink(" · ".join(tags) if not tags.is_empty() else "일반", 17, Color(0.6, 0.16, 0.08), "ui_black"))
+		if tags.is_empty(): tags.append("일반")
+		# traits as tags, not a dotted string
+		var tg := HFlowContainer.new()
+		tg.add_theme_constant_override("h_separation", 6)
+		tg.add_theme_constant_override("v_separation", 6)
+		for tx in tags:
+			var pill := PanelContainer.new()
+			pill.add_theme_stylebox_override("panel", UI.flat(Color(UI.EMBER, 0.18), 10, Vector4(10, 2, 10, 3)))
+			pill.add_child(UI.ink(tx, 15, Color(1.0, 0.72, 0.62), "ui_black"))
+			tg.add_child(pill)
+		nv.add_child(tg)
 		top.add_child(nv)
 		dv.add_child(top)
-		dv.add_child(UI.divider(detail.custom_minimum_size.x - 40))
 		var spd := "빠름" if float(e["speed"]) >= 3.0 else ("느림" if float(e["speed"]) < 1.5 else "보통")
 		var g1 := GridContainer.new()
 		g1.columns = 2
-		g1.add_theme_constant_override("h_separation", 22)
+		g1.add_theme_constant_override("h_separation", 24)
 		g1.add_theme_constant_override("v_separation", 6)
-		g1.add_child(UI.stat("heart", tr("체력 %d") % e["hp"], 18))
-		g1.add_child(UI.stat("st_speed", tr("속도 %s") % tr(spd), 18))
-		g1.add_child(UI.stat("st_armor", tr("방어 %d%%") % int(float(e["armor"]) * 100), 18))
-		g1.add_child(UI.stat("st_magic", tr("마법 저항 %d%%") % int(float(e["mr"]) * 100), 18))
-		g1.add_child(UI.stat("coin", tr("보상 %d") % e["gold"], 18))
-		g1.add_child(UI.stat("skull", tr("생명 -%d") % e["lives"], 18))
+		g1.add_child(UI.stat("heart", tr("체력 %d") % e["hp"], 17))
+		g1.add_child(UI.stat("st_speed", tr("속도 %s") % tr(spd), 17))
+		g1.add_child(UI.stat("st_armor", tr("방어 %d%%") % int(float(e["armor"]) * 100), 17))
+		g1.add_child(UI.stat("st_magic", tr("마법 저항 %d%%") % int(float(e["mr"]) * 100), 17))
+		g1.add_child(UI.stat("coin", tr("보상 %d") % e["gold"], 17))
+		g1.add_child(UI.stat("skull", tr("생명 -%d") % e["lives"], 17))
 		dv.add_child(g1)
-		var tip := UI.ink(tr("공략: ") + tr(str(e.get("desc", ""))), 17, UI.INK)
+		dv.add_child(UI.ink("공략", UI.T_SMALL, UI.GOLD, "ui_black"))
+		var tip := UI.ink(str(e.get("desc", "")), 17, UI.INK)
 		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		tip.custom_minimum_size = Vector2(detail.custom_minimum_size.x - 40, 0)
+		tip.custom_minimum_size = Vector2(dw - 40, 0)
 		dv.add_child(tip)
 	var first := ""
 	var seen_n := 0
-	var cell := 78 if not compact else 62
 	for t in DB.ENEMIES:
 		var seen: bool = Game.seen_enemies.has(t)
-		var b := UI.icon_button(null, cell, UI.NAVY, 14, "navy")
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(cell, cell)
+		for st in ["normal", "hover", "pressed", "disabled"]:
+			b.add_theme_stylebox_override(st, UI.flat(UI.RIDGE if st != "hover" else UI.RIDGE.lightened(0.08), 14, Vector4(6, 6, 6, 6)))
+		b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		UI.juice(b)
 		if seen:
-			var inner := cell * 0.8
-			var por := UI.portrait(Assets.tex("portrait_" + t), inner, 1.3, Vector2(0.5, 0.4))
+			var inner := cell * 0.86
+			var por := UI.bust(Assets.tex("portrait_" + t), inner, 1.3, Vector2(0.5, 0.4))
 			por.position = Vector2.ONE * (cell - inner) * 0.5
 			por.size = Vector2(inner, inner)
 			b.add_child(por)
-		if not seen:
-			b.icon = Assets.tex("lock")
-			b.add_theme_constant_override("icon_max_width", int(cell * 0.42))
-			b.pressed.connect(func(): Audio.play("error", -6.0))
-		else:
 			seen_n += 1
 			if first == "":
 				first = t
-			b.pressed.connect(func(): show.call(t))
+			b.pressed.connect(func():
+				Audio.play("click", -6.0)
+				show.call(t))
+		else:
+			b.icon = Assets.tex("lock")
+			b.expand_icon = true
+			b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			b.add_theme_constant_override("icon_max_width", int(cell * 0.36))
+			b.add_theme_color_override("icon_normal_color", Color(1, 1, 1, 0.35))
+			b.pressed.connect(func(): Audio.play("error", -6.0))
 		grid.add_child(b)
 	if first != "":
 		show.call(first)
 	else:
 		dv.add_child(UI.ink("아직 만난 적이 없습니다.\n전투에서 적을 만나면 기록됩니다.", 18, UI.INK_SOFT))
-	var cnt := UI.label(tr("발견 %d / %d") % [seen_n, DB.ENEMIES.size()], 18, UI.GOLD, 4, "ui_black")
-	cnt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	left.add_child(cnt)
+	left.add_child(UI.ink(tr("발견 %d / %d") % [seen_n, DB.ENEMIES.size()], UI.T_SMALL, UI.MUTED, "ui_black"))
 
 ## Tower codex: every tower's three levels, both specializations and their special abilities.
-func _tower_codex(vb: VBoxContainer, vs: Vector2, compact: bool) -> void:
-	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 16)
-	vb.add_child(hb)
+func _tower_codex(vb: VBoxContainer, w: float) -> void:
+	var cell := 88
+	var box: BoxContainer = VBoxContainer.new() if Game.tall else HBoxContainer.new()
+	box.add_theme_constant_override("separation", 16)
+	vb.add_child(box)
 	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 8)
-	hb.add_child(left)
-	var dw := minf(vs.x - 300.0, 640.0)
-	var detail := UI.framed("parch", 12)
-	detail.custom_minimum_size = Vector2(dw, minf(vs.y - 250.0, 400.0))
-	var sc := ScrollContainer.new()
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sc.custom_minimum_size = Vector2(dw - 24, minf(vs.y - 274.0, 376.0))
-	detail.add_child(sc)
+	left.add_theme_constant_override("separation", 10)
+	var grid := GridContainer.new()
+	grid.columns = 4 if Game.tall else 2
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	left.add_child(grid)
+	box.add_child(left)
+	var dw := w if Game.tall else w - (cell * 2 + 6.0) - 16.0
+	var detail := UI.framed("well", 10)
+	detail.custom_minimum_size = Vector2(dw, 0)
+	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var dv := VBoxContainer.new()
-	dv.add_theme_constant_override("separation", 6)
+	dv.add_theme_constant_override("separation", 8)
 	dv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sc.add_child(dv)
-	hb.add_child(detail)
+	detail.add_child(dv)
+	box.add_child(detail)
+	var picked := [""]
+	var cells := {}
 	var show := func(t: String):
+		picked[0] = t
+		for k in cells:
+			(cells[k] as Button).add_theme_stylebox_override("normal", UI.well_on(6) if k == t else UI.flat(UI.RIDGE, 14, Vector4(6, 6, 6, 6)))
 		for c in dv.get_children():
 			c.queue_free()
-		sc.scroll_vertical = 0
 		var d: Dictionary = DB.TOWERS[t]
 		var top := HBoxContainer.new()
-		top.add_theme_constant_override("separation", 10)
-		top.add_child(UI.icon(Assets.tex("tower_%s_3" % t), 72 if not compact else 58))
+		top.add_theme_constant_override("separation", 12)
+		top.add_child(UI.icon(Assets.tex("tower_%s_3" % t), 68))
 		var nv := VBoxContainer.new()
 		nv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		nv.add_child(UI.ink(d["name"], 24, UI.INK, "title_kr"))
-		var dl := UI.ink(d["desc"], 16, UI.INK_SOFT)
+		nv.add_child(UI.ink(d["name"], 23, UI.INK, "title_kr"))
+		var dl := UI.ink(d["desc"], UI.T_SMALL, UI.INK_SOFT)
 		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		dl.custom_minimum_size.x = dw - 140
+		dl.custom_minimum_size.x = dw - 130
 		nv.add_child(dl)
 		top.add_child(nv)
 		dv.add_child(top)
 		# level 1-3 stats, one row each
 		for lv in 3:
 			var st := DB.tower_stats(t, lv + 1, "")
-			var row := HBoxContainer.new()
-			row.add_theme_constant_override("separation", 12)
-			row.add_child(UI.ink("Lv.%d" % (lv + 1), 17, Color(0.6, 0.16, 0.08), "ui_black"))
+			var row := HFlowContainer.new()
+			row.add_theme_constant_override("h_separation", 14)
+			var lvl := UI.ink("Lv.%d" % (lv + 1), 16, UI.GOLD, "ui_black")
+			lvl.custom_minimum_size.x = 40
+			row.add_child(lvl)
 			row.add_child(UI.stat("coin", str(d["levels"][lv]["cost"]), 16))
 			if t == "barracks":
 				row.add_child(UI.stat("st_unit", tr("병사 %d") % st["count"], 16))
@@ -861,65 +920,67 @@ func _tower_codex(vb: VBoxContainer, vs: Vector2, compact: bool) -> void:
 				row.add_child(UI.stat("st_rate", tr("%.1f초") % st["rate"], 16))
 				row.add_child(UI.stat("st_range", "%.1f" % st["range"], 16))
 			dv.add_child(row)
-		dv.add_child(UI.divider(dw - 50))
+		dv.add_child(UI.divider(dw - 40))
 		# the two specializations (level 4), each with its special ability
 		for m in d["masteries"]:
 			var mh := HBoxContainer.new()
 			mh.add_theme_constant_override("separation", 10)
-			mh.add_child(UI.icon(Assets.tex("m_" + m["id"]), 46 if not compact else 40))
+			var mi := UI.icon(Assets.tex("m_" + m["id"]), 44)
+			mi.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+			mh.add_child(mi)
 			var mv := VBoxContainer.new()
-			mv.add_theme_constant_override("separation", 0)
+			mv.add_theme_constant_override("separation", 2)
 			mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			var mt := HBoxContainer.new()
-			mt.add_theme_constant_override("separation", 8)
-			mt.add_child(UI.ink(m["name"], 19, UI.INK, "ui_black"))
+			mt.add_theme_constant_override("separation", 10)
+			mt.add_child(UI.ink(m["name"], 18, UI.INK, "ui_black"))
 			mt.add_child(UI.stat("coin", str(m["cost"]), 15))
 			mv.add_child(mt)
 			var md := UI.ink(m["desc"], 15, UI.INK_SOFT)
 			md.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			md.custom_minimum_size.x = dw - 120
+			md.custom_minimum_size.x = dw - 110
 			mv.add_child(md)
-			mh.add_child(mv)
-			dv.add_child(mh)
 			var ab: Dictionary = m.get("ability", {})
 			if not ab.is_empty():
 				var ah := HBoxContainer.new()
-				ah.add_theme_constant_override("separation", 10)
-				var pad := Control.new()
-				pad.custom_minimum_size.x = 26
-				ah.add_child(pad)
-				ah.add_child(UI.icon(Assets.tex("a_" + ab["id"]), 36 if not compact else 32))
+				ah.add_theme_constant_override("separation", 8)
+				ah.add_child(UI.icon(Assets.tex("a_" + ab["id"]), 30))
 				var av := VBoxContainer.new()
 				av.add_theme_constant_override("separation", 0)
 				av.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				var at := HBoxContainer.new()
-				at.add_theme_constant_override("separation", 8)
-				at.add_child(UI.ink(tr("특수 능력 · ") + tr(ab["name"]), 16, Color(0.1, 0.4, 0.5), "ui_black"))
+				at.add_theme_constant_override("separation", 10)
+				at.add_child(UI.ink(ab["name"], 15, Color(0.55, 0.85, 0.95), "ui_black"))
 				at.add_child(UI.stat("coin", str(DB.ability_cost(t, m["id"])), 14))
 				av.add_child(at)
-				var adl := UI.ink(ab["desc"], 14, UI.INK_SOFT)
+				var adl := UI.ink(ab["desc"], 15, UI.INK_SOFT)
 				adl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				adl.custom_minimum_size.x = dw - 150
 				av.add_child(adl)
 				ah.add_child(av)
-				dv.add_child(ah)
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-	left.add_child(grid)
-	var cell := 96 if not compact else 76
+				mv.add_child(ah)
+			mh.add_child(mv)
+			dv.add_child(mh)
 	for t in ["archer", "barracks", "mage", "artillery"]:
-		var b := UI.icon_button(Assets.tex("tower_%s_1" % t), cell, UI.NAVY, 14, "navy")
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(cell, cell)
+		b.icon = Assets.tex("tower_%s_1" % t)
+		b.expand_icon = true
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.add_theme_constant_override("icon_max_width", int(cell * 0.8))
+		for st in ["normal", "hover", "pressed"]:
+			b.add_theme_stylebox_override(st, UI.flat(UI.RIDGE if st != "hover" else UI.RIDGE.lightened(0.08), 14, Vector4(6, 6, 6, 6)))
+		b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		b.tooltip_text = DB.TOWERS[t]["name"]
+		UI.juice(b)
 		b.pressed.connect(func():
 			Audio.play("click", -6.0)
 			show.call(t))
+		cells[t] = b
 		grid.add_child(b)
-	var hint := UI.label("3레벨 타워는 전문화로 4레벨이 되고, 전문화한 타워는 특수 능력을 하나 더 배울 수 있습니다.", 15, UI.MUTED, 3)
+	var hint := UI.ink("3레벨 타워는 전문화로 4레벨이 되고, 전문화한 타워는 특수 능력을 하나 더 배울 수 있습니다.", 15, UI.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.custom_minimum_size.x = cell * 2 + 6
+	hint.custom_minimum_size.x = w if Game.tall else cell * 2 + 6
 	left.add_child(hint)
 	show.call("archer")
 
@@ -929,19 +990,18 @@ func _tower_codex(vb: VBoxContainer, vs: Vector2, compact: bool) -> void:
 func _open_achievements() -> void:
 	if not Content.has("menu"):
 		await _need_menu()
-	var o := _overlay(tr("업적  ★ %d / %d") % [Game.achievement_count(), DB.ACHIEVEMENTS.size()], "blue")
+	var o := _overlay("업적", 1100.0, _count_tag("star", "%d / %d" % [Game.achievement_count(), DB.ACHIEVEMENTS.size()]))
 	var vb: VBoxContainer = o[1]
-	var vs := get_viewport().get_visible_rect().size
-	var sc := ScrollContainer.new()
-	sc.custom_minimum_size = Vector2(minf(vs.x - 100.0, 1080.0), minf(vs.y - 190.0, 470.0))
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vb.add_child(sc)
+	var w: float = o[2]
+	var hint := UI.ink("업적마다 ★1을 얻어 ‘왕국 강화’에 쓸 수 있습니다.", UI.T_SMALL, UI.MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(hint)
 	var grid := GridContainer.new()
-	grid.columns = 2 if vs.x >= 900.0 else 1
+	grid.columns = 2 if w >= 760.0 else 1
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 8)
-	sc.add_child(grid)
-	var cell_w := (sc.custom_minimum_size.x - 34.0) / grid.columns
+	vb.add_child(grid)
+	var cell_w := floorf((w - 10.0 * (grid.columns - 1)) / grid.columns)
 	# finished ones first, then by progress
 	var list: Array = DB.ACHIEVEMENTS.duplicate()
 	list.sort_custom(func(a, b):
@@ -954,43 +1014,50 @@ func _open_achievements() -> void:
 		return pa > pb)
 	for a in list:
 		var done: bool = Game.achievements.get(a["id"], false)
-		var cp := UI.framed("parch" if done else "slim", 2)
+		var cp := PanelContainer.new()
+		cp.add_theme_stylebox_override("panel", UI.well_on(6) if done else UI.frame("well", 6))
 		cp.custom_minimum_size = Vector2(cell_w, 0)
 		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 10)
+		hb.add_theme_constant_override("separation", 12)
 		cp.add_child(hb)
-		var ic := UI.icon(Assets.tex(a["icon"]), 52)
+		var ic := UI.icon(Assets.tex(a["icon"]), 48)
 		if not done:
 			ic.modulate = Color(0.6, 0.6, 0.66)
 		hb.add_child(ic)
 		var tv := VBoxContainer.new()
 		tv.add_theme_constant_override("separation", 2)
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		if done:
-			tv.add_child(UI.ink(a["name"], 20, UI.INK, "ui_black"))
-			tv.add_child(UI.ink(a["desc"], 15, UI.INK_SOFT))
-		else:
-			tv.add_child(UI.label(a["name"], 20, UI.TEXT, 4, "ui_black"))
-			tv.add_child(UI.label(a["desc"], 15, UI.MUTED, 3))
+		tv.add_child(UI.ink(a["name"], 18, UI.INK, "ui_black"))
+		var dl := UI.ink(a["desc"], 15, UI.INK_SOFT)
+		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tv.add_child(dl)
 		var cur := mini(int(Game.stats.get(a["stat"], 0)), int(a["goal"]))
-		var pb := UI.bar("gold" if done else "blue", 0, 12)
-		pb.max_value = float(a["goal"])
-		pb.value = cur
-		pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tv.add_child(pb)
+		if not done:
+			var pb := UI.bar("blue", 0, 10)
+			pb.max_value = float(a["goal"])
+			pb.value = cur
+			pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			tv.add_child(pb)
 		hb.add_child(tv)
 		if done:
-			var ck := VBoxContainer.new()
-			ck.alignment = BoxContainer.ALIGNMENT_CENTER
-			ck.add_child(UI.icon(Assets.tex("check"), 30))
-			ck.add_child(UI.stat("star", "+1", 15))
+			var ck := UI.stat("star", "+1", 15, UI.GOLD)
+			ck.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			hb.add_child(ck)
 		else:
-			hb.add_child(UI.label("%d/%d" % [cur, a["goal"]], 16, UI.MUTED, 3, "ui_black"))
+			var pl := UI.ink("%d/%d" % [cur, a["goal"]], 15, UI.MUTED, "ui_black")
+			pl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			hb.add_child(pl)
 		grid.add_child(cp)
-	var hint := UI.label("업적마다 ★1을 얻어 ‘왕국 강화’에 쓸 수 있습니다.", 16, UI.MUTED, 3)
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vb.add_child(hint)
+
+## Icon + number for a sheet header (stars owned, achievements done).
+func _count_tag(icon: String, txt: String) -> Control:
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 6)
+	hb.add_child(UI.icon(Assets.tex(icon), 26))
+	var l := UI.ink(txt, 20, UI.GOLD, "ui_black")
+	l.name = "Count"
+	hb.add_child(l)
+	return hb
 
 # ---------------------------------------------------------------- kingdom upgrades
 
@@ -998,50 +1065,43 @@ func _open_achievements() -> void:
 func _open_upgrades() -> void:
 	if not Content.has("menu"):
 		await _need_menu()
-	var o := _overlay("왕국 강화", "red")
+	var tag := _count_tag("star", "")
+	var o := _overlay("왕국 강화", 1100.0, tag)
 	var vb: VBoxContainer = o[1]
-	var vs := get_viewport().get_visible_rect().size
-	var compact := vs.y < 600.0
-	var head := HBoxContainer.new()
-	head.alignment = BoxContainer.ALIGNMENT_CENTER
-	head.add_theme_constant_override("separation", 10)
-	head.add_child(UI.icon(Assets.tex("star"), 36))
-	var have := UI.label("", 26, UI.GOLD, 6, "ui_black")
-	head.add_child(have)
-	vb.add_child(head)
+	var w: float = o[2]
+	var have: Label = tag.get_node("Count")
+	var hint := UI.ink("★는 지역 클리어(최대 3개), 영웅 난이도 클리어(+1), 업적(+1)으로 얻습니다. 환불은 언제든 무료.", UI.T_SMALL, UI.MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(hint)
 	var grid := GridContainer.new()
-	var cols := 3 if vs.x >= 1000.0 else 2
+	var cols := 3 if w >= 1000.0 else (2 if w >= 620.0 else 1)
 	grid.columns = cols
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
-	var sc := ScrollContainer.new()
-	var sw := minf(vs.x - 100.0, 1080.0)
-	sc.custom_minimum_size = Vector2(sw, minf(vs.y - 250.0, 440.0))
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sc.add_child(grid)
-	vb.add_child(sc)
-	var cell_w := (sw - 10.0 * (cols - 1) - 24.0) / cols
+	vb.add_child(grid)
+	var cell_w := floorf((w - 10.0 * (cols - 1)) / cols)
 	var refresh: Callable
 	var cells := []
 	for u in DB.UPGRADES:
 		var cp := PanelContainer.new()
 		cp.custom_minimum_size = Vector2(cell_w, 0)
 		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 10)
+		hb.add_theme_constant_override("separation", 12)
 		cp.add_child(hb)
-		hb.add_child(UI.icon(Assets.tex(u["icon"]), 58 if not compact else 48))
+		hb.add_child(UI.icon(Assets.tex(u["icon"]), 50))
 		var tv := VBoxContainer.new()
 		tv.add_theme_constant_override("separation", 0)
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var nl := UI.label(u["name"], 20, UI.TEXT, 4, "ui_black")
+		tv.alignment = BoxContainer.ALIGNMENT_CENTER
+		var nl := UI.ink(u["name"], 18, UI.INK, "ui_black")
 		tv.add_child(nl)
-		var dl := UI.label(u["desc"], 16, UI.MUTED, 3)
+		var dl := UI.ink(u["desc"], 15, UI.INK_SOFT)
 		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		tv.add_child(dl)
 		hb.add_child(tv)
-		var bt := UI.button("", 19, false, Vector2(84, 50), "gold")
+		var bt := UI.button("", 19, false, Vector2(78, 48), "primary")
 		bt.icon = Assets.tex("star")
-		bt.add_theme_constant_override("icon_max_width", 22)
+		bt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hb.add_child(bt)
 		var id: String = u["id"]
 		var cost: int = u["cost"]
@@ -1056,67 +1116,56 @@ func _open_upgrades() -> void:
 			Audio.play("upgrade", -2.0)
 			refresh.call()
 			UI.pop_in(cp))
-		cells.append([cp, bt, id, cost, nl, dl])
+		cells.append([cp, bt, id, cost])
 		grid.add_child(cp)
 	refresh = func():
 		have.text = tr("보유 %d") % Game.available_stars()
 		for cell in cells:
 			var owned: bool = Game.upgrades.get(cell[2], false)
 			var afford: bool = Game.available_stars() >= int(cell[3])
-			(cell[0] as PanelContainer).add_theme_stylebox_override("panel", UI.frame("parch" if owned else "slim", 4))
-			var nl2: Label = cell[4]
-			var dl2: Label = cell[5]
-			nl2.add_theme_color_override("font_color", UI.INK if owned else UI.TEXT)
-			nl2.add_theme_constant_override("outline_size", 0 if owned else 4)
-			dl2.add_theme_color_override("font_color", UI.INK_SOFT if owned else UI.MUTED)
-			dl2.add_theme_constant_override("outline_size", 0 if owned else 3)
+			(cell[0] as PanelContainer).add_theme_stylebox_override("panel", UI.well_on(6) if owned else UI.frame("well", 6))
 			var b2: Button = cell[1]
 			b2.text = "" if owned else str(cell[3])
 			b2.icon = Assets.tex("check") if owned else Assets.tex("star")
+			UI._btn_styles(b2, "ghost" if owned else "primary")
 			b2.disabled = owned or not afford
 	refresh.call()
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 16)
-	var reset := UI.button("전부 환불", 20, false, Vector2(190, 52), "blue")
+	var reset := UI.button("전부 환불", 19, false, Vector2(200, 52), "secondary")
 	reset.icon = Assets.tex("ic_retry")
-	reset.add_theme_constant_override("icon_max_width", 24)
+	reset.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	reset.pressed.connect(func():
 		Game.upgrades = {}
 		Game.save()
 		refresh.call())
-	row.add_child(reset)
-	vb.add_child(row)
-	var hint := UI.label("★는 지역 클리어(최대 3개), 영웅 난이도 클리어(+1), 업적(+1)으로 얻습니다. 환불은 언제든 무료.", 15, UI.MUTED, 3)
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.custom_minimum_size = Vector2(sw, 0)
-	vb.add_child(hint)
+	vb.add_child(reset)
 
 # ---------------------------------------------------------------- settings
 
 func _open_settings() -> void:
-	var o := _overlay("설정", "blue")
+	var o := _overlay("설정", 900.0)
 	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
+	var w: float = o[2]
 	vb.add_theme_constant_override("separation", 12)
-	var cols := HBoxContainer.new()
-	cols.add_theme_constant_override("separation", 26)
+	# two columns on a wide screen, one on an upright one
+	var cols: BoxContainer = VBoxContainer.new() if Game.tall else HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 20 if Game.tall else 32)
 	vb.add_child(cols)
+	var colw := w if Game.tall else floorf((w - 32.0) / 2.0)
 	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 12)
-	left.custom_minimum_size = Vector2(400, 0)
+	left.add_theme_constant_override("separation", 10)
+	left.custom_minimum_size = Vector2(colw, 0)
 	cols.add_child(left)
 	var right := VBoxContainer.new()
-	right.add_theme_constant_override("separation", 12)
-	right.custom_minimum_size = Vector2(400, 0)
+	right.add_theme_constant_override("separation", 10)
+	right.custom_minimum_size = Vector2(colw, 0)
 	cols.add_child(right)
 	# --- sound & graphics
-	left.add_child(_section("소리 · 그래픽"))
+	left.add_child(_section("소리와 그래픽"))
 	for row in [["음악", Game.music_volume, "music"], ["효과음", Game.sfx_volume, "sfx"]]:
 		var hb := HBoxContainer.new()
 		hb.add_theme_constant_override("separation", 14)
-		var l := UI.label(row[0], 21, UI.TEXT, 4, "ui_black")
+		var l := UI.label(row[0], UI.T_BODY, UI.TEXT, 0, "ui")
 		l.custom_minimum_size.x = 92
 		hb.add_child(l)
 		var sl := HSlider.new()
@@ -1124,7 +1173,8 @@ func _open_settings() -> void:
 		sl.max_value = 1
 		sl.step = 0.05
 		sl.value = row[1]
-		sl.custom_minimum_size = Vector2(280, 40)
+		sl.custom_minimum_size = Vector2(160, 40)
+		sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var key: String = row[2]
 		sl.value_changed.connect(func(v):
@@ -1153,87 +1203,74 @@ func _open_settings() -> void:
 		Game.apply_quality()
 		Game.save()))
 	# --- interface, language, save data
-	right.add_child(_section("화면 · 언어"))
+	right.add_child(_section("화면과 언어"))
 	var scales := [[0.9, "작게"], [1.0, "보통"], [1.15, "크게"]]
 	right.add_child(_choice("UI 크기", scales, Game.ui_scale, func(v):
 		Game.set_ui_scale(v)
-		shade.queue_free()
-		(func(): _open_settings()).call_deferred()))
+		_swap(shade, func(): (func(): _open_settings()).call_deferred())))
 	right.add_child(_choice("언어", UI.LANGUAGES, Game.language, func(v):
 		Game.language = v
 		Lang.apply(v)
 		Game.save()
 		Game.goto_scene("res://scenes/main_menu.tscn")))
 	right.add_child(_section("저장 데이터"))
-	var sv := HBoxContainer.new()
-	sv.add_theme_constant_override("separation", 10)
-	var ex := UI.button("내보내기", 19, false, Vector2(195, 52), "green")
+	var ex := UI.button("내보내기", 18, false, Vector2(0, 50), "secondary")
 	ex.icon = Assets.tex("ic_upgrade")
-	ex.add_theme_constant_override("icon_max_width", 22)
-	ex.pressed.connect(func():
-		shade.queue_free()
-		_open_save_code(true))
-	sv.add_child(ex)
-	var im := UI.button("가져오기", 19, false, Vector2(195, 52), "blue")
+	ex.pressed.connect(func(): _swap(shade, func(): _open_save_code(true)))
+	var im := UI.button("가져오기", 18, false, Vector2(0, 50), "secondary")
 	im.icon = Assets.tex("ic_map")
-	im.add_theme_constant_override("icon_max_width", 22)
-	im.pressed.connect(func():
-		shade.queue_free()
-		_open_save_code(false))
-	sv.add_child(im)
-	right.add_child(sv)
-	var pl := UI.button("플레이 기록 보내기 (밸런스 피드백)", 17, false, Vector2(400, 46), "purple")
-	pl.pressed.connect(func():
-		shade.queue_free()
-		_open_playlog())
+	im.pressed.connect(func(): _swap(shade, func(): _open_save_code(false)))
+	right.add_child(UI.action_row([ex, im]))
+	var pl := UI.button("플레이 기록 보내기 (밸런스 피드백)", 17, false, Vector2(0, 48), "secondary")
+	pl.pressed.connect(func(): _swap(shade, _open_playlog))
 	right.add_child(pl)
 	# installable web app (PWA): Chrome/Edge/Android hand us their install prompt; iOS needs Safari's share menu
 	if OS.has_feature("web") and not bool(JavaScriptBridge.eval("!!(window.rbStandalone && window.rbStandalone())", true)):
 		if bool(JavaScriptBridge.eval("!!(window.rbCanInstall && window.rbCanInstall())", true)):
-			var ib := UI.button("앱으로 설치", 19, false, Vector2(400, 50), "purple")
+			var ib := UI.button("앱으로 설치", 18, false, Vector2(0, 50), "secondary")
 			ib.icon = Assets.tex("ic_play")
-			ib.add_theme_constant_override("icon_max_width", 22)
 			ib.pressed.connect(func():
 				JavaScriptBridge.eval("window.rbInstall && window.rbInstall()", true)
 				ib.disabled = true)
 			right.add_child(ib)
 		elif OS.has_feature("web_ios"):
-			var il := UI.label("Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 화면으로 실행됩니다.", 15, UI.MUTED, 3)
+			var il := UI.ink("Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 화면으로 실행됩니다.", 15, UI.MUTED)
 			il.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			il.custom_minimum_size = Vector2(400, 0)
+			il.custom_minimum_size = Vector2(colw, 0)
 			right.add_child(il)
 	# destructive action needs a second tap within 3 s
-	var rs := UI.button("진행 상황 초기화", 19, false, Vector2(400, 50), "gray")
+	var rs := UI.button("진행 상황 초기화", 18, false, Vector2(0, 48), "ghost")
 	var armed := [false]
 	rs.pressed.connect(func():
 		if not armed[0]:
 			armed[0] = true
 			rs.text = tr("정말 초기화? 한 번 더 누르세요")
-			UI._btn_styles(rs, "red")
+			UI._btn_styles(rs, "danger")
 			get_tree().create_timer(3.0).timeout.connect(func():
 				if is_instance_valid(rs) and armed[0]:
 					armed[0] = false
 					rs.text = tr("진행 상황 초기화")
-					UI._btn_styles(rs, "gray"))
+					UI._btn_styles(rs, "ghost"))
 			return
 		armed[0] = false
 		Game.reset_progress()
 		Game.save()
 		rs.text = tr("초기화 완료")
-		UI._btn_styles(rs, "gray")
+		UI._btn_styles(rs, "ghost")
 		rs.disabled = true)
 	right.add_child(rs)
 
 func _section(text: String) -> Control:
-	var l := UI.label(text, 17, UI.GOLD, 4, "ui_black")
+	var l := UI.ink(text, 17, UI.GOLD, "ui_black")
 	return l
 
 func _toggle(text: String, on: bool, cb: Callable) -> CheckButton:
 	var c := CheckButton.new()
 	c.text = text
 	c.button_pressed = on
-	c.add_theme_font_override("font", Assets.font("ui_black"))
-	c.add_theme_font_size_override("font_size", 18)
+	c.add_theme_font_size_override("font_size", 17)
+	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	c.toggled.connect(cb)
 	return c
 
@@ -1244,41 +1281,39 @@ func _choice(label: String, options: Array, current: Variant, cb: Callable) -> C
 ## Save transfer: export shows the code (also copied to the clipboard / downloadable on the web),
 ## import takes a pasted code (the browser's own prompt on the web: it supports paste on phones).
 func _open_save_code(export: bool) -> void:
-	var o := _overlay("저장 내보내기" if export else "저장 가져오기", "blue")
+	var o := _overlay("저장 내보내기" if export else "저장 가져오기", 640.0)
 	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
 	var web := OS.has_feature("web")
-	var info := UI.label("", 17, UI.TEXT, 3)
+	var info := UI.ink("", 17, UI.TEXT)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	info.custom_minimum_size = Vector2(560, 0)
-	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(info)
 	var te := TextEdit.new()
-	te.custom_minimum_size = Vector2(560, 150)
+	te.custom_minimum_size = Vector2(0, 140)
 	te.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	te.add_theme_font_size_override("font_size", 13)
+	te.add_theme_font_size_override("font_size", 14)
 	vb.add_child(te)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 10)
-	vb.add_child(row)
+	var btns: Array = []
+	var back := UI.button("설정으로", 18, false, Vector2(0, 52), "ghost")
+	back.pressed.connect(func(): _swap(shade, _open_settings))
+	btns.append(back)
 	if export:
 		var code := Game.export_code()
 		te.text = code
 		te.editable = false
 		DisplayServer.clipboard_set(code)
 		info.text = tr("아래 코드를 복사해 다른 기기에서 ‘가져오기’ 하세요. (클립보드에 복사했습니다)")
-		var cp := UI.button("다시 복사", 19, false, Vector2(170, 52), "green")
+		if web:
+			var dl := UI.button("파일로 저장", 18, false, Vector2(0, 52), "secondary")
+			dl.pressed.connect(func():
+				JavaScriptBridge.download_buffer(code.to_utf8_buffer(), "rune_bastion_save.txt", "text/plain"))
+			btns.append(dl)
+		var cp := UI.button("다시 복사", 18, true, Vector2(0, 52), "primary")
 		cp.pressed.connect(func():
 			DisplayServer.clipboard_set(code)
 			Audio.play("click", -4.0)
 			info.text = tr("클립보드에 복사했습니다."))
-		row.add_child(cp)
-		if web:
-			var dl := UI.button("파일로 저장", 19, false, Vector2(170, 52), "blue")
-			dl.pressed.connect(func():
-				JavaScriptBridge.download_buffer(code.to_utf8_buffer(), "rune_bastion_save.txt", "text/plain"))
-			row.add_child(dl)
+		btns.append(cp)
 	else:
 		info.text = tr("다른 기기에서 내보낸 저장 코드를 붙여넣으세요. 현재 진행 상황을 덮어씁니다.")
 		te.placeholder_text = "RB1-..."
@@ -1292,25 +1327,21 @@ func _open_save_code(export: bool) -> void:
 			Audio.play("upgrade", -2.0)
 			Game.goto_scene("res://scenes/main_menu.tscn")
 		if web:
-			var pb := UI.button("코드 붙여넣기", 19, true, Vector2(200, 52), "green")
+			var pb := UI.button("코드 붙여넣기", 18, false, Vector2(0, 52), "secondary")
 			pb.pressed.connect(func():
 				var got = JavaScriptBridge.eval("window.prompt(%s, '') || ''" % JSON.stringify(tr("저장 코드를 붙여넣으세요")), true)
 				if got is String and got != "":
 					te.text = got
 					apply.call(got))
-			row.add_child(pb)
-		var ok := UI.button("적용", 19, false, Vector2(150, 52), "gold")
+			btns.append(pb)
+		var ok := UI.button("적용", 18, true, Vector2(0, 52), "primary")
 		ok.pressed.connect(func(): apply.call(te.text))
-		row.add_child(ok)
-	var back := UI.button("닫기", 19, false, Vector2(150, 52), "gray")
-	back.pressed.connect(func():
-		shade.queue_free()
-		_open_settings())
-	row.add_child(back)
+		btns.append(ok)
+	vb.add_child(UI.action_row(btns))
 
 ## Playtest feedback: the recent-run log as one code to paste into a chat.
 func _open_playlog() -> void:
-	var o := _overlay("플레이 기록", "blue")
+	var o := _overlay("플레이 기록", 640.0)
 	var shade: Control = o[0]
 	var vb: VBoxContainer = o[1]
 	var runs := Game.playlog.size()
@@ -1318,39 +1349,31 @@ func _open_playlog() -> void:
 	for r in Game.playlog:
 		if r is Dictionary and r.get("r", "") == "won":
 			won += 1
-	var head := UI.label(tr("기록된 판 %d (승리 %d)") % [runs, won], 21, UI.GOLD, 4, "ui_black")
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vb.add_child(head)
-	var info := UI.label("최근 판의 결과(도달 웨이브, 잃은 생명, 새어 나간 적, 지은 타워)를 코드로 묶었습니다. 복사해서 대화창에 붙여 넣으면 어디서 어려웠는지 분석해 난이도를 조정합니다. 개인 정보는 들어 있지 않습니다.", 16, UI.TEXT, 3)
+	vb.add_child(UI.ink(tr("기록된 판 %d (승리 %d)") % [runs, won], 20, UI.GOLD, "ui_black"))
+	var info := UI.ink("최근 판의 결과(도달 웨이브, 잃은 생명, 새어 나간 적, 지은 타워)를 코드로 묶었습니다. 복사해서 대화창에 붙여 넣으면 어디서 어려웠는지 분석해 난이도를 조정합니다. 개인 정보는 들어 있지 않습니다.", UI.T_SMALL, UI.TEXT)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	info.custom_minimum_size = Vector2(560, 0)
-	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(info)
 	var code := Game.playlog_code() if runs > 0 else ""
 	var te := TextEdit.new()
-	te.custom_minimum_size = Vector2(560, 120)
+	te.custom_minimum_size = Vector2(0, 120)
 	te.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	te.add_theme_font_size_override("font_size", 12)
+	te.add_theme_font_size_override("font_size", 13)
 	te.text = code if runs > 0 else tr("아직 기록이 없습니다. 몇 판 플레이한 뒤 다시 열어 주세요.")
 	te.editable = false
 	vb.add_child(te)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 10)
-	vb.add_child(row)
+	var btns: Array = []
+	var back := UI.button("설정으로", 18, false, Vector2(0, 52), "ghost")
+	back.pressed.connect(func(): _swap(shade, _open_settings))
+	btns.append(back)
 	if runs > 0:
 		DisplayServer.clipboard_set(code)
-		var cp := UI.button("복사", 19, true, Vector2(170, 52), "green")
+		var cp := UI.button("복사", 18, true, Vector2(0, 52), "primary")
 		cp.pressed.connect(func():
 			DisplayServer.clipboard_set(code)
 			Audio.play("click", -4.0)
 			cp.text = tr("복사했습니다"))
-		row.add_child(cp)
-	var back := UI.button("닫기", 19, false, Vector2(150, 52), "gray")
-	back.pressed.connect(func():
-		shade.queue_free()
-		_open_settings())
-	row.add_child(back)
+		btns.append(cp)
+	vb.add_child(UI.action_row(btns))
 
 func _test_playlog() -> void:
 	Game.playlog = [{"lv": 2, "d": 0, "e": false, "h": "kael", "r": "lost", "s": 0, "wv": 9, "nw": 12, "li": 0, "ml": 20, "t": 512, "k": 230, "g": 40, "tw": ["ar3", "ba2", "ma3-arcane"], "lw": {"7": 6, "9": 14}, "lt": {"wolf": 9, "orc": 11}, "sp": 5, "hl": 4, "ts": 0}]

@@ -14,6 +14,7 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
   - AI 플레이: `LEVELS="0 4 8" tools/balance.sh smart 0`
   - 엔진 클래스: `python3 tools/engine/check_classes.py <godot 4.7.2 소스>`
   - 브라우저 스모크: `python3 tools/browser_test.py build/web_hosted /tmp/s 1280 720 --play --nosw --smoke`
+- UI 점검: `DISPLAY=:77 tools/ui_shots.sh /tmp/ui 2`(15개 화면 × PC·폰 세로·폰 가로)
 - 화면 확인: `DISPLAY=:77 godot --path . --rendering-driver opengl3 --resolution 1600x900 res://scenes/test_runner.tscn -- mode=shots ...`(옵션은 `scripts/tools/test_runner.gd` 머리말)
 
 ## 지켜야 할 규칙
@@ -28,4 +29,9 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
 - **게시 전 브라우저 스모크 테스트**(`browser_test.py --smoke`)가 실패하면 배포되지 않습니다.
 - **텍스트를 추가하면** 영어를 `tools/i18n/en_*.txt`에 넣고 `python3 tools/i18n_build.py`를 돌립니다(`lang_en.gd`는 생성 파일). 그다음 `python3 tools/make_fonts.py`로 폰트를 다시 만듭니다. CI가 `i18n_build.py --check`로 빠진 영어를 잡습니다.
 - **타이틀 디오라마를 바꾸면** `tools/render_backdrops.sh`(화면 필요, Xvfb)로 타이틀 그림을 다시 렌더링합니다.
+- **UI**(`docs/UI.md`):
+  - 팝업은 `UI.sheet()`로 만들고, 내용 폭은 `UI.sheet_w()`에서 계산합니다. 고정 폭을 쓰지 않습니다.
+  - 버튼은 역할로 고릅니다: 진행은 `primary`(금, 오른쪽), 그 밖은 `secondary`/`ghost`.
+  - 리본은 결과 화면에만 씁니다.
+  - 새 화면은 `Game.tall`(세로)에서도 배치하고, `tools/ui_shots.sh`로 PC·폰 세로·폰 가로를 찍어 확인합니다.
 - **커밋 메시지·문서**: 저장소 문서는 한국어로 씁니다.

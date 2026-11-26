@@ -271,3 +271,16 @@ Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 �
 전장을 준비하는 중...	Preparing the battlefield...
 업그레이드 준비 중	Upgrade not ready yet
 추가 데이터를 받는 중...	Downloading more data...
+새로운 적	New enemy
+Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅   Q 영웅 스킬	Esc pause   Space next wave   F speed   1, 2 spells   H hero   Q hero skill
+팁	Tip
+재사용 %d초	%ds cooldown
+등급 %d	Rank %d
+공략	How to beat it
+소리와 그래픽	Sound and graphics
+화면과 언어	Display and language
+설정으로	Back to settings
+등장 적	Enemies
+난이도	Difficulty
+철인 도전: 생명 3, 주문 없음, 골드 +40%	Iron Challenge: 3 lives, no spells, gold +40%
+%s의 재능	%s's talents

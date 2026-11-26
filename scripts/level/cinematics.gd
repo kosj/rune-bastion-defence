@@ -320,30 +320,34 @@ func _story_next() -> void:
 	var sp := _speaker(String(line[0]))
 	if _story_panel and is_instance_valid(_story_panel):
 		_story_panel.queue_free()
-	var panel := UI.framed("parch", 14)
+	var panel := UI.framed("card", 10)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vw := root.get_viewport_rect().size.x
+	var pw := minf(800.0, vw - 24.0)
 	panel.anchor_left = 0.5
 	panel.anchor_right = 0.5
 	panel.anchor_top = 1.0 - BAR
 	panel.anchor_bottom = 1.0 - BAR
-	panel.offset_left = -400
-	panel.offset_right = 400
+	panel.offset_left = -pw * 0.5
+	panel.offset_right = pw * 0.5
 	panel.offset_bottom = -14
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 16)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(hb)
-	var por := UI.bust(Assets.tex(sp[1]), 118, 1.3)
+	var psz := 84.0 if Game.tall else 118.0
+	var por := UI.bust(Assets.tex(sp[1]), psz, 1.3)
 	por.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 4)
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var enemy: bool = sp[2]
-	vb.add_child(UI.ink(tr(sp[0]), 22, Color(0.62, 0.14, 0.08) if enemy else Color(0.18, 0.3, 0.55), "ui_black"))
-	_story_text = UI.ink(tr(String(line[1])), 21, UI.INK)
-	UI.wrap_words(_story_text, 610.0)
-	_story_text.custom_minimum_size = Vector2(610, 64)
+	vb.add_child(UI.ink(tr(sp[0]), 20, Color(1.0, 0.62, 0.52) if enemy else Color(0.62, 0.78, 1.0), "ui_black"))
+	var txw := minf(610.0, pw - psz - 16.0 - 40.0)
+	_story_text = UI.ink(tr(String(line[1])), 20 if Game.tall else 21, UI.INK)
+	UI.wrap_words(_story_text, txw)
+	_story_text.custom_minimum_size = Vector2(txw, 64)
 	vb.add_child(_story_text)
 	var more := UI.ink("탭하여 계속  ▶", 14, UI.INK_SOFT)
 	more.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -358,7 +362,7 @@ func _story_next() -> void:
 	root.move_child(panel, _catch.get_index())
 	_story_panel = panel
 	if _story_i == 0:
-		var sk := UI.button("건너뛰기  ▶▶", 17, false, Vector2(170, 46), "gray")
+		var sk := UI.button("건너뛰기  ▶▶", 17, false, Vector2(170, 46), "secondary")
 		sk.anchor_left = 1.0
 		sk.anchor_right = 1.0
 		sk.offset_left = -190

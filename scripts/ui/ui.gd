@@ -1,30 +1,43 @@
 class_name UI
-## UI style factory. Textured fantasy kit (tools/make_ui_kit.py): gold-trimmed navy enamel panels,
-## parchment cards, gem buttons, round slots, ribbons and bars, plus gold-gradient titles and
-## press/hover "juice" on every button.
+## UI style factory. One quiet material for every surface (a matte slate sheet; darker wells for
+## rows inside it), one loud colour for the action that moves the game forward (crown gold), and
+## the textured fantasy kit (tools/make_ui_kit.py) kept for the pieces that are part of the game
+## itself: round medallion slots, map flags, bars, badges and the result-screen ribbon.
+## Dialogs are built with `sheet()`: a centred card on a wide screen, a sheet that comes up from
+## the bottom edge on an upright one.
 
-const GOLD := Color(0.98, 0.78, 0.32)
-const GOLD_DARK := Color(0.62, 0.42, 0.12)
-const NAVY := Color(0.07, 0.09, 0.16, 0.92)
-const NAVY_LIGHT := Color(0.13, 0.17, 0.29, 0.95)
-const PARCH := Color(0.96, 0.9, 0.76)
-const INK := Color(0.24, 0.15, 0.08)  # text on parchment
-const INK_SOFT := Color(0.42, 0.3, 0.18)
-const RED := Color(0.86, 0.26, 0.22)
-const GREEN := Color(0.36, 0.78, 0.38)
-const TEXT := Color(0.97, 0.94, 0.86)
-const MUTED := Color(0.72, 0.74, 0.82)
+# ---------------------------------------------------------------- palette
+const SLATE := Color(0.094, 0.133, 0.18, 0.97)    # #18222e  sheet surface
+const WELL := Color(0.035, 0.06, 0.09, 0.55)      # inset rows inside a sheet
+const RIDGE := Color(0.176, 0.239, 0.318)         # #2d3d51  secondary buttons, chips
+const RIDGE_LIP := Color(0.09, 0.125, 0.17)
+const LINE := Color(1.0, 1.0, 1.0, 0.08)
+const VELLUM := Color(0.945, 0.91, 0.83)          # #f1e8d4  text
+const LICHEN := Color(0.62, 0.667, 0.73)          # #9eaaba  secondary text
+const GOLD := Color(0.949, 0.757, 0.306)          # #f2c14e  forward action, currency, stars
+const GOLD_DARK := Color(0.66, 0.455, 0.12)       # #a8741f  its lip
+const EMBER := Color(0.85, 0.34, 0.25)            # danger, lives
+const SAGE := Color(0.6, 0.84, 0.5)               # gains (upgrade deltas, done)
+const ARCANE := Color(0.29, 0.23, 0.45)           # special modes (endless, iron, talents)
+
+# older names, still used across the screens
+const NAVY := SLATE
+const NAVY_LIGHT := RIDGE
+const PARCH := WELL
+const INK := VELLUM
+const INK_SOFT := LICHEN
+const RED := EMBER
+const GREEN := SAGE
+const TEXT := VELLUM
+const MUTED := LICHEN
+
+# ---------------------------------------------------------------- type scale (canvas px)
+const T_TITLE := 28   # sheet titles (serif)
+const T_HEAD := 21    # row titles, buttons
+const T_BODY := 18
+const T_SMALL := 16   # captions; nothing smaller on a phone canvas
 
 const KIT := "res://assets/ui/kit/%s.png"
-
-# kind -> [texture, margins(l,t,r,b), shadow pad baked into the texture, frame width]
-const FRAMES := {
-	"dark": ["panel_dark", Vector4(30, 30, 30, 30), 7.0, 7.0],
-	"slim": ["panel_slim", Vector4(22, 22, 22, 22), 7.0, 4.0],
-	"parch": ["panel_parch", Vector4(28, 28, 28, 28), 7.0, 5.0],
-	"leather": ["panel_leather", Vector4(30, 30, 30, 30), 7.0, 6.0],
-	"pill": ["pill", Vector4(14, 14, 14, 14), 2.0, 2.0],
-}
 
 static var _tex_cache := {}
 static var _title_shader: Shader
@@ -47,32 +60,77 @@ static func hd(tex_name: String, margins: Vector4, expand := Vector4.ZERO, conte
 	s.content_margin_bottom = content.w
 	return s
 
-## Framed panel style: "dark" (enamel + gold), "slim", "parch" (parchment), "leather", "pill".
-static func frame(kind := "dark", pad := 12.0) -> StyleBoxHD:
-	var f: Array = FRAMES[kind]
-	var e: float = f[2]
-	var c: float = f[3] + pad
-	return hd(f[0], f[1], Vector4(e, e, e, e), Vector4(c, c, c, c))
-
-## Backwards-compatible style helper: picks the kit frame that best matches the old flat parameters.
-static func box(bg: Color, border := GOLD_DARK, radius := 14, bw := 3, shadow := 8, pad := 12) -> StyleBox:
-	var kind := "dark"
-	if bg.get_luminance() > 0.55:
-		kind = "parch"
-	elif radius <= 12 or bw <= 2:
-		kind = "slim"
-	var s := frame(kind, maxf(pad - 4.0, 4.0))
+## Flat rounded surface. Depth comes from the hierarchy of radius, fill and shadow, not frames:
+## sheet (raised, large radius, soft shadow) > card (floating over the battlefield) > well (inset
+## row inside a sheet, no shadow) > pill (tiny tags on the map / wave preview).
+static func flat(bg: Color, radius: float, pad := Vector4(12, 12, 12, 12), shadow := 0.0, shadow_a := 0.4) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.set_corner_radius_all(int(radius))
+	s.corner_detail = 10
+	s.anti_aliasing = true
+	s.content_margin_left = pad.x
+	s.content_margin_top = pad.y
+	s.content_margin_right = pad.z
+	s.content_margin_bottom = pad.w
+	if shadow > 0.0:
+		s.shadow_color = Color(0, 0, 0, shadow_a)
+		s.shadow_size = int(shadow)
+		s.shadow_offset = Vector2(0, shadow * 0.35)
 	return s
+
+## Surface styles by role: "sheet" (dialogs), "card" (floating HUD cards), "well" (rows inside a
+## sheet), "bar" (the HUD resource capsule), "pill" (small tags). The old kit names map onto them:
+## "dark" -> sheet, "parch" -> well, "slim" -> bar, "leather" -> card.
+static func frame(kind := "sheet", pad := 12.0) -> StyleBox:
+	match kind:
+		"dark", "sheet":
+			var s := flat(SLATE, 20, Vector4(pad + 6, pad + 4, pad + 6, pad + 6), 22, 0.5)
+			s.border_width_top = 1
+			s.border_color = Color(1, 1, 1, 0.07)
+			return s
+		"card", "leather":
+			var c := flat(Color(SLATE, 0.94), 16, Vector4(pad + 4, pad + 2, pad + 4, pad + 4), 14, 0.38)
+			c.border_width_top = 1
+			c.border_color = Color(1, 1, 1, 0.07)
+			return c
+		"slim", "bar":
+			return flat(Color(0.07, 0.1, 0.14, 0.82), 18, Vector4(pad + 10, pad + 2, pad + 10, pad + 2), 8, 0.3)
+		"pill":
+			return flat(Color(0.05, 0.07, 0.1, 0.8), 14, Vector4(pad + 8, pad + 1, pad + 8, pad + 2))
+		_:  # "parch", "well"
+			return flat(WELL, 14, Vector4(pad + 6, pad + 4, pad + 6, pad + 4))
+
+## A well marked as chosen / owned / done: the same inset with a gold edge.
+static func well_on(pad := 8.0) -> StyleBoxFlat:
+	var s := frame("well", pad) as StyleBoxFlat
+	s.bg_color = Color(0.2, 0.16, 0.06, 0.55)
+	s.set_border_width_all(2)
+	s.border_color = Color(GOLD, 0.85)
+	return s
+
+## Backwards-compatible style helper (light colours meant parchment: those are wells now).
+static func box(bg: Color, _border := GOLD_DARK, _radius := 14, _bw := 3, _shadow := 8, pad := 12) -> StyleBox:
+	return frame("well" if bg.get_luminance() > 0.55 else "sheet", maxf(pad - 4.0, 4.0))
 
 static func panel(bg := NAVY, border := GOLD_DARK, radius := 14) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", box(bg, border, radius))
 	return p
 
-static func framed(kind := "dark", pad := 12.0) -> PanelContainer:
+static func framed(kind := "sheet", pad := 12.0) -> PanelContainer:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", frame(kind, pad))
 	return p
+
+## Text colours written for the old parchment cards (dark browns, reds, greens) read on the
+## slate as light tints of the same hue.
+static func on_dark(c: Color) -> Color:
+	if c.get_luminance() >= 0.45:
+		return c
+	if c.s < 0.25:
+		return LICHEN
+	return Color.from_hsv(c.h, minf(c.s, 0.55), 0.95, c.a)
 
 static func label(text: String, size := 22, color := TEXT, outline := 6, font := "ui") -> Label:
 	var l := Label.new()
@@ -85,9 +143,9 @@ static func label(text: String, size := 22, color := TEXT, outline := 6, font :=
 		l.add_theme_color_override("font_outline_color", Color(0.03, 0.03, 0.06, 0.95))
 	return l
 
-## Dark ink text for parchment cards (no outline).
+## Text set on a sheet or card (no outline; the surface gives the contrast).
 static func ink(text: String, size := 20, color := INK, font := "ui") -> Label:
-	var l := label(text, size, color, 0, font)
+	var l := label(text, size, on_dark(color), 0, font)
 	return l
 
 ## A character portrait shown inside a round medallion: the picture is zoomed to the head
@@ -195,38 +253,119 @@ void fragment() {
 
 # ---------------------------------------------------------------- buttons
 
-const BTN_KINDS := ["red", "blue", "green", "gold", "gray", "purple"]
+## Buttons by role. Colour says what a button does, not which screen it is on:
+## primary (gold) moves the game forward, secondary (slate) is everything else, ghost is an
+## unpicked option, special (arcane) opens a mode, danger wipes something. The old kit colours
+## map onto these: red/green/gold -> primary, blue -> secondary, gray -> ghost, purple -> special.
+const BTN_ROLES := {
+	"primary": [GOLD, GOLD_DARK, Color(0.17, 0.1, 0.03)],
+	"secondary": [RIDGE, RIDGE_LIP, VELLUM],
+	"special": [ARCANE, Color(0.15, 0.11, 0.25), VELLUM],
+	"danger": [Color(0.75, 0.27, 0.21), Color(0.42, 0.13, 0.1), Color(1, 0.96, 0.92)],
+	"ghost": [Color(1, 1, 1, 0.0), Color(1, 1, 1, 0.0), LICHEN],
+}
+
+static func role_of(kind: String) -> String:
+	match kind:
+		"red", "green", "gold", "primary":
+			return "primary"
+		"purple", "special":
+			return "special"
+		"gray", "ghost":
+			return "ghost"
+		"danger":
+			return "danger"
+	return "secondary"
 
 static func _btn_styles(b: Button, kind: String) -> void:
-	var m := Vector4(22, 20, 22, 24)
-	var e := Vector4(4, 4, 4, 4)
+	var role := role_of(kind)
+	var c: Array = BTN_ROLES[role]
+	var lip := 4
 	for st in ["normal", "hover", "pressed", "disabled"]:
-		var tex := "btn_%s_%s" % ["gray" if st == "disabled" else kind, "normal" if st == "disabled" else st]
-		var c := Vector4(20, 7, 20, 13) if st != "pressed" else Vector4(20, 10, 20, 10)
-		var s := hd(tex, m, e, c)
-		if st == "disabled":
-			s.modulate_color = Color(0.85, 0.85, 0.85, 0.9)
+		var bg: Color = c[0]
+		if st == "hover":
+			bg = bg.lightened(0.08)
+		elif st == "pressed":
+			bg = bg.darkened(0.06)
+		var s := flat(bg, 14, Vector4(18, 9, 18, 9 + lip))
+		if role == "ghost":
+			s.set_border_width_all(2)
+			s.border_color = Color(1, 1, 1, 0.22 if st != "hover" else 0.34)
+			s.content_margin_bottom = 9
+		elif st == "pressed":
+			# the face sinks onto its lip
+			s.border_width_bottom = 1
+			s.border_color = c[1]
+			s.content_margin_top = 9 + lip - 1
+			s.content_margin_bottom = 9
+		elif st == "disabled":
+			s.bg_color = Color(0.16, 0.2, 0.26, 0.7)
+			s.content_margin_bottom = 9 + lip
+		else:
+			s.border_width_bottom = lip
+			s.border_color = c[1]
 		b.add_theme_stylebox_override(st, s)
 	b.add_theme_stylebox_override("hover_pressed", b.get_theme_stylebox("pressed"))
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# keyboard focus (also the default action a sheet focuses, which Enter presses): a quiet ring
+	var f := flat(Color(0, 0, 0, 0), 16)
+	f.draw_center = false
+	f.set_border_width_all(2)
+	f.border_color = Color(1, 1, 1, 0.3)
+	f.expand_margin_left = 3
+	f.expand_margin_right = 3
+	f.expand_margin_top = 3
+	f.expand_margin_bottom = 3
+	b.add_theme_stylebox_override("focus", f)
+	var fc: Color = c[2]
+	b.add_theme_color_override("font_color", fc)
+	b.add_theme_color_override("font_hover_color", fc.lightened(0.1) if role != "primary" else fc)
+	b.add_theme_color_override("font_pressed_color", fc)
+	b.add_theme_color_override("font_hover_pressed_color", fc)
+	b.add_theme_color_override("font_focus_color", fc)
+	b.add_theme_color_override("font_disabled_color", Color(0.55, 0.6, 0.67))
+	b.add_theme_color_override("icon_normal_color", fc)
+	b.add_theme_color_override("icon_hover_color", fc)
+	b.add_theme_color_override("icon_pressed_color", fc)
+	b.add_theme_color_override("icon_hover_pressed_color", fc)
+	b.add_theme_color_override("icon_focus_color", fc)
+	b.add_theme_constant_override("outline_size", 0)
 
 static func button(text: String, size := 24, primary := true, min_size := Vector2(200, 64), kind := "") -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = min_size
+	# buttons keep their height; their width follows the label when the label needs more room
+	b.custom_minimum_size = Vector2(min_size.x, minf(min_size.y, maxf(52.0, size * 2.3)))
 	b.add_theme_font_override("font", Assets.font("ui_black"))
-	b.add_theme_font_size_override("font_size", size)
-	var light := kind == "gold"
-	b.add_theme_color_override("font_color", Color(0.3, 0.16, 0.03) if light else TEXT)
-	b.add_theme_color_override("font_hover_color", Color(0.25, 0.12, 0.02) if light else Color(1, 1, 1))
-	b.add_theme_color_override("font_pressed_color", Color(0.25, 0.12, 0.02) if light else Color(1, 0.93, 0.7))
-	b.add_theme_color_override("font_hover_pressed_color", Color(1, 0.93, 0.7))
-	b.add_theme_color_override("font_disabled_color", Color(0.75, 0.75, 0.78))
-	b.add_theme_constant_override("outline_size", 0 if light else 6)
-	b.add_theme_color_override("font_outline_color", Color(0.12, 0.04, 0.02, 0.9))
-	b.add_theme_constant_override("icon_max_width", int(size * 1.3))
-	b.add_theme_constant_override("h_separation", 8)
-	_btn_styles(b, kind if kind != "" else ("red" if primary else "blue"))
+	b.add_theme_font_size_override("font_size", mini(size, 26) if min_size.y < 80 else size)
+	b.add_theme_constant_override("icon_max_width", int(size * 1.05))
+	b.add_theme_constant_override("h_separation", 10)
+	_btn_styles(b, kind if kind != "" else ("primary" if primary else "secondary"))
+	b.pressed.connect(func(): Audio.play("click", -4.0, 0.05))
+	juice(b)
+	return b
+
+## A round flat utility button (close, back, pause...) in the sheet's own material.
+static func round_button(tex: Texture2D, sz := 48, role := "secondary") -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(sz, sz)
+	b.icon = tex
+	b.expand_icon = true
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+	b.add_theme_constant_override("icon_max_width", int(sz * 0.5))
+	var c: Array = BTN_ROLES[role]
+	for st in ["normal", "hover", "pressed", "disabled"]:
+		var bg: Color = c[0]
+		if st == "hover":
+			bg = bg.lightened(0.1)
+		elif st == "pressed":
+			bg = bg.darkened(0.1)
+		# no padding: icon_max_width sets the glyph size, so the button can be resized later
+		b.add_theme_stylebox_override(st, flat(Color(bg, 0.92), sz * 0.5, Vector4(4, 4, 4, 4)))
+	b.add_theme_stylebox_override("hover_pressed", b.get_theme_stylebox("pressed"))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
+		b.add_theme_color_override(k, c[2])
 	b.pressed.connect(func(): Audio.play("click", -4.0, 0.05))
 	juice(b)
 	return b
@@ -270,12 +409,12 @@ static func juice(c: Control) -> void:
 	c.resized.connect(func(): c.pivot_offset = c.size * 0.5)
 	if c is BaseButton:
 		var bb := c as BaseButton
-		bb.button_down.connect(func(): _tw_scale(c, 0.92, 0.06, false))
+		bb.button_down.connect(func(): _tw_scale(c, 0.96, 0.05, false))
 		bb.button_up.connect(func(): _tw_scale(c, 1.0, 0.22, true))
 		if not Game.is_mobile:
 			c.mouse_entered.connect(func():
 				if not bb.disabled:
-					_tw_scale(c, 1.05, 0.12, false))
+					_tw_scale(c, 1.03, 0.12, false))
 			c.mouse_exited.connect(func(): _tw_scale(c, 1.0, 0.14, false))
 
 static func _tw_scale(c: Control, s: float, d: float, back: bool) -> void:
@@ -313,11 +452,14 @@ static func ribbon(text: String, size := 34, kind := "red", min_w := 300.0) -> P
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return p
 
-static func divider(w := 320.0) -> TextureRect:
-	var t := icon(kit("divider"), 24)
-	t.custom_minimum_size = Vector2(w, 22)
-	t.stretch_mode = TextureRect.STRETCH_SCALE
-	return t
+## A hairline between groups (only where spacing alone would not say "new group").
+static func divider(w := 320.0) -> Control:
+	var c := ColorRect.new()
+	c.color = LINE
+	c.custom_minimum_size = Vector2(minf(w, 4000.0), 1)
+	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return c
 
 ## Framed progress bar ("green" / "gold" / "red" / "blue" fill).
 static func bar(fill := "green", w := 120.0, h := 14.0) -> ProgressBar:
@@ -352,12 +494,12 @@ static func badge(text: String, sz := 34, font_size := 20) -> Control:
 
 static func pop_in(c: Control, delay := 0.0) -> void:
 	c.pivot_offset = c.size * 0.5
-	c.scale = Vector2(0.6, 0.6)
+	c.scale = Vector2(0.94, 0.94)
 	c.modulate.a = 0.0
 	var tw := c.create_tween().set_parallel(true)
 	tw.set_ignore_time_scale(true)
-	tw.tween_property(c, "scale", Vector2.ONE, 0.35).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(c, "modulate:a", 1.0, 0.2).set_delay(delay)
+	tw.tween_property(c, "scale", Vector2.ONE, 0.22).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "modulate:a", 1.0, 0.16).set_delay(delay)
 
 static func stars_row(n: int, sz := 48) -> HBoxContainer:
 	var h := HBoxContainer.new()
@@ -373,7 +515,7 @@ static func stat(icon_name: String, txt: String, size := 18, color := INK) -> HB
 	hb.add_theme_constant_override("separation", 4)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hb.add_child(icon(Assets.tex(icon_name), size + 6))
-	var l := label(txt, size, color, 0 if color == INK else 4, "ui_black")
+	var l := label(txt, size, on_dark(color), 0, "ui_black")
 	hb.add_child(l)
 	return hb
 
@@ -413,7 +555,7 @@ static func theme() -> Theme:
 		t.set_color("font_pressed_color", cls, TEXT)
 		t.set_color("font_hover_pressed_color", cls, Color(1, 1, 1))
 		t.set_color("font_focus_color", cls, TEXT)
-		t.set_font_size("font_size", cls, 21)
+		t.set_font_size("font_size", cls, T_BODY)
 	# scrollbars
 	var grab := hd("scroll_grab", Vector4(8, 14, 8, 14), Vector4.ZERO, Vector4(4, 4, 4, 4))
 	var lane := StyleBoxFlat.new()
@@ -430,8 +572,22 @@ static func theme() -> Theme:
 	# progress bars
 	t.set_stylebox("background", "ProgressBar", hd("bar_frame", Vector4(9, 0, 9, 0), Vector4(1, 1, 1, 1), Vector4.ZERO))
 	t.set_stylebox("fill", "ProgressBar", hd("bar_gold", Vector4(9, 0, 9, 0), Vector4(1, 1, 1, 1), Vector4.ZERO))
+	# text fields: wells
+	for cls in ["TextEdit", "LineEdit"]:
+		var n := flat(Color(0.03, 0.05, 0.08, 0.7), 12, Vector4(12, 10, 12, 10))
+		var fo := flat(Color(0.03, 0.05, 0.08, 0.7), 12, Vector4(12, 10, 12, 10))
+		fo.set_border_width_all(2)
+		fo.border_color = Color(GOLD, 0.7)
+		t.set_stylebox("normal", cls, n)
+		t.set_stylebox("read_only", cls, n)
+		t.set_stylebox("focus", cls, fo)
+		t.set_color("font_color", cls, VELLUM)
+		t.set_color("font_readonly_color", cls, LICHEN)
+		t.set_color("font_placeholder_color", cls, Color(LICHEN, 0.6))
+		t.set_color("caret_color", cls, GOLD)
+		t.set_color("selection_color", cls, Color(GOLD, 0.3))
 	# tooltips
-	t.set_stylebox("panel", "TooltipPanel", frame("parch", 2))
+	t.set_stylebox("panel", "TooltipPanel", frame("card", 2))
 	t.set_color("font_color", "TooltipLabel", INK)
 	t.set_font_size("font_size", "TooltipLabel", 17)
 	_theme = t
@@ -454,17 +610,18 @@ static func with_close(panel: Control, on_close: Callable, sz := 50) -> Control:
 	fit.call_deferred()
 	return holder
 
-## A labelled row of option buttons (the chosen one gold), e.g. the UI size or language setting.
+## A labelled row of option chips (the chosen one gold), e.g. the UI size or language setting.
 ## options: [[value, caption], ...]; cb gets the picked value.
 static func choice(label_text: String, options: Array, current: Variant, cb: Callable, btn_w := 98.0) -> HBoxContainer:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 6)
-	var l := label(label_text, 19, TEXT, 4, "ui_black")
+	var l := label(label_text, T_BODY, TEXT, 0, "ui")
 	l.custom_minimum_size.x = 92
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hb.add_child(l)
 	for op in options:
 		var sel: bool = str(op[0]) == str(current) or (op[0] is float and current is float and absf(float(op[0]) - float(current)) < 0.01)
-		var b := button(op[1], 17, false, Vector2(btn_w, 46), "gold" if sel else "gray")
+		var b := button(op[1], 17, false, Vector2(btn_w, 44), "primary" if sel else "ghost")
 		var v: Variant = op[0]
 		b.pressed.connect(func():
 			Audio.play("click", -4.0)
@@ -475,3 +632,179 @@ static func choice(label_text: String, options: Array, current: Variant, cb: Cal
 ## The language options shown in the settings (title screen and battle pause menu).
 const LANGUAGES := [["", "자동"], ["ko", "한국어"], ["en", "English"]]
 
+
+
+# ---------------------------------------------------------------- sheets (dialogs)
+
+## Opens a dialog over `parent` (a full-screen Control): a dimmed backdrop and a sheet with the
+## title and a close button in its header row. On a wide screen the sheet is a centred card; on
+## an upright one it spans the width and comes up from the bottom edge, where the thumb is. The
+## body scrolls once the sheet would leave the screen.
+## opts: width (wide-screen width, default 560), on_close (Callable: shows the close button, and
+## a tap on the backdrop closes too), aside (Control shown in the header), ribbon (kit ribbon kind:
+## the result screens put their title on a ribbon over the top edge instead), dim (backdrop alpha).
+## Returns the backdrop; its metas: "body" (VBoxContainer to fill), "sheet"/"panel", "ribbon",
+## "center" (the layer that carries the sheet; ResultFX shakes it), "width" (body width).
+static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
+	var vs := parent.get_viewport_rect().size
+	var upright := Game.tall
+	var shade := ColorRect.new()
+	shade.color = Color(0.01, 0.02, 0.04, float(opts.get("dim", 0.55)))
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	parent.add_child(shade)
+	var layer := Control.new()
+	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shade.add_child(layer)
+	var p := PanelContainer.new()
+	p.name = "Sheet"
+	var st := frame("sheet", 12) as StyleBoxFlat
+	var ribbon_kind: String = opts.get("ribbon", "")
+	if upright:
+		st.corner_radius_bottom_left = 0
+		st.corner_radius_bottom_right = 0
+		st.content_margin_bottom += 8
+		st.shadow_offset = Vector2(0, -4)
+	if ribbon_kind != "":
+		st.content_margin_top += 30
+	p.add_theme_stylebox_override("panel", st)
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(p)
+	var margin := 0.0 if upright else 24.0
+	var w := vs.x if upright else minf(float(opts.get("width", 560)), vs.x - 2.0 * margin)
+	p.custom_minimum_size.x = w
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 14)
+	p.add_child(col)
+	if upright:
+		var grip := Panel.new()
+		grip.custom_minimum_size = Vector2(44, 5)
+		grip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		grip.add_theme_stylebox_override("panel", flat(Color(1, 1, 1, 0.18), 3, Vector4.ZERO))
+		grip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(grip)
+		col.add_theme_constant_override("separation", 10)
+	var on_close: Callable = opts.get("on_close", Callable())
+	var rib: Control = null
+	if ribbon_kind != "":
+		rib = ribbon(title_text, 36, ribbon_kind, minf(420.0, w - 40.0))
+		layer.add_child(rib)
+	else:
+		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 12)
+		var tl := label(title_text, T_TITLE - (2 if upright else 0), VELLUM, 0, "title_kr")
+		tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		tl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		tl.clip_text = true
+		head.add_child(tl)
+		var aside: Control = opts.get("aside", null)
+		if aside:
+			aside.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			head.add_child(aside)
+		if on_close.is_valid():
+			var x := round_button(Assets.tex("ic_close"), 44)
+			x.name = "Close"
+			x.pressed.connect(func(): on_close.call())
+			head.add_child(x)
+		col.add_child(head)
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(sc)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 12)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(body)
+	var body_w := w - st.content_margin_left - st.content_margin_right
+	# the body grows with its content until the sheet would leave the screen, then it scrolls
+	var place := func():
+		if not is_instance_valid(p) or not p.is_inside_tree():
+			return
+		var v := parent.get_viewport_rect().size
+		var head_h := col.get_combined_minimum_size().y - sc.get_combined_minimum_size().y
+		var room := v.y * (0.92 if upright else 1.0) - 2.0 * margin - st.content_margin_top - st.content_margin_bottom - head_h - (24.0 if rib else 0.0)
+		sc.custom_minimum_size.y = minf(body.get_combined_minimum_size().y, maxf(room, 120.0))
+		p.size = Vector2(p.custom_minimum_size.x, 0)
+		p.size = p.get_combined_minimum_size()
+		if upright:
+			p.position = Vector2(0, v.y - p.size.y)
+		else:
+			p.position = ((v - p.size) * 0.5).round() + Vector2(0, 14 if rib else 0)
+		if rib:
+			rib.position = Vector2(p.position.x + (p.size.x - rib.size.x) * 0.5, p.position.y - rib.size.y * 0.55)
+	body.minimum_size_changed.connect(place)
+	shade.resized.connect(place)
+	place.call_deferred()
+	if on_close.is_valid():
+		# a tap on the dimmed backdrop (not on the sheet) closes, like the close button
+		shade.gui_input.connect(func(ev: InputEvent):
+			if (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) or (ev is InputEventScreenTouch and ev.pressed):
+				on_close.call())
+	shade.set_meta("body", body)
+	shade.set_meta("sheet", p)
+	shade.set_meta("panel", p)
+	shade.set_meta("ribbon", rib)
+	shade.set_meta("center", layer)
+	shade.set_meta("width", body_w)
+	shade.set_meta("upright", upright)
+	# entrance: the backdrop fades in; the sheet rises from the bottom edge (upright) or settles
+	# from 96% (wide). No overshoot: it answers a tap, it is not a celebration.
+	shade.modulate.a = 0.0
+	var tw := shade.create_tween()
+	tw.set_ignore_time_scale(true)
+	tw.tween_property(shade, "modulate:a", 1.0, 0.16)
+	if upright:
+		layer.position.y = vs.y * 0.5
+		var t2 := layer.create_tween()
+		t2.set_ignore_time_scale(true)
+		t2.tween_property(layer, "position:y", 0.0, 0.28).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	else:
+		(func():
+			if not is_instance_valid(p):
+				return
+			p.pivot_offset = p.size * 0.5
+			p.scale = Vector2(0.96, 0.96)
+			var t3 := p.create_tween()
+			t3.set_ignore_time_scale(true)
+			t3.tween_property(p, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)).call_deferred()
+	return shade
+
+## Body width of a sheet built by `sheet()` (for wrapping text and sizing rows).
+static func sheet_w(shade: Control) -> float:
+	return float(shade.get_meta("width", 480.0))
+
+## Closes a sheet with a short exit (the reverse of its entrance), then frees it.
+static func dismiss(shade: Control, after := Callable()) -> void:
+	if not is_instance_valid(shade) or shade.has_meta("closing"):
+		return
+	shade.set_meta("closing", true)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tw := shade.create_tween()
+	tw.set_ignore_time_scale(true)
+	tw.set_parallel(true)
+	tw.tween_property(shade, "modulate:a", 0.0, 0.14)
+	if bool(shade.get_meta("upright", false)):
+		var layer: Control = shade.get_meta("center")
+		tw.tween_property(layer, "position:y", 80.0, 0.14).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(func():
+		shade.queue_free()
+		if after.is_valid():
+			after.call())
+
+## Width a row of `n` buttons gets inside a sheet body of width `w` (gap 10).
+static func split_w(w: float, n: int, gap := 10.0) -> float:
+	return floorf((w - gap * (n - 1)) / n)
+
+## A row of buttons sharing the full width (the last one, the forward action, on the right).
+static func action_row(btns: Array, gap := 10.0) -> HBoxContainer:
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", int(gap))
+	hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for b in btns:
+		var c := b as Control
+		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		c.custom_minimum_size.x = 0
+		hb.add_child(c)
+	return hb

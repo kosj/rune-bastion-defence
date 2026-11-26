@@ -57,6 +57,9 @@ func _ready() -> void:
 	_fit_ui()
 
 ## Phones (small CSS viewport) get a smaller virtual canvas so buttons stay finger-sized.
+## A window taller than it is wide (a phone held upright) gets an upright canvas, so the UI keeps
+## its size instead of shrinking to fit a landscape layout into the narrow width; screens that
+## lay themselves out by orientation listen to `layout_changed`.
 func _fit_ui() -> void:
 	var win := get_tree().root
 	var px := Vector2(win.size)
@@ -64,11 +67,22 @@ func _fit_ui() -> void:
 	var css := px / dpr
 	var small := minf(css.x, css.y) < 560.0
 	compact = small
-	win.content_scale_size = Vector2i(960, 540) if small else Vector2i(1280, 720)
+	var was_tall := tall
+	tall = px.y > px.x * 1.05
+	if tall:
+		win.content_scale_size = Vector2i(480, 854) if small else Vector2i(720, 1280)
+	else:
+		win.content_scale_size = Vector2i(960, 540) if small else Vector2i(1280, 720)
 	# phones have little headroom below the 540-line layouts, so their range is narrower
 	win.content_scale_factor = clampf(ui_scale, 0.9, 1.1) if small else ui_scale
+	if was_tall != tall:
+		layout_changed.emit()
 
 var compact := false
+## The window is upright (portrait): screens stack their parts vertically and dialogs come up
+## from the bottom edge as sheets.
+var tall := false
+signal layout_changed
 var autopause := true  # off in automated test runs
 var testing := false  # automated runs: skip the first-visit level intros
 ## Recent runs (newest last) for playtest feedback: shared as a code from the settings screen.

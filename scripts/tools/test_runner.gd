@@ -131,6 +131,12 @@ var _hitch_log: Array = []
 
 func _process(delta: float) -> void:
 	t += delta / maxf(Engine.time_scale, 0.01)
+	if args.has("rotate_at") and t >= float(args["rotate_at"]) and not has_meta("rotated"):
+		# turn the "phone": swap the window's width and height (layout_changed screens)
+		set_meta("rotated", true)
+		var ws := DisplayServer.window_get_size()
+		get_window().size = Vector2i(ws.y, ws.x)
+		get_tree().create_timer(0.5).timeout.connect(func(): print("ROTATED ", DisplayServer.window_get_size(), " ", get_window().size, " tall=", Game.tall))
 	var mode: String = args.get("mode", "auto")
 	if args.has("hitch"):
 		# hitch=<ms>: log every frame slower than that (first-use loads / shader compiles)
@@ -369,7 +375,7 @@ func _process(delta: float) -> void:
 	if has_meta("texab_done") and not has_meta("texab_fin"):
 		return  # the texture A/B probe is still shooting
 	if mode == "menu":
-		if t > float(args.get("max_t", "7.0")):
+		if t > float(args.get("max_t", "7.0")) and not _shot_busy:
 			get_tree().quit()
 		return
 	if level == null or not is_instance_valid(level) or LevelMain.I == null:
@@ -428,7 +434,7 @@ func _process(delta: float) -> void:
 				if args.has("final_shot"):
 					_shot()
 				get_tree().quit()
-	if t > float(args.get("max_t", "600")):
+	if t > float(args.get("max_t", "600")) and not _shot_busy:
 		print("TIMEOUT")
 		get_tree().quit()
 
@@ -854,10 +860,16 @@ func _render_backdrop() -> void:
 	get_tree().quit()
 
 
+var _shot_busy := false
+
 func _shot() -> void:
+	if DisplayServer.get_name() == "headless":
+		return  # nothing is drawn (and frame_post_draw never comes)
 	var dir: String = args.get("shots", "/tmp/shots")
 	DirAccess.make_dir_recursive_absolute(dir)
+	_shot_busy = true
 	await RenderingServer.frame_post_draw
+	_shot_busy = false
 	var img := get_viewport().get_texture().get_image()
 	var p := "%s/%s_%02d.png" % [dir, args.get("tag", "shot"), shot_i]
 	shot_i += 1

@@ -25,6 +25,7 @@ const ROADS := [
 ]
 
 var menu: Node  # main menu (opens the hero / bestiary / upgrade overlays)
+var _world: Control  # the painting with its roads and flags (moved as one when the map pans)
 var _map: TextureRect
 var _roads: Control
 var _flags: Control
@@ -42,7 +43,10 @@ func _ready() -> void:
 	_map.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_map.stretch_mode = TextureRect.STRETCH_SCALE
 	_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_map)
+	_world = Control.new()
+	_world.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_world)
+	_world.add_child(_map)
 	# soft vignette so the UI reads on top of the bright painting
 	var vg := TextureRect.new()
 	var gt := GradientTexture2D.new()
@@ -57,18 +61,19 @@ func _ready() -> void:
 	vg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	vg.stretch_mode = TextureRect.STRETCH_SCALE
 	vg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(vg)
+	_world.add_child(vg)
 	_roads = _Roads.new()
 	_roads.owner_map = self
 	_roads.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_roads.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_roads)
+	_world.add_child(_roads)
 	_flags = Control.new()
 	_flags.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_flags.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_flags)
+	_world.add_child(_flags)
 	_build_chrome()
 	resized.connect(_layout)
+	Game.layout_changed.connect(_on_layout_changed)
 	_layout.call_deferred()
 	modulate.a = 0.0
 	var tw := create_tween()
@@ -82,8 +87,24 @@ func _ready() -> void:
 const FLAG_SPAN_X := Vector2(0.115 - 0.06, 0.925 + 0.055)
 const FLAG_SPAN_Y := Vector2(0.15 - 0.13, 0.835 + 0.075)
 
+var _pan_x := NAN  # upright: horizontal scroll of the painting (NAN = start at the newest region)
+var _drag_from := NAN
+
 func _map_rect() -> Rect2:
 	var vs := size
+	if Game.tall:
+		# upright: the painting fills the height and the player pans it sideways; it opens on
+		# the region to play next
+		var st := vs.y / MAP_SIZE.y
+		var mw := MAP_SIZE.x * st
+		if is_nan(_pan_x):
+			var focus := NODES[0]
+			for i in DB.LEVELS.size():
+				if Game.unlocked(i):
+					focus = NODES[i]
+			_pan_x = vs.x * 0.5 - focus.x * mw
+		_pan_x = clampf(_pan_x, minf(vs.x - mw, 0.0), 0.0)
+		return Rect2(Vector2(_pan_x, 0), MAP_SIZE * st)
 	var cover := maxf(vs.x / MAP_SIZE.x, vs.y / MAP_SIZE.y)
 	var contain := minf(vs.x / MAP_SIZE.x, vs.y / MAP_SIZE.y)
 	var fit_x := vs.x / (MAP_SIZE.x * (FLAG_SPAN_X.y - FLAG_SPAN_X.x))
@@ -100,15 +121,27 @@ func _map_rect() -> Rect2:
 			off[ax] = (vs[ax] - ms[ax]) * 0.5
 	return Rect2(off, ms)
 
+## A point of the painting in the painting's own coordinates (the world layer is moved to the map
+## rect, so this is also where the flags and roads are drawn).
 func uv_to_screen(uv: Vector2) -> Vector2:
-	var r := _map_rect()
-	return r.position + uv * r.size
+	return uv * _map_rect().size
+
+func _gui_input(ev: InputEvent) -> void:
+	if not Game.tall:
+		return
+	if ev is InputEventMouseButton and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		_drag_from = (ev as InputEventMouseButton).position.x if ev.pressed else NAN
+	elif ev is InputEventMouseMotion and not is_nan(_drag_from):
+		_pan_x += (ev as InputEventMouseMotion).relative.x
+		_world.position = _map_rect().position
 
 var _bands: Array = []
 
 func _layout() -> void:
 	var r := _map_rect()
-	_map.position = r.position
+	_world.position = r.position
+	_world.size = r.size
+	_map.position = Vector2.ZERO
 	_map.size = r.size
 	for b in _bands:
 		b.queue_free()
@@ -117,7 +150,7 @@ func _layout() -> void:
 	var gaps := [r.position.y, size.y - r.end.y, r.position.x, size.x - r.end.x]
 	for side in 4:
 		var g: float = gaps[side]
-		if g < 1.0:
+		if g < 1.0 or Game.tall:
 			continue
 		var at := AtlasTexture.new()
 		at.atlas = _map.texture
@@ -140,7 +173,7 @@ func _layout() -> void:
 			band.position = Vector2(0.0 if side == 2 else r.end.x, r.position.y)
 			band.size = Vector2(g, r.size.y)
 		add_child(band)
-		move_child(band, _map.get_index())
+		move_child(band, _world.get_index())
 		_bands.append(band)
 	_rebuild_flags()
 
@@ -154,66 +187,91 @@ func _process(delta: float) -> void:
 
 # ---------------------------------------------------------------- chrome (corners)
 
+var _chrome: Array = []
+
+## The phone was turned: the open briefing closes, the map and its corners lay out again.
+func _on_layout_changed() -> void:
+	_close_card()
+	_pan_x = NAN
+	_rebuild_chrome()
+	_layout()
+
+func _rebuild_chrome() -> void:
+	for c in _chrome:
+		if is_instance_valid(c):
+			c.queue_free()
+	_chrome.clear()
+	_build_chrome()
+
 func _build_chrome() -> void:
-	var back := UI.icon_button(Assets.tex("ic_close"), 64, UI.NAVY, 32, "red")
-	back.position = Vector2(16, 14)
+	var t := Game.tall
+	var back := UI.round_button(Assets.tex("ic_close"), 52 if t else 58)
+	back.position = Vector2(14, 14)
 	back.pressed.connect(func():
 		if menu and menu.has_method("_close_select"):
 			menu.call("_close_select"))
 	add_child(back)
 	# stars counter (kingdom upgrades currency)
-	var plate := UI.framed("slim", 6)
+	var plate := UI.framed("bar", 2)
 	plate.anchor_left = 1.0
 	plate.anchor_right = 1.0
-	plate.offset_left = -196
-	plate.offset_right = -16
-	plate.offset_top = 16
+	plate.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	plate.offset_left = -14
+	plate.offset_right = -14
+	plate.offset_top = 18
 	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hb := HBoxContainer.new()
 	hb.alignment = BoxContainer.ALIGNMENT_CENTER
 	hb.add_theme_constant_override("separation", 6)
-	hb.add_child(UI.icon(Assets.tex("star"), 34))
-	_stars_l = UI.label("%d / %d" % [DB.total_stars(), DB.max_stars()], 26, UI.GOLD, 6, "ui_black")
+	hb.add_child(UI.icon(Assets.tex("star"), 28 if t else 32))
+	_stars_l = UI.label("%d / %d" % [DB.total_stars(), DB.max_stars()], 22 if t else 24, UI.GOLD, 0, "ui_black")
 	hb.add_child(_stars_l)
 	plate.add_child(hb)
 	add_child(plate)
-	# bottom-right dock: upgrades / heroes / bestiary / achievements
+	# bottom dock: upgrades / heroes / bestiary / achievements (centred under the thumb upright)
 	var dock := HBoxContainer.new()
-	dock.add_theme_constant_override("separation", 10)
-	dock.anchor_left = 0.0
-	dock.anchor_right = 0.0
+	dock.add_theme_constant_override("separation", 14 if t else 12)
 	dock.anchor_top = 1.0
 	dock.anchor_bottom = 1.0
 	dock.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	dock.offset_left = 16
+	if t:
+		dock.anchor_left = 0.5
+		dock.anchor_right = 0.5
+		dock.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	else:
+		dock.offset_left = 16
 	dock.offset_bottom = -12
-	for it in [["ic_upgrade", "강화", "_open_upgrades", "gold"], ["ic_hero", "영웅", "_open_heroes", "red"], ["ic_book", "도감", "_open_bestiary", "brown"], ["ic_trophy", "업적", "_open_achievements", "purple"]]:
+	for it in [["ic_upgrade", "강화", "_open_upgrades"], ["ic_hero", "영웅", "_open_heroes"], ["ic_book", "도감", "_open_bestiary"], ["ic_trophy", "업적", "_open_achievements"]]:
 		var col := VBoxContainer.new()
-		col.add_theme_constant_override("separation", -6)
+		col.add_theme_constant_override("separation", 2)
 		col.alignment = BoxContainer.ALIGNMENT_END
-		var b := UI.icon_button(Assets.tex(it[0]), 70, UI.NAVY, 35, "navy" if it[3] == "gold" else it[3])
+		var b := UI.round_button(Assets.tex(it[0]), 62)
+		b.add_theme_constant_override("icon_max_width", 36)
+		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		var fn: String = it[2]
 		b.pressed.connect(func():
 			if menu and menu.has_method(fn):
 				menu.call(fn))
 		col.add_child(b)
-		var l := UI.label(it[1], 18, UI.TEXT, 6, "ui_black")
+		var l := UI.label(it[1], 16, UI.TEXT, 5, "ui_black")
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		col.add_child(l)
-		if it[0] == "ic_upgrade" and Game.available_stars() > 0:
-			var bd := UI.badge(str(Game.available_stars()), 28, 15)
-			bd.position = Vector2(46, -4)
-			b.add_child(bd)
-		if it[0] == "ic_hero" and DB.unspent_talents() > 0:
-			var bd := UI.badge(str(DB.unspent_talents()), 28, 15)
-			bd.position = Vector2(46, -4)
+		var n := 0
+		if it[0] == "ic_upgrade":
+			n = Game.available_stars()
+		elif it[0] == "ic_hero":
+			n = DB.unspent_talents()
+		if n > 0:
+			var bd := UI.badge(str(n), 26, 14)
+			bd.position = Vector2(42, -4)
 			b.add_child(bd)
 		dock.add_child(col)
 	add_child(dock)
+	_chrome = [back, plate, dock]
 
 func refresh_stars() -> void:
-	if _stars_l:
-		_stars_l.text = "%d / %d" % [DB.total_stars(), DB.max_stars()]
+	# the counter and the dock's badges (stars left to spend, talent points)
+	_rebuild_chrome()
 
 # ---------------------------------------------------------------- flags
 
@@ -326,150 +384,129 @@ func _shake(c: Control) -> void:
 
 # ---------------------------------------------------------------- briefing card
 
-func _close_card() -> void:
-	if _card:
-		_card.queue_free()
-		_card = null
+var _card_w := 560.0
 
-func _card_shell(title: String, ribbon_kind := "red") -> VBoxContainer:
+## The briefing sheet (UI.sheet): a tap beside it closes it.
+func _card_shell(title: String, _ribbon_kind := "") -> VBoxContainer:
 	_close_card()
-	var shade := ColorRect.new()
-	shade.color = Color(0, 0, 0, 0.5)
-	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
-	shade.mouse_filter = Control.MOUSE_FILTER_STOP
-	shade.gui_input.connect(func(ev):
-		if ev is InputEventMouseButton and ev.pressed:
-			_close_card())
-	add_child(shade)
+	var shade := UI.sheet(self, title, {"width": 640, "dim": 0.45, "on_close": func(): _close_card()})
 	_card = shade
-	var cc := CenterContainer.new()
-	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	shade.add_child(cc)
-	var compact := size.y < 600.0
-	var wrap := VBoxContainer.new()
-	wrap.add_theme_constant_override("separation", -26)
-	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cc.add_child(wrap)
-	var rib := UI.ribbon(title, 28 if compact else 32, ribbon_kind, 420)
-	rib.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	rib.z_index = 1
-	wrap.add_child(rib)
-	var p := UI.framed("parch", 16 if compact else 20)
-	p.mouse_filter = Control.MOUSE_FILTER_STOP
-	p.custom_minimum_size = Vector2(560 if not compact else 600, 0)
-	var holder := UI.with_close(p, _close_card, 48)
-	holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	wrap.add_child(holder)
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 8 if compact else 12)
-	p.add_child(vb)
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 14)
-	vb.add_child(spacer)
-	(func(): UI.pop_in(wrap)).call_deferred()
-	return vb
+	_card_w = UI.sheet_w(shade)
+	return shade.get_meta("body")
+
+func _close_card() -> void:
+	if _card and is_instance_valid(_card):
+		UI.dismiss(_card)
+	_card = null
+
+## Picture of a region: beside the text on a wide sheet, across the top of an upright one.
+func _thumb(tex: Texture2D) -> Control:
+	var tw := _card_w if Game.tall else 240.0
+	var img := TextureRect.new()
+	img.texture = tex
+	img.custom_minimum_size = Vector2(tw, roundf(tw * 9.0 / 16.0))
+	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	img.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	# rounded corners like the wells around it
+	var clip := PanelContainer.new()
+	clip.add_theme_stylebox_override("panel", UI.flat(Color(0, 0, 0, 0.3), 12, Vector4.ZERO))
+	clip.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	clip.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	clip.add_child(img)
+	return clip
 
 func _open_card(i: int) -> void:
 	var d: Dictionary = DB.LEVELS[i]
 	# while the player reads the briefing, load what this battle needs first (Content.warm)
 	Content.warm(Assets.battle_models(i))
-	var compact := size.y < 600.0
 	var vb := _card_shell("%d. %s" % [i + 1, tr(d["name"])])
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
+	var w := _card_w
+	var row: BoxContainer = VBoxContainer.new() if Game.tall else HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12 if Game.tall else 16)
 	vb.add_child(row)
-	var thumb_p := UI.framed("slim", 0)
-	var img := TextureRect.new()
-	img.texture = Assets.tex("level_%d" % i)
-	img.custom_minimum_size = Vector2(220, 124) if compact else Vector2(240, 135)
-	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	thumb_p.add_child(img)
-	# keep the 16:9 box: stretched to the info column's height it would crop the picture
-	thumb_p.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	row.add_child(thumb_p)
+	row.add_child(_thumb(Assets.tex("level_%d" % i)))
 	var info := VBoxContainer.new()
 	info.add_theme_constant_override("separation", 6)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(info)
-	info.add_child(UI.ink(d.get("subtitle", ""), 20, Color(0.55, 0.18, 0.1), "ui_black"))
+	var sr := HBoxContainer.new()
+	sr.add_theme_constant_override("separation", 10)
+	var sub := UI.ink(d.get("subtitle", ""), 18, UI.GOLD, "ui_black")
+	sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sr.add_child(sub)
+	sr.add_child(UI.stars_row(Game.stars[i], 24))
+	info.add_child(sr)
 	var desc := UI.ink(d["desc"], 17, UI.INK)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.custom_minimum_size = Vector2(250, 0)
+	desc.custom_minimum_size = Vector2(w if Game.tall else w - 256.0, 0)
 	info.add_child(desc)
-	var sr := HBoxContainer.new()
-	sr.add_theme_constant_override("separation", 8)
-	sr.add_child(UI.stars_row(Game.stars[i], 30))
 	if Game.heroic[i]:
-		var hb := UI.ink("영웅 클리어", 16, Color(0.6, 0.35, 0.02), "ui_black")
-		sr.add_child(hb)
-	info.add_child(sr)
-	# enemies of this region
+		info.add_child(UI.ink("영웅 클리어", UI.T_SMALL, UI.GOLD, "ui_black"))
+	var meta := HFlowContainer.new()
+	meta.add_theme_constant_override("h_separation", 18)
+	meta.add_child(UI.stat("skull", tr("웨이브 %d") % d["waves"].size(), 16))
+	meta.add_child(UI.stat("heart", tr("생명 %d") % (10 if Game.difficulty == 1 else int(d["lives"])), 16))
+	meta.add_child(UI.stat("coin", tr("시작 골드 %d") % int(int(d["gold"]) * (1.3 if Game.difficulty == 2 else 1.0)), 16))
+	info.add_child(meta)
+	# enemies of this region (unmet ones as silhouettes)
 	var types := []
-	for w in d["waves"]:
-		for e in w:
+	for wv in d["waves"]:
+		for e in wv:
 			if not types.has(e[0]):
 				types.append(e[0])
-	var er := HBoxContainer.new()
-	er.add_theme_constant_override("separation", 4)
-	er.add_child(UI.ink("등장 적 ", 16, UI.INK_SOFT, "ui_black"))
+	var er := HFlowContainer.new()
+	er.add_theme_constant_override("h_separation", 4)
+	er.add_theme_constant_override("v_separation", 4)
+	var el := UI.ink("등장 적", UI.T_SMALL, UI.INK_SOFT, "ui_black")
+	el.custom_minimum_size.y = 36
+	el.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	er.add_child(el)
 	for tname in types:
 		var ic := UI.bust(Assets.tex("portrait_" + tname), 36, 1.55, Vector2(0.5, 0.34))
 		if not Game.seen_enemies.get(tname, false):
 			ic.modulate = Color(0.05, 0.05, 0.08, 0.85)
 		er.add_child(ic)
 	vb.add_child(er)
-	var meta := HBoxContainer.new()
-	meta.add_theme_constant_override("separation", 18)
-	meta.add_child(UI.stat("skull", tr("웨이브 %d") % d["waves"].size(), 17))
-	meta.add_child(UI.stat("heart", tr("생명 %d") % (10 if Game.difficulty == 1 else int(d["lives"])), 17))
-	meta.add_child(UI.stat("coin", tr("시작 골드 %d") % int(int(d["gold"]) * (1.3 if Game.difficulty == 2 else 1.0)), 17))
-	vb.add_child(meta)
-	vb.add_child(UI.divider(520))
-	# difficulty + start
-	var bottom := HBoxContainer.new()
-	bottom.add_theme_constant_override("separation", 10)
-	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
-	vb.add_child(bottom)
+	# difficulty: three chips, what the chosen one changes written under them
+	var dr := HBoxContainer.new()
+	dr.add_theme_constant_override("separation", 6)
+	var dl := UI.ink("난이도", UI.T_BODY, UI.INK)
+	dl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dr.add_child(dl)
 	for dv in [[2, "쉬움"], [0, "일반"], [1, "영웅"]]:
 		var sel: bool = Game.difficulty == dv[0]
-		var b := UI.button(tr(dv[1], "difficulty"), 19, false, Vector2(86, 54), "gold" if sel else "gray")
+		var b := UI.button(tr(dv[1], "difficulty"), 17, false, Vector2(80, 44), "primary" if sel else "ghost")
 		var val: int = dv[0]
 		b.pressed.connect(func():
 			Game.difficulty = val
 			Game.save()
 			_open_card(i))
-		bottom.add_child(b)
-	var go := UI.button("출전", 30, true, Vector2(200, 62), "red")
+		dr.add_child(b)
+	vb.add_child(dr)
+	var notes := {1: "영웅 난이도: 적 체력 +15% · 공격력 +10% · 생명 10 — 클리어 시 보너스 ★", 2: "쉬움: 적 체력 -28% · 공격력 -15% · 시작 골드 +30% — 별은 그대로 얻습니다"}
+	if notes.has(Game.difficulty):
+		var note := UI.ink(notes[Game.difficulty], 15, UI.MUTED)
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vb.add_child(note)
+	# iron challenge (three stars here) on the left, the way into the battle on the right
+	var btns: Array = []
+	if Game.stars[i] >= 3:
+		var ib := UI.button("철인 도전", 18, false, Vector2(0, 58), "special")
+		ib.icon = Assets.tex("skull")
+		ib.pressed.connect(func(): Game.start_challenge(i))
+		btns.append(ib)
+	var go := UI.button("출전", 26, true, Vector2(0, 58), "primary")
 	go.icon = Assets.tex("ic_play")
 	go.pressed.connect(func(): Game.start_level(i))
-	bottom.add_child(go)
-	if Game.difficulty == 1:
-		var note := UI.ink("영웅 난이도: 적 체력 +15% · 공격력 +10% · 생명 10 — 클리어 시 보너스 ★", 15, Color(0.6, 0.16, 0.08))
-		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vb.add_child(note)
-	elif Game.difficulty == 2:
-		var note2 := UI.ink("쉬움: 적 체력 -28% · 공격력 -15% · 시작 골드 +30% — 별은 그대로 얻습니다", 15, Color(0.12, 0.42, 0.16))
-		note2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vb.add_child(note2)
-	# iron challenge: unlocked by three stars here
-	var irow := HBoxContainer.new()
-	irow.alignment = BoxContainer.ALIGNMENT_CENTER
-	irow.add_theme_constant_override("separation", 12)
-	if Game.stars[i] >= 3:
-		var ib := UI.button("철인 도전", 19, false, Vector2(190, 48), "purple")
-		ib.icon = Assets.tex("skull")
-		ib.add_theme_constant_override("icon_max_width", 24)
-		ib.pressed.connect(func(): Game.start_challenge(i))
-		irow.add_child(ib)
-		var il := UI.ink("✓ 철인 배지 획득" if Game.iron_done(i) else "생명 3 · 주문 없음 · 골드 +40%", 15, Color(0.12, 0.42, 0.16) if Game.iron_done(i) else UI.INK_SOFT, "ui_black")
-		il.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		irow.add_child(il)
-	else:
-		var lk := UI.ink("별 3개를 얻으면 철인 도전이 열립니다", 15, UI.INK_SOFT)
-		irow.add_child(lk)
-	vb.add_child(irow)
+	go.grab_focus.call_deferred()  # Enter starts the battle
+	btns.append(go)
+	var ar := UI.action_row(btns)
+	go.size_flags_stretch_ratio = 1.6
+	vb.add_child(ar)
+	var il := UI.ink(("✓ 철인 배지 획득" if Game.iron_done(i) else "철인 도전: 생명 3, 주문 없음, 골드 +40%") if Game.stars[i] >= 3 else "별 3개를 얻으면 철인 도전이 열립니다", 15, UI.SAGE if Game.iron_done(i) else UI.MUTED)
+	il.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(il)
 
 func _open_endless_card() -> void:
 	var maps := []
@@ -480,35 +517,28 @@ func _open_endless_card() -> void:
 		maps.append(0)
 	_endless_pick = clampi(_endless_pick, 0, maps.size() - 1)
 	var mi: int = maps[_endless_pick]
-	var vb := _card_shell("∞ 무한 모드", "blue")
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
+	var vb := _card_shell("∞ 무한 모드")
+	var w := _card_w
+	var row: BoxContainer = VBoxContainer.new() if Game.tall else HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12 if Game.tall else 16)
 	vb.add_child(row)
-	var thumb_p := UI.framed("slim", 0)
-	var img := TextureRect.new()
-	img.texture = Assets.tex("level_%d" % mi)
-	img.custom_minimum_size = Vector2(240, 135)
-	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	thumb_p.add_child(img)
-	# keep the 16:9 box: stretched to the info column's height it would crop the picture
-	thumb_p.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	row.add_child(thumb_p)
+	row.add_child(_thumb(Assets.tex("level_%d" % mi)))
 	var info := VBoxContainer.new()
-	info.add_theme_constant_override("separation", 8)
+	info.add_theme_constant_override("separation", 10)
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(info)
 	var desc := UI.ink("끝없이 강해지는 적을 상대로 몇 웨이브까지 버틸 수 있을까? 10웨이브마다 보스가 등장합니다.", 17)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.custom_minimum_size = Vector2(250, 0)
+	desc.custom_minimum_size = Vector2(w if Game.tall else w - 256.0, 0)
 	info.add_child(desc)
+	# which battlefield: a stepper
 	var mr := HBoxContainer.new()
 	mr.add_theme_constant_override("separation", 6)
-	var prev := UI.button("◀", 20, false, Vector2(48, 44), "blue")
-	var nm := UI.ink(DB.LEVELS[mi]["name"], 19, UI.INK, "ui_black")
-	nm.custom_minimum_size = Vector2(140, 0)
+	var prev := UI.button("◀", 18, false, Vector2(48, 44), "secondary")
+	var nm := UI.ink(DB.LEVELS[mi]["name"], 18, UI.INK, "ui_black")
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var nxt := UI.button("▶", 20, false, Vector2(48, 44), "blue")
+	var nxt := UI.button("▶", 18, false, Vector2(48, 44), "secondary")
 	prev.pressed.connect(func():
 		_endless_pick = (_endless_pick - 1 + maps.size()) % maps.size()
 		_open_endless_card())
@@ -519,14 +549,12 @@ func _open_endless_card() -> void:
 	mr.add_child(nm)
 	mr.add_child(nxt)
 	info.add_child(mr)
-	info.add_child(UI.stat("crown", tr("최고 기록: 웨이브 %d") % int(Game.endless_best.get(str(mi), 0)), 18))
-	vb.add_child(UI.divider(520))
-	var cc := CenterContainer.new()
-	var go := UI.button("출전", 30, true, Vector2(240, 62), "purple")
+	info.add_child(UI.stat("crown", tr("최고 기록: 웨이브 %d") % int(Game.endless_best.get(str(mi), 0)), 17))
+	var go := UI.button("출전", 26, true, Vector2(0, 58), "primary")
 	go.icon = Assets.tex("ic_play")
 	go.pressed.connect(func(): Game.start_endless(mi))
-	cc.add_child(go)
-	vb.add_child(cc)
+	go.grab_focus.call_deferred()
+	vb.add_child(UI.action_row([go]))
 
 # ---------------------------------------------------------------- dotted roads
 

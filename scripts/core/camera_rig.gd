@@ -94,7 +94,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		# convert pixel motion to world motion at ground plane
 		var vp := get_viewport().get_visible_rect().size
-		var world_per_px := 2.0 * zoom * tan(deg_to_rad(cam.fov * 0.5)) / vp.y
+		# the field of view spans the screen's short side (see _fit_aspect)
+		var world_per_px := 2.0 * zoom * tan(deg_to_rad(cam.fov * 0.5)) / (vp.x if Game.tall else vp.y)
 		var move := Vector3(-delta.x, 0, -delta.y / sin(deg_to_rad(pitch_deg))) * world_per_px
 		target += move
 		_vel = move * 30.0
@@ -118,7 +119,19 @@ func _process(delta: float) -> void:
 	_clamp()
 	_apply(rd)
 
+## Upright screens: the field of view is kept across the width (the short side), so units keep
+## the size they have with the phone held sideways and the extra height shows more of the map;
+## kept across the height, an upright view would be a narrow slit of the battlefield. The far
+## zoom-out also goes further, so the whole width of a map can still be seen at once.
+func _fit_aspect() -> void:
+	var want := Camera3D.KEEP_WIDTH if Game.tall else Camera3D.KEEP_HEIGHT
+	if cam.keep_aspect != want:
+		cam.keep_aspect = want
+		zoom_max = 54.0 if Game.tall else 40.0
+		zoom = clampf(zoom, zoom_min, zoom_max)
+
 func _apply(rd: float) -> void:
+	_fit_aspect()
 	_pos = _pos.lerp(target, clampf(rd * 12.0, 0.0, 1.0)) if rd > 0.0 else target
 	var p := deg_to_rad(pitch_deg)
 	var off := Vector3(0, sin(p), cos(p)) * zoom

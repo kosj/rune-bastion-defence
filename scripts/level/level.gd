@@ -128,6 +128,7 @@ func _ready() -> void:
 	add_child(hud)
 	hud.process_mode = Node.PROCESS_MODE_ALWAYS
 	hud.build(cam_rig.cam)
+	Game.layout_changed.connect(_on_layout_changed)
 	overlay = hud.overlay
 	hud.speed_toggled.connect(_toggle_speed)
 	hud.pause_pressed.connect(_pause)
@@ -1553,38 +1554,53 @@ func _show_enemy_card(type: String) -> void:
 	var e: Dictionary = DB.ENEMIES[type]
 	if _info_card:
 		_info_card.queue_free()
-	var p := UI.framed("parch", 4)
+	var p := UI.framed("card", 6)
 	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 10)
+	hb.add_theme_constant_override("separation", 12)
 	hb.add_child(UI.bust(Assets.tex("portrait_" + type), 84, 1.3))
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 0)
-	vb.add_child(UI.ink("새로운 적!", 16, Color(0.7, 0.16, 0.08), "ui_black"))
-	vb.add_child(UI.ink(e["name"], 24, UI.INK, "title_kr"))
-	var desc := UI.ink(tr(e["desc"]), 16, UI.INK_SOFT)
-	UI.wrap_words(desc, 236.0)
-	desc.custom_minimum_size.x = 230
+	vb.add_theme_constant_override("separation", 2)
+	vb.add_child(UI.ink("새로운 적", UI.T_SMALL, UI.EMBER, "ui_black"))
+	vb.add_child(UI.ink(e["name"], 23, UI.INK, "title_kr"))
+	var vs := hud.root.get_viewport_rect().size
+	var tw_w := (vs.x - 16.0 - 84.0 - 12.0 - 40.0) if Game.tall else 236.0
+	var desc := UI.ink(tr(e["desc"]), UI.T_SMALL, UI.INK_SOFT)
+	UI.wrap_words(desc, tw_w)
+	desc.custom_minimum_size.x = tw_w - 6.0
 	vb.add_child(desc)
 	hb.add_child(vb)
 	p.add_child(hb)
-	p.anchor_left = 1.0
-	p.anchor_right = 1.0
-	p.offset_left = -372
-	p.offset_right = -16
-	p.offset_top = 90
+	if Game.tall:
+		# upright: across the width, under the top bar
+		p.anchor_left = 0.0
+		p.anchor_right = 1.0
+		p.offset_left = 8
+		p.offset_right = -8
+		p.offset_top = 66
+	else:
+		p.anchor_left = 1.0
+		p.anchor_right = 1.0
+		p.offset_left = -372
+		p.offset_right = -16
+		p.offset_top = 90
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.root.add_child(p)
 	_info_card = p
+	# slides in once laid out (its position is only known after the container pass), stays
+	# for five seconds, fades out
 	p.modulate.a = 0.0
-	p.position.x += 40
-	var tw := p.create_tween()
-	tw.set_ignore_time_scale(true)
-	tw.set_parallel(true)
-	tw.tween_property(p, "modulate:a", 1.0, 0.3)
-	tw.tween_property(p, "position:x", p.position.x - 40, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.chain().tween_interval(5.0)
-	tw.chain().tween_property(p, "modulate:a", 0.0, 0.5)
-	tw.chain().tween_callback(p.queue_free)
+	(func():
+		if not is_instance_valid(p):
+			return
+		var x0 := p.position.x
+		p.position.x = x0 + 40.0
+		var tw := p.create_tween()
+		tw.set_ignore_time_scale(true)
+		tw.tween_property(p, "modulate:a", 1.0, 0.3)
+		tw.parallel().tween_property(p, "position:x", x0, 0.35).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_interval(5.0)
+		tw.tween_property(p, "modulate:a", 0.0, 0.5)
+		tw.tween_callback(p.queue_free)).call_deferred()
 
 func _clear_cards() -> void:
 	if _info_card and is_instance_valid(_info_card):
@@ -1645,34 +1661,14 @@ func _pause() -> void:
 		cine.abort()  # a cut-scene hides the HUD the pause menu lives in
 	get_tree().paused = true
 	_clear_cards()
-	var compact := hud.root.get_viewport_rect().size.y < 600.0
 	_modal = hud.modal("일시 정지", func(vb: VBoxContainer):
-		vb.add_theme_constant_override("separation", 8 if compact else 12)
-		var b1 := UI.button("계속하기", 28, true, Vector2(360, 66 if compact else 70), "green")
-		b1.icon = Assets.tex("ic_play")
-		b1.pressed.connect(_resume)
-		vb.add_child(b1)
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 10)
-		var b2 := UI.button("다시 시작", 21, false, Vector2(175, 56), "blue")
-		b2.icon = Assets.tex("ic_retry")
-		b2.add_theme_constant_override("icon_max_width", 26)
-		b2.pressed.connect(func(): Game.start_level(level_idx) if not Game.endless else Game.start_endless(level_idx))
-		row.add_child(b2)
-		var b3 := UI.button("지도로", 21, false, Vector2(175, 56), "blue")
-		b3.icon = Assets.tex("ic_map")
-		b3.add_theme_constant_override("icon_max_width", 26)
-		b3.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
-		row.add_child(b3)
-		vb.add_child(row)
-		vb.add_child(UI.divider(360))
+		vb.add_theme_constant_override("separation", 10)
 		vb.add_child(_volume_row("음악", Game.music_volume, func(v): Game.music_volume = v; Audio.update_music_volume(); Game.save()))
 		vb.add_child(_volume_row("효과음", Game.sfx_volume, func(v): Game.sfx_volume = v; Game.save()))
 		var hq := CheckButton.new()
 		hq.text = "고품질 그래픽"
 		hq.button_pressed = Game.high_quality
-		hq.add_theme_font_override("font", Assets.font("ui_black"))
+		hq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hq.toggled.connect(func(v): Game.high_quality = v; Game.apply_quality(); Game.save())
 		vb.add_child(hq)
 		# language: labels switch at once; the menu is rebuilt so its own lines follow
@@ -1687,15 +1683,37 @@ func _pause() -> void:
 				_modal.queue_free()
 				_modal = null
 			_pause(), 92.0))
-		if not Game.is_mobile and not compact:
-			var keys := UI.label("단축키  Esc 일시정지 · Space 다음 웨이브 · F 배속\n1 · 2 주문 · H 영웅 선택 · Q 영웅 스킬", 15, UI.MUTED, 3)
-			keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			vb.add_child(keys), 440, "blue")
+		if not Game.is_mobile and not Game.tall:
+			var keys := UI.ink("Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅   Q 영웅 스킬", UI.T_SMALL, UI.MUTED)
+			keys.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			vb.add_child(keys)
+		var sp := Control.new()
+		sp.custom_minimum_size.y = 4
+		vb.add_child(sp)
+		var b2 := UI.button("다시 시작", 20, false, Vector2(0, 52), "secondary")
+		b2.icon = Assets.tex("ic_retry")
+		b2.pressed.connect(func(): Game.start_level(level_idx) if not Game.endless else Game.start_endless(level_idx))
+		var b3 := UI.button("지도로", 20, false, Vector2(0, 52), "secondary")
+		b3.icon = Assets.tex("ic_map")
+		b3.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
+		vb.add_child(UI.action_row([b3, b2]))
+		var b1 := UI.button("계속하기", 24, true, Vector2(0, 60), "primary")
+		b1.icon = Assets.tex("ic_play")
+		b1.pressed.connect(_resume)
+		b1.grab_focus.call_deferred()
+		vb.add_child(b1), 440, "", _resume)
+
+## The phone was turned during the pause menu: open it again, laid out for the new shape.
+func _on_layout_changed() -> void:
+	if _modal and get_tree().paused and (state == "playing" or state == "ready"):
+		_modal.queue_free()
+		_modal = null
+		_pause()
 
 func _volume_row(label: String, v: float, cb: Callable) -> HBoxContainer:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 12)
-	var l := UI.label(label, 21, UI.TEXT, 4, "ui_black")
+	var l := UI.label(label, UI.T_BODY, UI.TEXT, 0, "ui")
 	l.custom_minimum_size.x = 112  # "Sound FX" too, so both sliders line up in either language
 	hb.add_child(l)
 	var s := HSlider.new()
@@ -1703,7 +1721,8 @@ func _volume_row(label: String, v: float, cb: Callable) -> HBoxContainer:
 	s.max_value = 1.0
 	s.step = 0.05
 	s.value = v
-	s.custom_minimum_size = Vector2(220, 36)
+	s.custom_minimum_size = Vector2(160, 36)
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	s.value_changed.connect(cb)
 	hb.add_child(s)
 	return hb
@@ -1851,29 +1870,29 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 			# long lines (English especially) wrap inside the card instead of running past its edge
 			nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			nl.custom_minimum_size.x = 500
+			nl.custom_minimum_size.x = minf(500.0, hud.root.get_viewport_rect().size.x - 60.0)
 			nl.name = "Note"
 			vb.add_child(nl)
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 10)
-		row.name = "Buttons"
-		var rb := UI.button("다시", 21, false, Vector2(120, 58), "blue")
-		rb.icon = Assets.tex("ic_retry")
-		rb.add_theme_constant_override("icon_max_width", 26)
-		rb.pressed.connect(func(): Game.start_level(level_idx))
-		row.add_child(rb)
-		var mb := UI.button("지도", 21, false, Vector2(120, 58), "blue")
+		# map and retry on the left, the way forward on the right and widest
+		var btns: Array = []
+		var mb := UI.button("지도", 20, false, Vector2(0, 56), "secondary")
 		mb.icon = Assets.tex("ic_map")
-		mb.add_theme_constant_override("icon_max_width", 26)
 		mb.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
-		row.add_child(mb)
+		btns.append(mb)
+		var rb := UI.button("다시", 20, false, Vector2(0, 56), "secondary")
+		rb.icon = Assets.tex("ic_retry")
+		rb.pressed.connect(func(): Game.start_level(level_idx))
+		btns.append(rb)
 		if level_idx < DB.LEVELS.size() - 1:
-			var nb := UI.button("다음 지역", 24, true, Vector2(200, 58), "red")
+			var nb := UI.button("다음 지역", 22, true, Vector2(0, 56), "primary")
 			nb.icon = Assets.tex("ic_play")
 			nb.name = "Next"
 			nb.pressed.connect(func(): Game.start_level(level_idx + 1))
-			row.add_child(nb)
+			btns.append(nb)
+		var row := UI.action_row(btns)
+		row.name = "Buttons"
+		if btns.size() == 3:
+			(btns[2] as Control).size_flags_stretch_ratio = 1.7
 		vb.add_child(row), 560, "red")
 	# --- the sequence (see ResultFX): ribbon slam, stars one by one, numbers, then the buttons
 	fx = ResultFX.new(_modal, _modal.get_meta("center"))
@@ -1958,35 +1977,35 @@ func _after_defeat() -> void:
 		return
 	Audio.voice("ann_defeat", 0.0, 1.0)
 	_modal = hud.modal("패배...", func(vb: VBoxContainer):
-		var l := UI.label("성문이 뚫렸습니다. 전략을 바꿔 다시 도전하세요!", 21, UI.TEXT, 5, "ui_black")
+		var l := UI.label("성문이 뚫렸습니다. 전략을 바꿔 다시 도전하세요!", 20, UI.TEXT, 0, "ui_black")
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		vb.add_child(l)
-		var tipp := UI.framed("parch", 2)
-		var tip := UI.ink(tr("팁 · ") + tr(str(DEFEAT_TIPS[randi() % DEFEAT_TIPS.size()])), 17, UI.INK)
-		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		tip.custom_minimum_size.x = 452
-		tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		tipp.add_child(tip)
-		vb.add_child(tipp)
 		var grid := HBoxContainer.new()
 		grid.alignment = BoxContainer.ALIGNMENT_CENTER
 		grid.add_theme_constant_override("separation", 28)
 		grid.add_child(UI.stat("skull", tr("처치 %d") % run_kills, 18, UI.TEXT))
 		grid.add_child(UI.stat("st_rate", tr("웨이브 %d / %d") % [maxi(wave_idx + 1, 0), waves.size()], 18, UI.TEXT))
 		vb.add_child(grid)
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 12)
-		var mb := UI.button("지도로", 22, false, Vector2(150, 60), "blue")
+		# one tip, set apart as advice rather than a second message
+		var tipp := UI.framed("well", 8)
+		var th := HBoxContainer.new()
+		th.add_theme_constant_override("separation", 12)
+		var tip := UI.ink(str(DEFEAT_TIPS[randi() % DEFEAT_TIPS.size()]), UI.T_BODY, UI.INK)
+		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		th.add_child(UI.ink("팁", UI.T_SMALL, UI.GOLD, "ui_black"))
+		th.add_child(tip)
+		tipp.add_child(th)
+		vb.add_child(tipp)
+		var mb := UI.button("지도로", 20, false, Vector2(0, 56), "secondary")
 		mb.icon = Assets.tex("ic_map")
-		mb.add_theme_constant_override("icon_max_width", 26)
 		mb.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
-		row.add_child(mb)
-		var rb := UI.button("다시 도전", 26, true, Vector2(230, 60), "red")
+		var rb := UI.button("다시 도전", 22, true, Vector2(0, 56), "primary")
 		rb.icon = Assets.tex("ic_retry")
-		rb.add_theme_constant_override("icon_max_width", 28)
 		rb.pressed.connect(func(): Game.start_level(level_idx))
-		row.add_child(rb)
+		var row := UI.action_row([mb, rb])
+		rb.size_flags_stretch_ratio = 1.6
 		vb.add_child(row), 520, "dark")
 
 func _on_achievement(id: String) -> void:
@@ -2020,19 +2039,14 @@ func _endless_over() -> void:
 		grid.add_child(UI.stat("skull", tr("처치 %d") % run_kills, 18, UI.TEXT))
 		grid.add_child(UI.stat("coin", tr("획득 골드 %d") % run_gold, 18, UI.TEXT))
 		vb.add_child(grid)
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 12)
-		var mb := UI.button("지도로", 22, false, Vector2(150, 60), "blue")
+		var mb := UI.button("지도로", 20, false, Vector2(0, 56), "secondary")
 		mb.icon = Assets.tex("ic_map")
-		mb.add_theme_constant_override("icon_max_width", 26)
 		mb.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
-		row.add_child(mb)
-		var rb := UI.button("다시 도전", 26, true, Vector2(230, 60), "purple")
+		var rb := UI.button("다시 도전", 22, true, Vector2(0, 56), "primary")
 		rb.icon = Assets.tex("ic_retry")
-		rb.add_theme_constant_override("icon_max_width", 28)
 		rb.pressed.connect(func(): Game.start_endless(level_idx))
-		row.add_child(rb)
+		var row := UI.action_row([mb, rb])
+		rb.size_flags_stretch_ratio = 1.6
 		vb.add_child(row), 520, "blue")
 
 ## One line in the playtest log: how far the run got, where lives were lost and what was built.

@@ -64,6 +64,8 @@ func build(cam: Camera3D) -> void:
 	_build_banner()
 	_build_boss_bar()
 	_build_vignette()
+	_apply_layout()
+	Game.layout_changed.connect(_apply_layout)
 
 func _make_circle(sz: int) -> Texture2D:
 	var img := Image.create(sz, sz, false, Image.FORMAT_RGBA8)
@@ -75,20 +77,27 @@ func _make_circle(sz: int) -> Texture2D:
 			img.set_pixel(x, y, Color(0, 0, 0, 0.62 * a))
 	return ImageTexture.create_from_image(img)
 
+var _res_items: Array = []  # [icon, label, min width] of the top-bar counters
+var top_panel: PanelContainer
+var top_right: HBoxContainer
+var dock: Control
+
 func _res_item(icon: String, txt: String, col: Color, min_w := 58) -> Array:
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 6)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hb.add_child(UI.icon(Assets.tex(icon), 36))
+	var ic := UI.icon(Assets.tex(icon), 36)
+	hb.add_child(ic)
 	var l := UI.label(txt, 28, col, 7, "ui_black")
 	l.custom_minimum_size.x = min_w
 	hb.add_child(l)
+	_res_items.append([ic, l, min_w])
 	return [hb, l]
 
 func _vsep() -> Control:
 	var c := ColorRect.new()
-	c.color = Color(0.85, 0.65, 0.3, 0.45)
-	c.custom_minimum_size = Vector2(2, 30)
+	c.color = Color(1, 1, 1, 0.14)
+	c.custom_minimum_size = Vector2(1, 26)
 	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return c
@@ -118,12 +127,13 @@ func _build_top() -> void:
 	hb.add_child(pad)
 	p.add_child(hb)
 	root.add_child(p)
+	top_panel = p
 
 	var tr := HBoxContainer.new()
 	tr.add_theme_constant_override("separation", 10)
-	speed_b = UI.icon_button(Assets.tex("speed1"), 64, UI.NAVY, 32, "navy")
+	speed_b = UI.round_button(Assets.tex("speed1"), 64)
 	speed_b.pressed.connect(func(): speed_toggled.emit())
-	pause_b = UI.icon_button(Assets.tex("pause"), 64, UI.NAVY, 32, "navy")
+	pause_b = UI.round_button(Assets.tex("pause"), 64)
 	pause_b.pressed.connect(func(): pause_pressed.emit())
 	tr.add_child(speed_b)
 	tr.add_child(pause_b)
@@ -133,6 +143,7 @@ func _build_top() -> void:
 	tr.offset_left = -152
 	tr.offset_right = -14
 	tr.offset_top = 12
+	top_right = tr
 
 func _cooldown_overlay(parent: Control, sz: int) -> TextureProgressBar:
 	var t := TextureProgressBar.new()
@@ -156,6 +167,7 @@ func _build_bottom() -> void:
 	bl.offset_left = 14
 	bl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(bl)
+	dock = bl
 	# hero portrait medallion
 	hero_b = UI.icon_button(null, 98, UI.NAVY, 49, "brown")
 	var hp_por := UI.portrait(Assets.tex(DB.hero_def()["portrait"]), 80)
@@ -236,7 +248,7 @@ func _mini_bar(c: Color) -> ProgressBar:
 var info_stats: HFlowContainer
 
 func _build_info() -> void:
-	info = UI.framed("parch", 6)
+	info = UI.framed("card", 6)
 	info.anchor_left = 1.0
 	info.anchor_right = 1.0
 	info.anchor_top = 1.0
@@ -249,8 +261,8 @@ func _build_info() -> void:
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 3)
-	info_title = UI.ink("", 23, UI.INK, "title_kr")
-	info_body = UI.ink("", 16, UI.INK_SOFT)
+	info_title = UI.ink("", 22, UI.INK, "title_kr")
+	info_body = UI.ink("", UI.T_SMALL, UI.INK_SOFT)
 	info_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info_body.custom_minimum_size.x = 320
 	info_stats = HFlowContainer.new()
@@ -273,7 +285,7 @@ func show_info(title: String, body: String, stats: Array = []) -> void:
 		c.queue_free()
 	for st in stats:
 		var up: bool = st.size() > 2 and st[2]
-		info_stats.add_child(UI.stat(st[0], st[1], 16, Color(0.12, 0.45, 0.08) if up else UI.INK))
+		info_stats.add_child(UI.stat(st[0], st[1], 16, UI.SAGE if up else UI.INK))
 	info_stats.visible = not stats.is_empty()
 	if not info.visible:
 		info.visible = true
@@ -305,8 +317,8 @@ func _build_banner() -> void:
 	banner_sub.modulate.a = 0.0
 	root.add_child(banner_sub)
 	# tutorial hints sit low and centred, clear of the wave banner and the corner widgets
-	hint = UI.framed("parch", 6)
-	hint_l = UI.ink("", 20, UI.INK, "ui_black")
+	hint = UI.framed("card", 8)
+	hint_l = UI.ink("", 19, UI.INK, "ui")
 	hint_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint_l.custom_minimum_size.x = 440
 	hint_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -502,7 +514,11 @@ var _wave_shown := [0, 0]
 
 func set_wave(cur: int, total: int) -> void:
 	_wave_shown = [cur, total]
-	wave_l.text = (tr("웨이브 %d/%d") % [cur, total]) if total > 0 else (tr("웨이브 %d/∞") % cur)
+	if Game.tall:
+		# upright top bar: the skull icon says "wave", the number is what changes
+		wave_l.text = ("%d/%d" % [cur, total]) if total > 0 else ("%d/∞" % cur)
+	else:
+		wave_l.text = (tr("웨이브 %d/%d") % [cur, total]) if total > 0 else (tr("웨이브 %d/∞") % cur)
 
 ## After a language switch in the pause menu: labels and buttons follow on their own, the lines
 ## formatted once (tr("...%d") % n) are written again.
@@ -513,7 +529,7 @@ var _toasts := 0
 
 ## Small slide-in notification (achievements).
 func toast(title: String, sub: String, icon: String) -> void:
-	var p := UI.framed("parch", 10)
+	var p := UI.framed("card", 8)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 10)
@@ -565,6 +581,78 @@ func _process(delta: float) -> void:
 		if absf(_gold_shown - _gold_target) < 1.0:
 			_gold_shown = _gold_target
 		gold_l.text = str(int(round(_gold_shown)))
+
+# ---------------------------------------------------------------- layout by orientation
+
+## Wide screens keep the corner layout; an upright phone gets a slimmer top bar, smaller corner
+## buttons, and the selection card across the width above the hero dock (not in a corner it
+## would cover half of). Runs again when the phone is turned.
+func _apply_layout() -> void:
+	var t := Game.tall
+	var vs := root.get_viewport_rect().size
+	var fs := 22 if t else 28
+	var isz := 28 if t else 36
+	for it in _res_items:
+		(it[0] as Control).custom_minimum_size = Vector2(isz, isz)
+		(it[1] as Label).add_theme_font_size_override("font_size", fs)
+		(it[1] as Label).add_theme_constant_override("outline_size", 5 if t else 7)
+		(it[1] as Control).custom_minimum_size.x = float(it[2]) * (0.78 if t else 1.0)
+	(top_panel.get_child(0) as HBoxContainer).add_theme_constant_override("separation", 8 if t else 14)
+	top_panel.position = Vector2(8, 8) if t else Vector2(14, 12)
+	top_panel.size = Vector2.ZERO
+	var bs := 50 if t else 64
+	for b in [speed_b, pause_b]:
+		(b as Control).custom_minimum_size = Vector2(bs, bs)
+		(b as Button).add_theme_constant_override("icon_max_width", int(bs * 0.78))
+	top_right.add_theme_constant_override("separation", 6 if t else 10)
+	top_right.offset_left = -(bs * 2 + (6 if t else 10) + (8 if t else 14))
+	top_right.offset_right = -(8 if t else 14)
+	top_right.offset_top = 8 if t else 12
+	# selection card
+	if t:
+		# under the top bar: the bottom of an upright screen belongs to the hero dock and the
+		# wave buttons, and the thumb
+		info.anchor_left = 0.0
+		info.anchor_top = 0.0
+		info.anchor_bottom = 0.0
+		info.grow_vertical = Control.GROW_DIRECTION_END
+		info.offset_left = 8
+		info.offset_right = -8
+		info.offset_top = 66
+		info.offset_bottom = 66
+		info_body.custom_minimum_size.x = vs.x - 60
+		info_stats.custom_minimum_size.x = vs.x - 60
+	else:
+		info.anchor_left = 1.0
+		info.anchor_top = 1.0
+		info.anchor_bottom = 1.0
+		info.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		info.offset_left = -372
+		info.offset_right = -16
+		info.offset_top = -16
+		info.offset_bottom = -16
+		info_body.custom_minimum_size.x = 320
+		info_stats.custom_minimum_size.x = 320
+	# wave banner and boss bar
+	banner.add_theme_font_size_override("font_size", 44 if t else 58)
+	banner.offset_top = 96 if t else 112
+	banner_sub.add_theme_font_size_override("font_size", 21 if t else 26)
+	banner_sub.offset_top = 156 if t else 190
+	var bw := minf(480.0, vs.x - 24.0)
+	boss_panel.offset_left = -bw * 0.5
+	boss_panel.offset_right = bw * 0.5
+	boss_panel.offset_top = 70 if t else 84
+	boss_bar.custom_minimum_size.x = bw - 40
+	var hw := minf(480.0, vs.x - 24.0)
+	hint.offset_left = -hw * 0.5
+	hint.offset_right = hw * 0.5
+	hint_l.custom_minimum_size.x = hw - 40
+	hint.offset_bottom = -160 if t else -150
+	target_hint.offset_left = -vs.x * 0.5 + 12
+	target_hint.offset_right = vs.x * 0.5 - 12
+	target_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	target_hint.add_theme_font_size_override("font_size", 21 if t else 26)
+	set_wave(_wave_shown[0], _wave_shown[1])
 
 # ---------------------------------------------------------------- wave call buttons
 
@@ -620,41 +708,10 @@ func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, lab
 
 # ---------------------------------------------------------------- menus
 
-func modal(title: String, build_body: Callable, wide := 520, ribbon_kind := "red") -> Control:
-	var shade := ColorRect.new()
-	shade.color = Color(0, 0, 0, 0.55)
-	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
-	shade.mouse_filter = Control.MOUSE_FILTER_STOP
-	root.add_child(shade)
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	shade.add_child(center)
-	var wrap := VBoxContainer.new()
-	wrap.add_theme_constant_override("separation", -30)
-	center.add_child(wrap)
-	var rib := UI.ribbon(title, 36, ribbon_kind, 420)
-	rib.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	rib.z_index = 1
-	wrap.add_child(rib)
-	var compact := root.get_viewport_rect().size.y < 600.0
-	var p := UI.framed("dark", 14 if compact else 20)
-	p.custom_minimum_size = Vector2(wide, 0)
-	wrap.add_child(p)
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 12)
-	vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	p.add_child(vb)
-	var sp := Control.new()
-	sp.custom_minimum_size = Vector2(0, 12 if compact else 18)
-	vb.add_child(sp)
-	# result screens animate these parts on their own (ResultFX)
-	shade.set_meta("ribbon", rib)
-	shade.set_meta("panel", p)
-	shade.set_meta("center", center)
-	build_body.call(vb)
-	shade.modulate.a = 0.0
-	var tw := shade.create_tween()
-	tw.set_ignore_time_scale(true)
-	tw.tween_property(shade, "modulate:a", 1.0, 0.2)
-	(func(): UI.pop_in(wrap)).call_deferred()
+## A dialog over the battlefield (UI.sheet). Result screens pass a ribbon kind: their title sits on
+## a ribbon (ResultFX slams it in); other dialogs get a plain header with a close button when
+## `on_close` is given.
+func modal(title: String, build_body: Callable, wide := 520, ribbon_kind := "", on_close := Callable()) -> Control:
+	var shade := UI.sheet(root, title, {"width": wide + 40, "ribbon": ribbon_kind, "on_close": on_close})
+	build_body.call(shade.get_meta("body"))
 	return shade
