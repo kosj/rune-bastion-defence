@@ -76,4 +76,9 @@ mc 512 $C/sera.glb 1024 idle=$D3/sera_idle.glb run=$D3/sera_run.glb attack=$D3/s
 mc 256 $C/skeleton_knight.glb 1024 run=$A4/skeleton_knight_run.glb attack=$A4/skeleton_knight_attack.glb death=$A4/skeleton_knight_death.glb hit=$A5/skeleton_knight_hit.glb rise=$A5/skeleton_knight_rise_supine.glb
 mc 512 $C/lich.glb 1024 run=$A4/lich_walk.glb attack=$A4/lich_attack.glb death=$A4/lich_death.glb roar=$A4/lich_summon.glb taunt=$A5/lich_taunt.glb cast=$A5/lich_cast.glb
 mc 512 $C/ranger.glb 1024 idle=$D2/archer_anim_a.glb run=$RAW/varco/anim_v6/ranger_run.glb attack=$D2/archer_anim_b.glb skill=$RAW/varco/anim_v6/ranger_skill.glb death=$RAW/varco/anim_v6/ranger_death.glb cheer=$RAW/varco/anim_v6/ranger_cheer.glb hit=$RAW/varco/anim_v6/ranger_hit.glb
+# hands: VARCO rigs have no finger bones, so the heroes' fingers are curled in the bind pose
+# (relaxed; Kael's sword hand a fist) - hand_pose.py
+python3 "$H/hand_pose.py" $C/hero.glb $C/hero.glb --left relaxed --right grip | grep WROTE
+python3 "$H/hand_pose.py" $C/sera.glb $C/sera.glb | grep WROTE
+python3 "$H/hand_pose.py" $C/ranger.glb $C/ranger.glb | grep WROTE
 echo ALL_DONE
