@@ -28,7 +28,7 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
   - 텍스처나 메시를 줄일 때는 가장 가까운 줌, 고해상도에서 전후를 비교합니다(`texab=` + `tools/texab_cmp.py`, 50dB 이상, 8단계 넘게 바뀐 픽셀 0.1% 미만).
   - 노멀·ORM·건물 albedo의 절반 축소는 이미 기준에 못 미쳤습니다.
 - **메시 예산은 화면 오차로 정합니다**: `tools/pipeline/rebuild_assets.sh`의 `e1.0`(가장 가까운 줌에서 원본과 1px, 폰 `e1.6`). 숫자를 손으로 낮추지 않습니다(MultiMesh 소품만 `e1.0/상한`). 모델을 다시 생성하면 `ALBEDO_REF`로 이전 색을 유지합니다. GLB를 바꾸면 추출된 `<이름>_albedo/normal/orm.png*`를 지우고 다시 임포트합니다(내용이 같은 GLB는 `.godot/imported/<이름>.glb-*`도 지워야 다시 추출됩니다).
-- **영웅 캐릭터 GLB를 다시 만들면** 손 모양 단계(`tools/pipeline/hand_pose.py`, `rebuild_assets.sh` 끝)도 거쳐야 합니다. 안 그러면 손가락이 다시 쫙 펴집니다.
+- **영웅·궁수·마법사 캐릭터 GLB를 다시 만들면** 손 모양 단계(`tools/pipeline/hand_pose.py`, `rebuild_assets.sh` 끝)도 거쳐야 합니다. 안 그러면 손가락이 다시 쫙 펴집니다.
 - **경량 엔진 템플릿**(`tools/engine/web_template.env`)은 물리·내비게이션·XR·네트워크·RegEx·mp3 등을 뺍니다. 그런 클래스를 쓰려면 env에서 해당 옵션을 지웁니다. 그러면 CI가 템플릿을 다시 빌드합니다. `python3 tools/engine/check_classes.py <godot 소스>`가 빠진 클래스 사용을 잡습니다.
 - **웹에는 셰이더 바이너리 캐시(PSO 캐시)가 없습니다**. 전투에 처음 나오는 것은 `ShaderWarmup`(`scripts/level/shader_warmup.gd`)이 로딩 화면 뒤에서 한 번씩 그려 컴파일해 둡니다. 새 이펙트·투사체·조명을 넣으면 워밍업에도 넣고, 위 명령으로 전투 중 컴파일이 0인지 확인합니다(`docs/PERFORMANCE.md` 7절).
 - **게시 전 브라우저 스모크 테스트**(`browser_test.py --smoke`)가 실패하면 배포되지 않습니다.
