@@ -26,6 +26,15 @@ GL_HOOK = """(() => {
   }
   const tick = () => { if (st.on) st.frames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
 })();"""
+# GL programs linked and the time spent in the calls that wait for a compile (Godot asks for the
+# compile/link status right away, which blocks until the GPU process has compiled the shader)
+COMPILE_HOOK = """(() => {
+  const P = WebGL2RenderingContext.prototype; const st = window.__glc = {links: 0, ms: 0};
+  for (const f of ['compileShader', 'linkProgram', 'getShaderParameter', 'getProgramParameter']) {
+    const o = P[f]; if (!o) continue;
+    P[f] = function () { const t = performance.now(); try { return o.apply(this, arguments); } finally { st.ms += performance.now() - t; if (f === 'linkProgram') st.links++; } };
+  }
+})();"""
 QUERY = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--query=")), "")
 LOCALE = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--locale=")), "ko-KR")
 THROTTLE = float(next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--throttle=")), "0"))  # Mbit/s, 0 = off
@@ -66,6 +75,8 @@ async def main():
         pg.set_default_timeout(120000)
         if GLCOUNT:
             await pg.add_init_script(GL_HOOK)
+        if PLAY:
+            await pg.add_init_script(COMPILE_HOOK)
         logs = []
         pg.on("console", lambda m: logs.append(f"[{m.type}] {m.text}"))
         marks = {}
@@ -148,6 +159,9 @@ async def main():
             await pg.wait_for_timeout(int(CARD_WAIT * 1000))
             await pg.screenshot(path=out + "_card.png")
             t_click = time.time() - t0
+            glc0 = await pg.evaluate("window.__glc || null")
+            if glc0:
+                print("GL programs linked before the battle (title, world map) %d, %.0f ms" % (glc0["links"], glc0["ms"]))
             await pg.keyboard.press("Enter")
             if EARLY:
                 await pg.wait_for_timeout(1500)
@@ -157,6 +171,9 @@ async def main():
             # the shader warm-up runs behind the dark screen (input is blocked until it is done)
             await wait_mark("shader_warmup_done", 300)
             print("shader warm-up %.1fs" % (marks.get("shader_warmup_done", 0) - marks.get("level_first_frame", 0)))
+            glc = await pg.evaluate("window.__glc || null")
+            if glc:
+                print("GL programs linked so far %d, %.0f ms in compile/link calls" % (glc["links"], glc["ms"]))
             await pg.wait_for_timeout(4000)
             await pg.screenshot(path=out + "_level.png")
             if GLCOUNT:
