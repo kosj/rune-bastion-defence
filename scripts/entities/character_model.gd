@@ -8,6 +8,8 @@ const YAW_FIX := {"hero": {"run": 90.0}, "footman": {"run": 90.0}, "goblin": {"r
 const ATTACK_IMPACT := 0.62  # seconds into the trimmed attack clip
 
 static var _prepared := {}
+## Off for before/after review captures (test_runner noidlelife=1).
+static var life_enabled := true
 static var _tint_mats := {}
 static var _blob_mesh: QuadMesh
 static var _blob_mat: ShaderMaterial
@@ -28,9 +30,13 @@ var _blob_size := 1.0
 var blob_y := 0.14
 ## Flying units (gargoyles) hover above the ground: no contact shadow under them.
 var ground_blob := true
+## Breathing / weight shift / looking around over the idle clip (heroes; see IdleLife).
+var life: IdleLife
 
 func setup(p_model: String, p_scale: float, tint := Color.WHITE, weapon := "") -> CharacterModel:
 	model_name = p_model
+	var life_amount := life.amount if is_instance_valid(life) else -1.0
+	life = null  # it belongs to the previous skeleton
 	var inst := Assets.instance(p_model)
 	_inst = inst
 	add_child(inst)
@@ -58,6 +64,8 @@ func setup(p_model: String, p_scale: float, tint := Color.WHITE, weapon := "") -
 			body.material_override = _tinted(p_model, tint)
 	if weapon != "" and skel:
 		attach_weapon(weapon)
+	if life_amount > 0.0:
+		add_idle_life(life_amount)
 	_blob_size = clampf(p_scale * 0.55, 0.7, 3.0)
 	add_to_group("unit_shadow")
 	refresh_shadow()
@@ -163,6 +171,15 @@ func attach_weapon(weapon: String, bone := "RightHand") -> void:
 const WEAPON_ROT := Vector3(-90, 0, 0)
 const WEAPON_POS := Vector3(0.0, 0.04, 0.0)
 
+## Adds IdleLife to the skeleton (after the AnimationPlayer's pose).
+func add_idle_life(amount := 1.0) -> void:
+	if skel == null or life != null or not life_enabled:
+		return
+	life = IdleLife.new()
+	life.amount = amount
+	skel.add_child(life)
+	life.set_idle(current == "idle")
+
 func has(n: String) -> bool:
 	return anim != null and anim.has_animation(n)
 
@@ -179,6 +196,8 @@ func play(n: String, speed := 1.0, blend := -1.0, restart := false) -> void:
 		anim.speed_scale = speed
 		return
 	current = n
+	if life:
+		life.set_idle(n == "idle")
 	_yaw_target = deg_to_rad(YAW_FIX.get(model_name, {}).get(n, 0.0))
 	anim.speed_scale = speed
 	anim.play(n, blend)

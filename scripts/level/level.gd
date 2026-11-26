@@ -117,6 +117,9 @@ func _ready() -> void:
 	_place_plots()
 	_place_vignette(bounds)
 	_place_events(bounds)
+	# the hero's spot is chosen after the plots and set pieces and kept clear of props
+	_hero_at = _hero_spot(bounds)
+	terrain.keepout.append(Vector3(_hero_at.x, _hero_at.y, HERO_CLEAR))
 	_decorate(def["theme"])
 	terrain.build_grass(2600 if Game.high_quality else 1100)
 	_make_range_ring()
@@ -925,9 +928,61 @@ func _show_range(p: Vector3, r: float, c := Color(1.0, 0.85, 0.35)) -> void:
 	range_ring.scale = Vector3(r, 1, r)
 	(range_ring.material_override as ShaderMaterial).set_shader_parameter("col", c)
 
-func _spawn_hero() -> void:
+## Room the hero keeps around its spot: no prop is scattered inside it.
+const HERO_CLEAR := 1.6
+var _hero_at := Vector2.INF
+
+## Where the hero appears: the level's `hero_start`, moved to the nearest spot that is clear of
+## build plots (their stone rings are 1.8 m across the middle), set pieces, the river and steep
+## ground, beside or on the road. The plots are placed with a random tie-break and the set pieces
+## move with them, so a fixed point could land inside a ring or a prop; this runs after both.
+func _hero_spot(bounds: Rect2) -> Vector2:
 	var hs: Array = def["hero_start"]
-	var p := Vector3(hs[0], terrain.walk_height(hs[0], hs[1]), hs[1])
+	var want := Vector2(hs[0], hs[1])
+	var inner := bounds.grow(-2.0)
+	var best := want
+	var best_cost := INF
+	for ring in 13:
+		var r := ring * 0.6
+		var n := 1 if ring == 0 else 8 + ring * 4
+		for i in n:
+			var a := TAU * float(i) / float(n)
+			var p := want + Vector2(cos(a), sin(a)) * r
+			if not inner.has_point(p) or terrain.in_river(p.x, p.y):
+				continue
+			var ok := true
+			for pl in plots:
+				if (pl as Vector2).distance_to(p) < 1.8 + 1.0:
+					ok = false
+					break
+			if not ok:
+				continue
+			for k in terrain.keepout:
+				if Vector2(k.x, k.y).distance_to(p) < k.z + 0.8:
+					ok = false
+					break
+			if not ok:
+				continue
+			# level ground under the feet
+			var h0 := terrain.height_at(p.x, p.y)
+			var steep := 0.0
+			for d in [Vector2(0.7, 0), Vector2(-0.7, 0), Vector2(0, 0.7), Vector2(0, -0.7)]:
+				steep = maxf(steep, absf(terrain.height_at(p.x + d.x, p.y + d.y) - h0))
+			if steep > 0.3:
+				continue
+			# near the road, where the fighting is; close to the designed spot
+			var pd := terrain.path_dist(p.x, p.y)
+			var cost := r + maxf(pd - 2.5, 0.0) * 2.0
+			if cost < best_cost:
+				best_cost = cost
+				best = p
+		if best_cost <= r:
+			break  # nothing further out can beat what was found
+	return best
+
+func _spawn_hero() -> void:
+	var hs := _hero_at if _hero_at != Vector2.INF else Vector2(def["hero_start"][0], def["hero_start"][1])
+	var p := Vector3(hs.x, terrain.walk_height(hs.x, hs.y), hs.y)
 	hero = Hero.new()
 	world.add_child(hero)
 	hero.setup_hero(p)

@@ -250,6 +250,7 @@ func _build_world() -> void:
 	_hero.setup(hd["model"], hd["scale"], Color.WHITE, hd["weapon"])
 	_hero.rotation_degrees.y = 15
 	_hero.play("idle")
+	_hero.add_idle_life()  # fades in from the still pose, so the backdrop picture still matches
 	if not await _step(): return
 	for i in 3:
 		var fm := CharacterModel.new()

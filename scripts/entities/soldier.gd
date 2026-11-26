@@ -181,7 +181,8 @@ func _go_home(delta: float) -> void:
 		_move_towards(dest, delta)
 	else:
 		if model.current != "idle" and _react_t <= 0.0:
-			model.play("idle")
+			# heroes settle out of the run more slowly (a stop, not a snap)
+			model.play("idle", 1.0, 0.32 if is_hero else -1.0)
 		if hp < max_hp:
 			hp = minf(max_hp, hp + regen * delta)
 

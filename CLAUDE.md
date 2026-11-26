@@ -11,10 +11,12 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
   - `python3 tools/make_fonts.py --check`: 쓰인 글자가 폰트에 있는지
   - `tools/check_chunks.sh`: 화면이 기다리지 않는 청크의 에셋을 부르는지
   - `tools/check_sheets.sh`: 모든 팝업이 닫기 버튼·바깥 탭·Esc로 닫히는지(가로·세로)
+  - `tools/check_spawn.sh`: 레벨마다 영웅 시작 위치가 부지·강·소품과 겹치지 않는지
   - 셀프 테스트: `test_runner.tscn -- selftest=1`
   - AI 플레이: `LEVELS="0 4 8" tools/balance.sh smart 0`
   - 엔진 클래스: `python3 tools/engine/check_classes.py <godot 4.7.2 소스>`
   - 브라우저 스모크: `python3 tools/browser_test.py build/web_hosted /tmp/s 1280 720 --play --nosw --smoke`
+- 전투 중 셰이더 컴파일 수: `DISPLAY=:77 tools/perf/shader_compiles.sh 2 1`(0이어야 함. 원인 찾기는 `GLSHIM_DUMP=<폴더>`)
 - UI 점검: `DISPLAY=:77 tools/ui_shots.sh /tmp/ui 2`(15개 화면 × PC·폰 세로·폰 가로)
 - 화면 확인: `DISPLAY=:77 godot --path . --rendering-driver opengl3 --resolution 1600x900 res://scenes/test_runner.tscn -- mode=shots ...`(옵션은 `scripts/tools/test_runner.gd` 머리말)
 
@@ -27,6 +29,7 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
   - 노멀·ORM·건물 albedo의 절반 축소는 이미 기준에 못 미쳤습니다.
 - **메시 예산은 화면 오차로 정합니다**: `tools/pipeline/rebuild_assets.sh`의 `e1.0`(가장 가까운 줌에서 원본과 1px, 폰 `e1.6`). 숫자를 손으로 낮추지 않습니다(MultiMesh 소품만 `e1.0/상한`). 모델을 다시 생성하면 `ALBEDO_REF`로 이전 색을 유지합니다. GLB를 바꾸면 추출된 `<이름>_albedo/normal/orm.png*`를 지우고 다시 임포트합니다(내용이 같은 GLB는 `.godot/imported/<이름>.glb-*`도 지워야 다시 추출됩니다).
 - **경량 엔진 템플릿**(`tools/engine/web_template.env`)은 물리·내비게이션·XR·네트워크·RegEx·mp3 등을 뺍니다. 그런 클래스를 쓰려면 env에서 해당 옵션을 지웁니다. 그러면 CI가 템플릿을 다시 빌드합니다. `python3 tools/engine/check_classes.py <godot 소스>`가 빠진 클래스 사용을 잡습니다.
+- **웹에는 셰이더 바이너리 캐시(PSO 캐시)가 없습니다**. 전투에 처음 나오는 것은 `ShaderWarmup`(`scripts/level/shader_warmup.gd`)이 로딩 화면 뒤에서 한 번씩 그려 컴파일해 둡니다. 새 이펙트·투사체·조명을 넣으면 워밍업에도 넣고, 위 명령으로 전투 중 컴파일이 0인지 확인합니다(`docs/PERFORMANCE.md` 7절).
 - **게시 전 브라우저 스모크 테스트**(`browser_test.py --smoke`)가 실패하면 배포되지 않습니다.
 - **텍스트를 추가하면** 영어를 `tools/i18n/en_*.txt`에 넣고 `python3 tools/i18n_build.py`를 돌립니다(`lang_en.gd`는 생성 파일). 그다음 `python3 tools/make_fonts.py`로 폰트를 다시 만듭니다. CI가 `i18n_build.py --check`로 빠진 영어를 잡습니다.
 - **타이틀 디오라마를 바꾸면** `tools/render_backdrops.sh`(화면 필요, Xvfb)로 타이틀 그림을 다시 렌더링합니다.

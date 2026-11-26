@@ -28,6 +28,7 @@ func setup_hero(p: Vector3) -> void:
 	ranged = h.get("ranged", false)
 	shoot_range = float(h.get("range", 0.0))
 	setup_unit(h["model"], h["scale"], Color.WHITE, h["weapon"])
+	model.add_idle_life()
 	# star upgrade + persistent talents (rank points spent in the hero screen)
 	_base_hp = float(h["hp"]) * (1.2 if DB.up("hero") else 1.0) * DB.talent_mult(hid, "hp")
 	var dm := DB.talent_mult(hid, "dmg")

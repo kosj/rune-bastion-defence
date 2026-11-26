@@ -172,6 +172,8 @@ func level_intro(full: bool) -> void:
 	var def: Dictionary = lv.def
 	var hs: Array = def["hero_start"]
 	var home := Vector3(hs[0], 0, hs[1])
+	if lv.hero:
+		home = Vector3(lv.hero.spawn_point.x, 0, lv.hero.spawn_point.z)  # moved clear of plots and props
 	var cr := lv.cam_rig
 	if not full or lv.paths.is_empty():
 		cr.zoom = 40.0

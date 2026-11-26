@@ -154,6 +154,9 @@ async def main():
                 await pg.screenshot(path=out + "_wait.png")
             await wait_mark("level_first_frame", 90)
             print("level ready %.1fs after pressing start" % (marks.get("level_first_frame", 0) - t_click))
+            # the shader warm-up runs behind the dark screen (input is blocked until it is done)
+            await wait_mark("shader_warmup_done", 300)
+            print("shader warm-up %.1fs" % (marks.get("shader_warmup_done", 0) - marks.get("level_first_frame", 0)))
             await pg.wait_for_timeout(4000)
             await pg.screenshot(path=out + "_level.png")
             if GLCOUNT:
@@ -178,7 +181,7 @@ async def main():
         if SMOKE:
             need = ["menu_first_frame", "chunk_menu", "chunk_stage1", "chunk_towers", "chunk_world", "menu_world_built"]
             if PLAY:
-                need.append("level_first_frame")
+                need += ["level_first_frame", "shader_warmup_done"]
             bad = ["missing milestone " + n for n in need if n not in marks]
             for l in logs:
                 if "GL Driver" in l:

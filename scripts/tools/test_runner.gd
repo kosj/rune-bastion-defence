@@ -27,6 +27,8 @@ func _ready() -> void:
 	if args.get("cine", "0") == "1":
 		Game.testing = false  # review runs: keep the level intro / boss cinematics
 	var mode: String = args.get("mode", "auto")
+	if args.get("noidlelife", "0") == "1":
+		CharacterModel.life_enabled = false
 	if args.has("lang"):
 		Game.language = args["lang"]
 		Lang.apply(Game.language)
@@ -141,6 +143,34 @@ var _hitch_log: Array = []
 
 func _process(delta: float) -> void:
 	t += delta / maxf(Engine.time_scale, 0.01)
+	if args.has("warmup") and LevelMain.I and not has_meta("warm_started"):
+		# warmup=1: the shader warm-up a scene change runs behind the fade (Game.goto_scene)
+		set_meta("warm_started", true)
+		set_meta("warm_busy", true)
+		print("NEWTHING t=%.1f warmup" % t)
+		await ShaderWarmup.run(LevelMain.I)
+		print("NEWTHING t=%.1f after-warmup" % t)
+		remove_meta("warm_busy")
+	if has_meta("warm_busy"):
+		return  # as in the game: nothing happens behind the loading fade
+	if args.has("herocam") and LevelMain.I and LevelMain.I.hero:
+		# herocam=<zoom>: keep the camera on the hero (idle / animation review with --write-movie)
+		var rig := LevelMain.I.cam_rig
+		rig.free = true
+		rig.input_enabled = false
+		rig.zoom_min = 1.0
+		rig.zoom = float(args["herocam"])
+		rig.pitch_deg = float(args.get("heropitch", "54"))
+		rig.target = LevelMain.I.hero.global_position + Vector3(0, float(args.get("heroy", "1.0")), 0)
+		if args.has("herodir") and not has_meta("herodir_set"):
+			set_meta("herodir_set", true)
+			LevelMain.I.hero.model.rotation.y = deg_to_rad(float(args["herodir"]))
+	if args.has("herocheck") and LevelMain.I and LevelMain.I.hero and t >= 1.0 and not has_meta("hc_done"):
+		set_meta("hc_done", true)
+		_hero_check()
+	if args.has("fxprobe") and LevelMain.I and t >= 3.0 and not has_meta("fx_started"):
+		set_meta("fx_started", true)
+		_fx_probe()
 	if args.has("closetest") and LevelMain.I and t >= 3.0 and not has_meta("ct_started"):
 		set_meta("ct_started", true)
 		_close_test_level()
@@ -151,6 +181,29 @@ func _process(delta: float) -> void:
 		get_window().size = Vector2i(ws.y, ws.x)
 		get_tree().create_timer(0.5).timeout.connect(func(): print("ROTATED ", DisplayServer.window_get_size(), " ", get_window().size, " tall=", Game.tall))
 	var mode: String = args.get("mode", "auto")
+	if args.has("newlog") and LevelMain.I:
+		# newlog=1: print a line when something appears for the first time (enemy kind, tower
+		# type/level/mastery, hero skill...): marks for logs of first-use costs
+		var L := LevelMain.I
+		var seen: Dictionary = get_meta("newlog", {})
+		for e in L.enemies:
+			if not is_instance_valid(e):
+				continue
+			var k := "enemy " + (e as Enemy).type
+			if not seen.has(k):
+				seen[k] = true
+				print("NEWTHING t=%.1f %s" % [t, k])
+		for key in L.towers:
+			var tw := L.towers[key] as Tower
+			var k2 := "tower %s%d%s" % [tw.type, tw.level, ("_" + tw.mastery) if tw.mastery != "" else ""]
+			if not seen.has(k2):
+				seen[k2] = true
+				print("NEWTHING t=%.1f %s" % [t, k2])
+		var wv := "wave %d" % L.wave_idx
+		if not seen.has(wv):
+			seen[wv] = true
+			print("NEWTHING t=%.1f %s" % [t, wv])
+		set_meta("newlog", seen)
 	if args.has("hitch"):
 		# hitch=<ms>: log every frame slower than that (first-use loads / shader compiles)
 		var now := Time.get_ticks_usec()
@@ -1226,4 +1279,146 @@ func _close_test_level() -> void:
 		if not ok:
 			_ct_fails += 1
 	print("CLOSETEST DONE fails=%d" % _ct_fails)
+	get_tree().quit()
+
+
+# ---------------------------------------------------------------- fxprobe (first-use hitches)
+
+## fxprobe=1: fires every effect (and builds every tower, spawns every enemy of the level) twice,
+## a second apart, and prints the slowest frame after each: the first time minus the second time
+## is what that thing costs the first time it is drawn (shader compile, first load).
+## Run at a tiny window: software GL draws slowly, the compile cost is what is being measured.
+func _fx_probe_frame_max(frames: int) -> float:
+	var worst := 0.0
+	var last := Time.get_ticks_usec()
+	for i in frames:
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec()
+		worst = maxf(worst, (now - last) / 1000.0)
+		last = now
+	return worst
+
+func _fx_probe() -> void:
+	var L: LevelMain = LevelMain.I
+	var fx: FX = L.fx
+	var c: Vector3 = L.cam_rig.target
+	var p := Vector3(c.x, L.terrain.height_at(c.x, c.z) + 0.5, c.z)
+	var dummy := Node3D.new()
+	L.world.add_child(dummy)
+	dummy.global_position = p
+	var items: Array = [
+		["light_flash", func(): fx.light_flash(p, Color(1, 0.6, 0.3), 3.0, 8.0, 0.4)],
+		["hit_spark", func(): fx.hit_spark(p, Color(1, 0.8, 0.4))],
+		["magic_burst", func(): fx.magic_burst(p, Color(0.6, 0.4, 1.0))],
+		["heal", func(): fx.heal(p)],
+		["burn_puff", func(): fx.burn_puff(p)],
+		["dust", func(): fx.dust(p)],
+		["smoke", func(): fx.smoke(p)],
+		["muzzle_flash", func(): fx.muzzle_flash(p, Vector3.FORWARD)],
+		["explosion", func(): fx.explosion(p)],
+		["telegraph", func(): fx.telegraph(p, 2.0, 0.6, Color(1, 0.3, 0.2))],
+		["firework", func(): fx.firework(p, Color(1, 0.8, 0.3))],
+		["shockwave", func(): fx.shockwave(p, 3.0, Color(0.6, 0.8, 1.0))],
+		["fire_ring", func(): fx.fire_ring(p, 2.0)],
+		["slash_arc", func(): fx.slash_arc(p, Color(1, 1, 1))],
+		["build_poof", func(): fx.build_poof(p)],
+		["upgrade_beam", func(): fx.upgrade_beam(p)],
+		["level_up", func(): fx.level_up(dummy)],
+		["move_marker", func(): fx.move_marker(p)],
+		["stun_stars", func(): fx.stun_stars(dummy)],
+		["frost_nova", func(): fx.frost_nova(p, 2.5)],
+		["ice_shards", func(): fx.ice_shards(p, 2.5)],
+		["rune_circle", func(): fx.rune_circle(p, Color(0.5, 0.8, 1.0))],
+		["charge", func(): fx.charge(p, Color(0.5, 0.8, 1.0))],
+		["lightning", func(): fx.lightning(p + Vector3(0, 4, 0), p, Color(0.6, 0.8, 1.0))],
+		["scorch", func(): fx.scorch(p, 1.5)],
+		["soul", func(): fx.soul(p)],
+		["coin_burst", func(): fx.coin_burst(p)],
+		["fire_patch", func(): fx.fire_patch(p, 1.5, 0.0)],
+	]
+	var res := {}
+	print("FXMARK -1 start")
+	for pass_i in 2:
+		for it in items:
+			await _fx_probe_frame_max(8)  # settle
+			print("FXMARK %d %s" % [pass_i, it[0]])
+			(it[1] as Callable).call()
+			var ms: float = await _fx_probe_frame_max(6)
+			if pass_i == 0:
+				res[it[0]] = [ms, 0.0]
+			else:
+				res[it[0]][1] = ms
+	var total := 0.0
+	for k in res:
+		var d: float = res[k][0] - res[k][1]
+		total += maxf(d, 0.0)
+		print("FXPROBE %-14s first %6.0f ms  again %6.0f ms  extra %6.0f ms" % [k, res[k][0], res[k][1], d])
+	print("FXPROBE TOTAL extra %.0f ms" % total)
+	get_tree().quit()
+
+
+# ---------------------------------------------------------------- herocheck (spawn spot is clear)
+
+## herocheck=1: what overlaps the hero where it appears: build plots, set pieces, props,
+## landmarks, the river. Prints one line per overlap and HEROCHECK <level> clear|N overlaps.
+func _hero_check() -> void:
+	var L: LevelMain = LevelMain.I
+	var hp: Vector3 = L.hero.spawn_point
+	var foot := 0.7
+	var hits: Array = []
+	for pl in L.plots:
+		var d := (pl as Vector2).distance_to(Vector2(hp.x, hp.z))
+		if d < 2.0 + foot:
+			hits.append("plot at %.1f m" % d)
+	for k in L.terrain.keepout:
+		var d2 := Vector2(k.x, k.y).distance_to(Vector2(hp.x, hp.z))
+		if d2 < 0.05:
+			continue  # the hero's own clearing
+		if d2 < k.z:
+			hits.append("keep-out area (r %.1f) at %.1f m" % [k.z, d2])
+	if L.terrain.in_river(hp.x, hp.z):
+		hits.append("river")
+	var box := AABB(hp - Vector3(foot, -0.05, foot), Vector3(foot * 2.0, 1.9, foot * 2.0))
+	var skip := {L.terrain: true, L.hero: true}
+	for g in L.get_tree().root.find_children("*", "GeometryInstance3D", true, false):
+		var gi := g as GeometryInstance3D
+		if not gi.visible or not gi.is_visible_in_tree():
+			continue
+		var under_skip := false
+		var n: Node = gi
+		while n:
+			if skip.has(n):
+				under_skip = true
+				break
+			n = n.get_parent()
+		if under_skip and not (gi is MultiMeshInstance3D):
+			continue
+		if gi is MultiMeshInstance3D:
+			continue  # props: checked from the scatter's own transforms below (headless runs keep no instance data)
+		elif gi is MeshInstance3D:
+			var mi := gi as MeshInstance3D
+			if mi.mesh == null:
+				continue
+			var a: AABB = mi.global_transform * mi.mesh.get_aabb()
+			if a.size.y < 0.35 or a.size.x > 30.0:
+				continue
+			if a.intersects(box):
+				hits.append("mesh %s at %s" % [mi.get_path(), a.get_center()])
+	for pname in L.terrain.decor_xf:
+		var m := Assets.mesh(pname)
+		if m == null:
+			continue
+		var ma := m.get_aabb()
+		if ma.size.y < 0.35:
+			continue
+		for xf: Transform3D in L.terrain.decor_xf[pname]:
+			var wa: AABB = xf * ma
+			if wa.intersects(box):
+				hits.append("prop %s at (%.1f, %.1f)" % [pname, xf.origin.x, xf.origin.z])
+	var pm := Assets.mesh("plot")
+	if pm:
+		print("HEROCHECK   (plot ring half-width %.2f)" % (pm.get_aabb().size.x * 0.5))
+	for h in hits:
+		print("HEROCHECK   %s" % h)
+	print("HEROCHECK level %d %s at (%.1f, %.1f) %s" % [L.level_idx, L.def["id"], hp.x, hp.z, "clear" if hits.is_empty() else "%d overlaps" % hits.size()])
 	get_tree().quit()

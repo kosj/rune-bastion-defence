@@ -33,6 +33,7 @@ var battery_saver := false  # cap the frame rate at 30 (cooler, longer-lasting p
 
 var _fade_layer: CanvasLayer
 var _fade_rect: ColorRect
+var _fade_note: Label  # "preparing the battlefield" while the shader warm-up holds the frames
 var _busy := false
 
 func _ready() -> void:
@@ -52,6 +53,16 @@ func _ready() -> void:
 	_fade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_fade_layer.add_child(_fade_rect)
+	_fade_note = Label.new()
+	_fade_note.visible = false
+	_fade_note.set_anchors_preset(Control.PRESET_CENTER)
+	_fade_note.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_fade_note.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_fade_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_fade_note.add_theme_font_override("font", Assets.font("ui"))
+	_fade_note.add_theme_font_size_override("font_size", 20)
+	_fade_note.add_theme_color_override("font_color", Color(0.62, 0.667, 0.73))
+	_fade_layer.add_child(_fade_note)
 	apply_quality()
 	get_tree().root.size_changed.connect(_fit_ui)
 	_fit_ui()
@@ -187,6 +198,13 @@ func goto_scene(path: String) -> void:
 	get_tree().change_scene_to_file(path)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	if path.ends_with("level.tscn") and LevelMain.I and is_instance_valid(LevelMain.I) and LevelMain.I.is_inside_tree():
+		# compile every shader the battle can need while the screen is still dark (ShaderWarmup)
+		_fade_note.text = tr("전장을 준비하는 중...")
+		_fade_note.visible = true
+		await get_tree().process_frame  # the note is on screen before the compiles hold the frames
+		await ShaderWarmup.run(LevelMain.I)
+		_fade_note.visible = false
 	var tw2 := create_tween()
 	tw2.tween_property(_fade_rect, "color:a", 0.0, 0.5)
 	await tw2.finished
