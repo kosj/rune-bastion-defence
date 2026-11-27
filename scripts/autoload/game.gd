@@ -7,6 +7,8 @@ const SAVE_PATH := "user://rune_bastion_save.cfg"
 const BACKUP_PATH := "user://rune_bastion_save.bak.cfg"
 const SAVE_VERSION := 2
 var _persist_asked := false
+## Tester tools (the play-log export in Settings): debug builds, or "?dev" in the page address.
+var dev := OS.is_debug_build()
 var restored_from_backup := false
 
 var stars: Array = []
@@ -54,7 +56,9 @@ func _ready() -> void:
 	if OS.has_feature("web"):
 		print("[RB] gpu texture formats: etc2=%s astc=%s s3tc=%s" % [OS.has_feature("etc2"), OS.has_feature("astc"), OS.has_feature("s3tc")])
 		# "?perf=1" in the address: the performance readout for testing on devices (docs/DEVICE_TEST.md)
-		if str(JavaScriptBridge.eval("location.search", true)).contains("perf"):
+		var q := str(JavaScriptBridge.eval("location.search", true))
+		dev = dev or q.contains("dev")
+		if q.contains("perf"):
 			(func(): PerfOverlay.toggle(get_tree())).call_deferred()
 	_fade_layer = CanvasLayer.new()
 	_fade_layer.layer = 100

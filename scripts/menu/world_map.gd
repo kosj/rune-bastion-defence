@@ -589,21 +589,31 @@ func _open_daily_card(from: Control) -> void:
 	info.add_child(UI.ink(DB.LEVELS[mi]["name"], 22, UI.INK, "title_kr"))
 	var iw := w if Game.tall else w - 256.0
 	for m in dd["mods"]:
+		# each twist: its icon, the name, and what it does underneath
 		var md: Dictionary = DB.DAILY_MODS[m]
 		var mr := HBoxContainer.new()
-		mr.add_theme_constant_override("separation", 8)
-		mr.add_child(UI.icon(Assets.tex(md["icon"]), 30))
-		var ml := UI.ink(tr(md["name"]) + "  ·  " + tr(md["desc"]), 17, UI.INK)
+		mr.add_theme_constant_override("separation", 10)
+		var mi_ic := UI.icon(Assets.tex(md["icon"]), 34)
+		mi_ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mr.add_child(mi_ic)
+		var mc := VBoxContainer.new()
+		mc.add_theme_constant_override("separation", -2)
+		mc.add_child(UI.ink(md["name"], 18, UI.INK, "ui_black"))
+		var ml := UI.ink(md["desc"], UI.T_SMALL, UI.INK_SOFT)
 		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		ml.custom_minimum_size = Vector2(iw - 40.0, 0)
-		mr.add_child(ml)
+		ml.custom_minimum_size = Vector2(iw - 44.0, 0)
+		mc.add_child(ml)
+		mr.add_child(mc)
 		info.add_child(mr)
 	var done := Game.daily_done_today()
 	var rew := UI.ink(tr("오늘 완료! 내일 새 도전이 열립니다") if done else (tr("첫 승리 보상: 영웅 경험치 +%d") % DB.DAILY_XP), UI.T_SMALL, UI.GOLD if not done else UI.INK_SOFT, "ui_black")
 	rew.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rew.custom_minimum_size = Vector2(iw, 0)
 	info.add_child(rew)
-	info.add_child(UI.stat("star", tr("연속 %d일 · 최고 %d일") % [Game.daily_streak(), int(Game.stats.get("daily_streak_best", 0))], 17))
+	# the streak once there is one (a "0 days" line reads as a scolding before the first win)
+	var best := int(Game.stats.get("daily_streak_best", 0))
+	if best > 0:
+		info.add_child(UI.stat("star", tr("연속 %d일 · 최고 %d일") % [Game.daily_streak(), best], 17))
 	var go := UI.button("다시 도전" if done else "도전", 26, true, Vector2(0, 58), "primary")
 	go.icon = Assets.tex("ic_play")
 	go.pressed.connect(func(): Game.start_daily())

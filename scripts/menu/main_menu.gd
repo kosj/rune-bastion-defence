@@ -392,17 +392,6 @@ func _build_title(first := false) -> void:
 			b.add_child(bd)
 		btns.append(b)
 	vb.add_child(UI.action_row(btns))
-	var credit := UI.label("3D 애셋: NCSOFT VARCO 3D 생성형 AI  ·  파이프라인: Blender  ·  엔진: Godot 4", 14, UI.MUTED, 3)
-	credit.anchor_left = 0.0
-	credit.anchor_right = 1.0
-	credit.anchor_top = 1.0
-	credit.anchor_bottom = 1.0
-	credit.offset_left = 16
-	credit.offset_right = -16
-	credit.offset_top = -(44 if t else 30)
-	credit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	credit.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_title_root.add_child(credit)
 	_menu_items = [_title_root]
 	if _select:
 		_title_root.visible = false
@@ -557,10 +546,24 @@ func _open_heroes() -> void:
 		var nv := VBoxContainer.new()
 		nv.add_theme_constant_override("separation", 0)
 		nv.alignment = BoxContainer.ALIGNMENT_CENTER
-		nv.add_child(UI.ink(h["name"], 24, UI.INK if unlocked else UI.INK_SOFT, "title_kr"))
-		nv.add_child(UI.ink(h["title"], UI.T_SMALL, UI.GOLD, "ui_black"))
+		# the name block wraps inside the card instead of widening it (long English names
+		# pushed three cards past a phone's width)
+		var name_w := cw - psz - 14.0 - 36.0
+		var nl := UI.ink(h["name"], 24, UI.INK if unlocked else UI.INK_SOFT, "title_kr")
+		var tl := UI.ink(h["title"], UI.T_SMALL, UI.GOLD, "ui_black")
 		var kind := tr("원거리 · 사거리 %.1f") % float(h["range"]) if h.get("ranged", false) else "근접 · 적을 막아섬"
-		nv.add_child(UI.ink(kind, UI.T_SMALL, UI.INK_SOFT))
+		var kl := UI.ink(kind, UI.T_SMALL, UI.INK_SOFT)
+		# a long name first steps its size down (to 18) to stay on one line; wrapping is the last
+		# resort (a Japanese name would otherwise break mid-word)
+		var nf: Font = nl.get_theme_font("font")
+		var nfs := 24
+		while nfs > 18 and nf.get_string_size(tr(h["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, nfs).x > name_w:
+			nfs -= 1
+		nl.add_theme_font_size_override("font_size", nfs)
+		for l in [nl, tl, kl]:
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.custom_minimum_size.x = name_w
+			nv.add_child(l)
 		top.add_child(nv)
 		cv.add_child(top)
 		var d := UI.ink(h["desc"], UI.T_SMALL, UI.INK)
@@ -573,24 +576,10 @@ func _open_heroes() -> void:
 		sr.add_child(UI.stat("st_dmg", "%d-%d" % [h["dmg"][0], h["dmg"][1]], 17))
 		sr.add_child(UI.stat("st_armor", "%d%%" % int(float(h["armor"]) * 100), 17))
 		cv.add_child(sr)
-		var sk := HBoxContainer.new()
-		sk.add_theme_constant_override("separation", 8)
-		sk.add_child(UI.icon(Assets.tex(h["skill_icon"]), 30))
-		var skn := UI.ink(h["skill_name"], 17, UI.INK, "ui_black")
-		skn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		sk.add_child(skn)
-		sk.add_child(UI.ink(tr("재사용 %d초") % int(h["skill_cd"]), UI.T_SMALL, UI.INK_SOFT))
-		cv.add_child(sk)
+		cv.add_child(_skill_line(h["skill_icon"], h["skill_name"], tr("재사용 %d초") % int(h["skill_cd"])))
 		# the second skill opens partway through each battle
 		var s2: Dictionary = h["skill2"]
-		var sk2 := HBoxContainer.new()
-		sk2.add_theme_constant_override("separation", 8)
-		sk2.add_child(UI.icon(Assets.tex(s2["icon"]), 30))
-		var skn2 := UI.ink(s2["name"], 17, UI.INK, "ui_black")
-		skn2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		sk2.add_child(skn2)
-		sk2.add_child(UI.ink(tr("전투 Lv%d부터 · 재사용 %d초") % [DB.SKILL2_LEVEL, int(s2["cd"])], UI.T_SMALL, UI.INK_SOFT))
-		cv.add_child(sk2)
+		cv.add_child(_skill_line(s2["icon"], s2["name"], tr("전투 Lv%d부터 · 재사용 %d초") % [DB.SKILL2_LEVEL, int(s2["cd"])]))
 		# persistent rank (lifetime XP) -> talent points
 		var rk := HBoxContainer.new()
 		rk.add_theme_constant_override("separation", 8)
@@ -642,6 +631,15 @@ func _open_heroes() -> void:
 		brow.append(b)
 		var ar := UI.action_row(brow)
 		b.size_flags_stretch_ratio = 2.0
+		if cw < 400.0:
+			# a narrow card (three across a phone held sideways): smaller labels, and the buttons
+			# never push the card wider than its share of the sheet
+			for bb in brow:
+				(bb as Button).add_theme_font_size_override("font_size", 17)
+				(bb as Button).add_theme_constant_override("icon_max_width", 18)
+				(bb as Button).add_theme_constant_override("h_separation", 6)
+				(bb as Button).clip_text = true
+			b.size_flags_stretch_ratio = 1.6
 		# side by side, the cards share one height and their buttons one line
 		var push := Control.new()
 		push.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1110,7 +1108,16 @@ func _open_upgrades() -> void:
 		var hb := HBoxContainer.new()
 		hb.add_theme_constant_override("separation", 12)
 		cp.add_child(hb)
-		hb.add_child(UI.icon(Assets.tex(u["icon"]), 50))
+		# every upgrade sits in the same round slot (tower renders and drawn icons alike), so the
+		# grid reads as one set
+		var slot := PanelContainer.new()
+		var sst := UI.flat(UI.RIDGE_LIP, 29, Vector4(5, 5, 5, 5))
+		sst.border_color = Color(1, 1, 1, 0.10)
+		sst.set_border_width_all(1)
+		slot.add_theme_stylebox_override("panel", sst)
+		slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		slot.add_child(UI.icon(Assets.tex(u["icon"]), 48))
+		hb.add_child(slot)
 		var tv := VBoxContainer.new()
 		tv.add_theme_constant_override("separation", 0)
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1246,9 +1253,11 @@ func _open_settings() -> void:
 	im.icon = Assets.tex("ic_map")
 	im.pressed.connect(func(): _swap(shade, func(): _open_save_code(false)))
 	right.add_child(UI.action_row([ex, im]))
-	var pl := UI.button("플레이 기록 보내기 (밸런스 피드백)", 17, false, Vector2(0, 48), "secondary")
-	pl.pressed.connect(func(): _swap(shade, _open_playlog))
-	right.add_child(pl)
+	if Game.dev:
+		# a tester's tool (a code to paste back to the developer), not a player feature
+		var pl := UI.button("플레이 기록 보내기 (밸런스 피드백)", 17, false, Vector2(0, 48), "secondary")
+		pl.pressed.connect(func(): _swap(shade, _open_playlog))
+		right.add_child(pl)
 	# installable web app (PWA): Chrome/Edge/Android hand us their install prompt; iOS needs Safari's share menu
 	if OS.has_feature("web") and not bool(JavaScriptBridge.eval("!!(window.rbStandalone && window.rbStandalone())", true)):
 		if bool(JavaScriptBridge.eval("!!(window.rbCanInstall && window.rbCanInstall())", true)):
@@ -1284,6 +1293,38 @@ func _open_settings() -> void:
 		UI._btn_styles(rs, "ghost")
 		rs.disabled = true)
 	right.add_child(rs)
+	right.add_child(_section("정보"))
+	var cr := UI.button("크레딧", 18, false, Vector2(0, 48), "ghost")
+	cr.icon = Assets.tex("ic_book")
+	cr.pressed.connect(func(): _swap(shade, _open_credits))
+	right.add_child(cr)
+
+## Who and what made the game (the tool credits used to sit under the title).
+func _open_credits() -> void:
+	var o := _overlay("크레딧", 620.0)
+	var shade: Control = o[0]
+	var vb: VBoxContainer = o[1]
+	var w: float = o[2]
+	vb.add_theme_constant_override("separation", 14)
+	var head := UI.title("Rune Bastion", 30, "title", 5)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(head)
+	for row in [["엔진", "Godot Engine 4 (MIT 라이선스)"],
+			["3D 모델", "NCSOFT VARCO 3D 생성형 AI, Blender로 다듬음"],
+			["음성과 음악", "ElevenLabs 음성·음악 생성, 일부 곡은 자체 작곡 도구"],
+			["글꼴", "Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)"],
+			["게임 디자인과 개발", "룬 바스티온 팀"]]:
+		var c := VBoxContainer.new()
+		c.add_theme_constant_override("separation", 2)
+		c.add_child(UI.ink(row[0], 16, UI.GOLD, "ui_black"))
+		var l := UI.ink(row[1], 18, UI.TEXT)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size = Vector2(w, 0)
+		c.add_child(l)
+		vb.add_child(c)
+	var back := UI.button("설정으로", 18, false, Vector2(0, 50), "ghost")
+	back.pressed.connect(func(): _swap(shade, _open_settings))
+	vb.add_child(UI.action_row([back]))
 
 func _section(text: String) -> Control:
 	var l := UI.ink(text, 17, UI.GOLD, "ui_black")
@@ -1298,6 +1339,25 @@ func _toggle(text: String, on: bool, cb: Callable) -> CheckButton:
 	c.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	c.toggled.connect(cb)
 	return c
+
+## A hero skill in the hero card: icon, then the name over its cooldown line. Two lines rather than
+## name and cooldown side by side, so a long translation never widens the card past the sheet.
+func _skill_line(icon: String, skill_name: String, sub: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var ic := UI.icon(Assets.tex(icon), 34)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(ic)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", -2)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(UI.ink(skill_name, 17, UI.INK, "ui_black"))
+	var sl := UI.ink(sub, UI.T_SMALL, UI.INK_SOFT)
+	sl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	sl.custom_minimum_size.x = 40
+	col.add_child(sl)
+	row.add_child(col)
+	return row
 
 ## Row of segmented buttons; options are [value, label] pairs.
 func _choice(label: String, options: Array, current: Variant, cb: Callable) -> Control:

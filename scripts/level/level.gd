@@ -1910,6 +1910,31 @@ func _toggle_speed() -> void:
 	Engine.time_scale = 2.0 if fast else 1.0
 	hud.set_speed(fast)
 
+## One keyboard shortcut for the pause sheet: its key caps ("Q E": two caps), then what it does.
+func _key_hint(keys: String, action: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	for key in keys.split(" ", false):
+		var cap := PanelContainer.new()
+		var st := StyleBoxFlat.new()
+		st.bg_color = Color(1, 1, 1, 0.07)
+		st.border_color = Color(1, 1, 1, 0.22)
+		st.set_border_width_all(1)
+		st.border_width_bottom = 2
+		st.set_corner_radius_all(5)
+		st.content_margin_left = 7
+		st.content_margin_right = 7
+		st.content_margin_top = 1
+		st.content_margin_bottom = 1
+		cap.add_theme_stylebox_override("panel", st)
+		var kl := UI.ink(key, UI.T_SMALL - 2, UI.INK)
+		kl.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+		cap.add_child(kl)
+		cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(cap)
+	row.add_child(UI.ink(action, UI.T_SMALL, UI.MUTED))
+	return row
+
 func _pause() -> void:
 	if _modal != null or state == "won" or state == "lost":
 		return
@@ -1940,8 +1965,12 @@ func _pause() -> void:
 				_modal = null
 			_pause(), 92.0))
 		if not Game.is_mobile and not Game.tall:
-			var keys := UI.ink("Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅   Q, E 영웅 스킬", UI.T_SMALL, UI.MUTED)
-			keys.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			# keyboard shortcuts as key caps; each cap and its action wrap together, never apart
+			var keys := HFlowContainer.new()
+			keys.add_theme_constant_override("h_separation", 14)
+			keys.add_theme_constant_override("v_separation", 6)
+			for kv in [["Esc", "멈춤"], ["Space", "다음 웨이브"], ["F", "배속"], ["1 2", "주문"], ["H", "영웅 지정"], ["Q E", "영웅 스킬"]]:
+				keys.add_child(_key_hint(kv[0], kv[1]))
 			vb.add_child(keys)
 		var sp := Control.new()
 		sp.custom_minimum_size.y = 4

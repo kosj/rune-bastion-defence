@@ -11,7 +11,8 @@ class_name PackChunks
 ##   stage1 index_stage1.pck     the first battle (level 1 with Kael): terrain, effects, props,
 ##                               castle, portal, level-1 towers and their crews, its enemies
 ##   towers index_towers.pck     tower levels 2-3 (upgrades) and the troll: completes the 3D title
-##   world  index_world.pck      everything else: later enemies, bosses, the other heroes
+##   world  index_world.pck      everything else: later enemies (and the shieldbearer's shield),
+##                               bosses, the other heroes
 ##
 ## Rules (checked by tools/split_pck.py and tools/check_chunks.sh):
 ## - a chunk may only refer to assets of the same or an earlier chunk;
@@ -48,7 +49,8 @@ const DATA := {
 		"world": [
 			"assets/characters/lich*", "assets/characters/sera*", "assets/characters/ranger*",
 			"assets/characters/ogre*", "assets/characters/skeleton*", "assets/characters/gargoyle*",
-			"assets/characters/sapper*", "assets/audio/music/battle_dark.*", "assets/audio/music/battle_river.*",
+			"assets/characters/sapper*", "assets/characters/shade*", "assets/models/w_shield*",
+			"assets/audio/music/battle_dark.*", "assets/audio/music/battle_river.*",
 			"assets/audio/music/battle_night.*", "assets/audio/music/boss.*"
 		]
 	},

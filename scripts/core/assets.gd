@@ -194,6 +194,8 @@ static func battle_models(level: int) -> Array:
 					out.append(ed["model"])
 				if e[0] == "shaman":
 					out.append("shaman_crystal")
+				if e[0] == "shield":
+					out.append("w_shield")
 	var uniq: Array = []
 	for n in out:
 		if not uniq.has(n):

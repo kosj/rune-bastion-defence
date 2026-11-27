@@ -36,6 +36,7 @@ ALBEDO_REF="$RAW/props_in" blender -b -P "$H/process_hq.py" -- "$RAW/dl_hq_props
 blender -b -P "$H/process_hq.py" -- "$RAW/weapons_in/raw" "$OUT/models" "$M" \
  w_sword:height:1.44:800:512:512:hard:256:0.15:0 w_axe:height:1.34:800:512:512:hard:256:0.2:90 \
  w_club:height:1.85:900:512:512:soft:256:0.13:0 w_dagger:height:0.58:600:512:256:hard:256:0.2:0 \
+ w_shield:height:0.9:e1.0:512:256:hard:256:0.5:0 \
  mortar:foot:1.25:1800:1024:512:hard:256:0:180 meteor:foot:1.4:900:512:512:soft:256:0.5:0 \
  shaman_crystal:height:1.1:900:512:512:hard:256:0.12:0 mage_crystal:height:1.0:700:512:512:hard:256:0.5:0 \
  2>&1 | grep -E "^(DONE)|Traceback|Error"
@@ -76,11 +77,15 @@ mc 512 $C/sera.glb 1024 idle=$D3/sera_idle.glb run=$D3/sera_run.glb attack=$D3/s
 mc 256 $C/skeleton_knight.glb 1024 run=$A4/skeleton_knight_run.glb attack=$A4/skeleton_knight_attack.glb death=$A4/skeleton_knight_death.glb hit=$A5/skeleton_knight_hit.glb rise=$A5/skeleton_knight_rise_supine.glb
 mc 512 $C/lich.glb 1024 run=$A4/lich_walk.glb attack=$A4/lich_attack.glb death=$A4/lich_death.glb roar=$A4/lich_summon.glb taunt=$A5/lich_taunt.glb cast=$A5/lich_cast.glb
 mc 512 $C/ranger.glb 1024 idle=$D2/archer_anim_a.glb run=$RAW/varco/anim_v6/ranger_run.glb attack=$D2/archer_anim_b.glb skill=$RAW/varco/anim_v6/ranger_skill.glb death=$RAW/varco/anim_v6/ranger_death.glb cheer=$RAW/varco/anim_v6/ranger_cheer.glb hit=$RAW/varco/anim_v6/ranger_hit.glb
+# Nox the Shadow King (VARCO 3D, 2026-11): walk, twin slash, fall, summon (cast) and rally (roar)
+A7=$RAW/varco/anim_v7
+mc 512 $C/shade.glb 1024 run=$A7/shade_walk.glb attack=$A7/shade_attack.glb death=$A7/shade_death.glb cast=$A7/shade_cast.glb roar=$A7/shade_roar.glb
 # hands: VARCO rigs have no finger bones, so the fingers are curled in the bind pose
 # (relaxed; Kael's sword hand a fist) - hand_pose.py
 python3 "$H/hand_pose.py" $C/hero.glb $C/hero.glb --left relaxed --right grip | grep WROTE
 python3 "$H/hand_pose.py" $C/sera.glb $C/sera.glb | grep WROTE
 python3 "$H/hand_pose.py" $C/ranger.glb $C/ranger.glb | grep WROTE
+python3 "$H/hand_pose.py" $C/shade.glb $C/shade.glb --left relaxed --right grip | grep WROTE
 # tower archers and mages too (the footman's hands already close on his sword and shield)
 python3 "$H/hand_pose.py" $C/archer_unit.glb $C/archer_unit.glb | grep WROTE
 python3 "$H/hand_pose.py" $C/mage_unit.glb $C/mage_unit.glb | grep WROTE

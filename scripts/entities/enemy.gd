@@ -99,10 +99,11 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		lane = randf_range(-1.6, 1.6)
 	var weapon := ""
 	match d["model"]:
-		"goblin": weapon = "w_dagger" if type in ["goblin", "rogue", "shade"] else ("p_arrow" if type == "spear" else "")
+		"goblin": weapon = "w_dagger" if type in ["goblin", "rogue"] else ("p_arrow" if type == "spear" else "")
+		"shade": weapon = "w_dagger"
 		"skeleton_knight": weapon = "w_sword" if type == "skeleton_knight" else "w_dagger"
 		"lich": weapon = ""
-		"orc": weapon = "w_axe"
+		"orc": weapon = "w_axe+w_shield" if type == "shield" else "w_axe"
 		"troll": weapon = "w_club"
 	model = CharacterModel.new()
 	model.ground_blob = not flying

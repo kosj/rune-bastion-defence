@@ -347,7 +347,7 @@ func _process(delta: float) -> void:
 			"notes":
 				# the selection card plus notices stacked under it (layering check on an upright phone)
 				L2._select_hero()
-				L2.hud.toast("업적 달성: 건축가", "타워 60개 건설 (보상 ★1)", "ic_upgrade")
+				L2.hud.toast(tr("업적 달성: ") + tr("건축가"), tr("타워 60개 건설") + tr("  (보상 ★1)"), "ic_upgrade")
 				L2._show_enemy_card(str(args.get("enemy_type", "goblin")))
 			"pause":
 				L2._pause()
@@ -1403,12 +1403,26 @@ func _ct_check(name: String, how: String, sh: Control) -> void:
 		_ct_fails += 1
 		sh.queue_free()
 
+## The sheet's panel must lie inside the window (a long translation can widen it past the edge,
+## which also pushes its close button off screen).
+func _ct_fit(name: String, sh: Control) -> void:
+	var panel: Control = sh.get_meta("panel", sh.get_meta("sheet", null))
+	if panel == null:
+		return
+	var r := panel.get_global_rect()
+	var vr := Rect2(Vector2.ZERO, sh.get_viewport_rect().size).grow(2.0)
+	if not vr.encloses(r):
+		print("CLOSETEST %-22s %-9s FAIL (panel %s outside %s)" % [name, "fit", r, vr.size])
+		_ct_fails += 1
+	else:
+		print("CLOSETEST %-22s %-9s ok" % [name, "fit"])
+
 func _close_test_menu() -> void:
 	get_viewport().disable_3d = true  # only the UI matters here (and software GL draws 3D slowly)
 	print("CLOSETEST window %s tall=%s" % [get_tree().root.size, Game.tall])
 	var ui: Control = _menu.get("ui")
 	for how in ["button", "backdrop", "esc"]:
-		for op in ["_open_heroes", "_open_bestiary", "_open_achievements", "_open_upgrades", "_open_settings", "_test_talents", "_test_save", "_test_playlog"]:
+		for op in ["_open_heroes", "_open_bestiary", "_open_achievements", "_open_upgrades", "_open_settings", "_open_credits", "_test_talents", "_test_save", "_test_playlog"]:
 			_menu.call(op)
 			await _ct_wait(0.6)
 			var sh := _ct_top(ui)
@@ -1416,6 +1430,8 @@ func _close_test_menu() -> void:
 				print("CLOSETEST %-22s %-9s FAIL (did not open)" % [op, how])
 				_ct_fails += 1
 				continue
+			if how == "button":
+				_ct_fit(op, sh)
 			await _ct_close(sh, how)
 			await _ct_check(op, how, sh)
 	# the map's briefing cards, and the map itself on Esc
@@ -1436,6 +1452,8 @@ func _close_test_menu() -> void:
 				print("CLOSETEST %-22s %-9s FAIL (did not open)" % [which, how])
 				_ct_fails += 1
 				continue
+			if how == "button":
+				_ct_fit(which, sh)
 			await _ct_close(sh, how)
 			await _ct_check(which, how, sh)
 	# a menu sheet opened from the map dock closes before the map does

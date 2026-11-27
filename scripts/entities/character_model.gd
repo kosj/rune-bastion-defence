@@ -63,7 +63,9 @@ func setup(p_model: String, p_scale: float, tint := Color.WHITE, weapon := "") -
 		if tint != Color.WHITE:
 			body.material_override = _tinted(p_model, tint)
 	if weapon != "" and skel:
-		attach_weapon(weapon)
+		# "w_axe+w_shield": a weapon in the right hand and a shield on the left forearm
+		for w in weapon.split("+"):
+			attach_weapon(w, "LeftForeArm" if w == "w_shield" else "RightHand")
 	if life_amount > 0.0:
 		add_idle_life(life_amount)
 	_blob_size = clampf(p_scale * 0.55, 0.7, 3.0)
@@ -170,9 +172,16 @@ func attach_weapon(weapon: String, bone := "RightHand") -> void:
 		w.scale = Vector3(s, s * 1.3, s)
 	w.rotation_degrees = WEAPON_ROT
 	w.position = WEAPON_POS
+	if weapon == "w_shield":
+		w.scale = Vector3.ONE * 0.42
+		w.rotation_degrees = SHIELD_ROT
+		w.position = SHIELD_POS
 
 const WEAPON_ROT := Vector3(-90, 0, 0)
 const WEAPON_POS := Vector3(0.0, 0.04, 0.0)
+## The shield rides the left forearm, face forward, centred halfway down it and clear of the arm.
+const SHIELD_ROT := Vector3.ZERO
+const SHIELD_POS := Vector3(0.0, 0.12, 0.05)
 
 ## Adds IdleLife to the skeleton (after the AnimationPlayer's pose).
 func add_idle_life(amount := 1.0) -> void:

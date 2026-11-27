@@ -764,7 +764,10 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 		var right := HBoxContainer.new()
 		right.add_theme_constant_override("separation", 10)
 		var aside: Control = opts.get("aside", null)
-		if aside:
+		# a phone held upright has no room for the aside beside the title (the balancing spacer
+		# would squeeze the title out): it goes on its own line under the rule instead
+		var aside_below := upright and aside != null
+		if aside and not aside_below:
 			aside.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			right.add_child(aside)
 		if on_close.is_valid():
@@ -784,9 +787,16 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 		var r := rule()
 		r.custom_minimum_size.y = 12
 		hv.add_child(r)
+		if aside_below:
+			aside.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			hv.add_child(aside)
 		col.add_child(hv)
 	var sc := ScrollContainer.new()
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	if upright:
+		# a phone scrolls by dragging; a visible bar would also add its width to a full-width
+		# sheet and push the right edge (and the close button) off the screen
+		sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_child(sc)
 	var inner := MarginContainer.new()

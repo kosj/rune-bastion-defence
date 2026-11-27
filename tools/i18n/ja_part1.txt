@@ -513,3 +513,21 @@ Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 �
 영웅|difficulty	英雄
 일반|difficulty	ノーマル
 쉬움|difficulty	やさしい
+정보	情報
+크레딧	クレジット
+엔진	エンジン
+Godot Engine 4 (MIT 라이선스)	Godot Engine 4(MITライセンス)
+3D 모델	3Dモデル
+NCSOFT VARCO 3D 생성형 AI, Blender로 다듬음	NCSOFT VARCO 3D 生成AI、Blenderで仕上げ
+음성과 음악	ボイスと音楽
+ElevenLabs 음성·음악 생성, 일부 곡은 자체 작곡 도구	ElevenLabsによるボイス・音楽生成、一部の曲は自作の作曲ツール
+글꼴	フォント
+Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)	Noto Sans CJK、Noto Serif CJK、Cardo(SIL Open Font License)
+게임 디자인과 개발	ゲームデザインと開発
+룬 바스티온 팀	ルーン・バスティオン チーム
+다음 웨이브	次のウェーブ
+배속	倍速
+주문	呪文
+영웅 스킬	英雄スキル
+멈춤	一時停止
+영웅 지정	英雄を選択

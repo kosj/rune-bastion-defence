@@ -357,3 +357,21 @@ Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅  
 그림자 심연	Shadow Hollow
 끝나지 않은 밤	The Endless Night
 달빛 숲 깊은 곳, 그림자 왕 녹스가 숨어 다니는 도적 떼를 이끕니다. 등대를 밝히고 마법사 탑으로 그림자를 꿰뚫으세요.	Deep in the moonlit forest, Nox the Shadow King leads a band of hidden rogues. Light the beacons and pierce the shadows with mage towers.
+정보	About
+크레딧	Credits
+엔진	Engine
+Godot Engine 4 (MIT 라이선스)	Godot Engine 4 (MIT license)
+3D 모델	3D models
+NCSOFT VARCO 3D 생성형 AI, Blender로 다듬음	NCSOFT VARCO 3D generative AI, refined in Blender
+음성과 음악	Voices and music
+ElevenLabs 음성·음악 생성, 일부 곡은 자체 작곡 도구	ElevenLabs voice and music generation; some tracks from our own composing tool
+글꼴	Fonts
+Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)	Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)
+게임 디자인과 개발	Game design and development
+룬 바스티온 팀	The Rune Bastion team
+다음 웨이브	next wave
+배속	speed
+주문	spells
+영웅 스킬	hero skills
+멈춤	pause
+영웅 지정	select hero

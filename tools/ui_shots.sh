@@ -1,12 +1,15 @@
 #!/bin/bash
-# UI 화면 점검: 주요 화면(오늘의 도전 카드 포함)(선택 카드 + 알림이 겹치지 않는지 보는 notes 포함)을 PC(D, 1600x900), 폰 세로(P, 430x932), 폰 가로(L, 932x430)로 찍습니다.
-# 사용: DISPLAY=:77 tools/ui_shots.sh <출력 폴더> [동시 실행 수] [형태 필터 D|P|L] [화면 필터]
-#   예: tools/ui_shots.sh /tmp/ui 2 "P" "pause|win"
+# UI 화면 점검: 주요 화면(오늘의 도전 카드, 선택 카드와 알림이 겹치지 않는지 보는 notes 포함)을
+# PC(D, 1600x900), 폰 세로(P, 430x932), 폰 가로(L, 932x430)로 찍습니다.
+# 사용: DISPLAY=:77 [UILANG=en|ja|ko] tools/ui_shots.sh <출력 폴더> [동시 실행 수] [형태 필터 D|P|L] [화면 필터]
+#   예: UILANG=en tools/ui_shots.sh /tmp/ui_en 2 "P" "pause|win"
+#   UILANG을 주면 그 언어로 찍습니다(번역이 길어 넘치는 곳 찾기).
 # 이미 있는 파일은 건너뜁니다. 화면이 느리면(소프트웨어 렌더링) 동시 실행 수를 2 이하로 둡니다.
 out=$1; J=${2:-2}; RF=${3:-.}; NF=${4:-.}; mkdir -p "$out"
 cd "$(dirname "$0")/.."
-M="mode=menu progress=1 progress_all=1 max_t=7.5"
-Lv="level=2 mode=shots intro=0 nowave=1"
+LA=""; [ -n "$UILANG" ] && LA="lang=$UILANG"
+M="mode=menu progress=1 progress_all=1 max_t=7.5 $LA"
+Lv="level=2 mode=shots intro=0 nowave=1 $LA"
 {
 for R in "1600x900 D" "430x932 P" "932x430 L"; do
   set -- $R
@@ -35,5 +38,5 @@ for R in "1600x900 D" "430x932 P" "932x430 L"; do
     echo "$1 ${name}_$2 $a"
   done
 done
-} | xargs -P "$J" -L 1 bash -c 'res=$0; tag=$1; shift; timeout 300 godot --path . --rendering-driver opengl3 --resolution $res --fixed-fps 10 res://scenes/test_runner.tscn -- shots='"$out"' tag=$tag "$@" > /tmp/ui_shot_$tag.log 2>&1'
+} | xargs -P "$J" -L 1 bash -c 'res=$0; tag=$1; shift; timeout 300 godot --path . --rendering-driver opengl3 --resolution $res --fixed-fps ${UIFPS:-10} res://scenes/test_runner.tscn -- shots='"$out"' tag=$tag "$@" > /tmp/ui_shot_$tag.log 2>&1'
 ls "$out" | wc -l
