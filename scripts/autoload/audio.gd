@@ -102,6 +102,10 @@ func play(name: String, volume_db := 0.0, pitch_var := 0.08, variants := 0) -> v
 	player.pitch_scale = 1.0 + randf_range(-pitch_var, pitch_var)
 	player.play()
 
+## Is this piece downloaded and playable now (web: its chunk may still be on the way)?
+func has_music(name: String) -> bool:
+	return _get_stream(name, MUSIC_DIR) != null
+
 func play_music(name: String, fade := 1.2) -> void:
 	if name == _music_current:
 		return

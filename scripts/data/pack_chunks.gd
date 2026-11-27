@@ -37,7 +37,7 @@ const DATA := {
 		],
 		"stage1": [
 			"assets/models/*", "assets/characters/*", "assets/fx/*", "assets/textures/*",
-			"assets/audio/music/battle.*", "assets/audio/music/boss.*"
+			"assets/audio/music/battle.*"
 		],
 		"towers": [
 			"assets/models/archer_2*", "assets/models/archer_3*", "assets/models/mage_2*",
@@ -47,7 +47,8 @@ const DATA := {
 		"world": [
 			"assets/characters/lich*", "assets/characters/sera*", "assets/characters/ranger*",
 			"assets/characters/ogre*", "assets/characters/skeleton*", "assets/characters/gargoyle*",
-			"assets/characters/sapper*", "assets/audio/music/battle_dark.*"
+			"assets/characters/sapper*", "assets/audio/music/battle_dark.*", "assets/audio/music/battle_river.*",
+			"assets/audio/music/battle_night.*", "assets/audio/music/boss.*"
 		]
 	},
 	"first_battle": {"level": 0, "hero": "kael", "needs": ["menu", "stage1"]},

@@ -177,6 +177,7 @@ func _ready() -> void:
 		for sid in hud.spell_btns:
 			((hud.spell_btns[sid] as Dictionary)["button"] as Control).visible = false
 	Audio.play_music(battle_music())
+	Audio.has_music("final")  # loaded now rather than when the last wave is called
 	# first time a kind of map event shows up: say what the gold "!" does
 	if not events.is_empty() and not Game.testing:
 		var kind0: String = events[0]["kind"]
@@ -1101,6 +1102,9 @@ func _call_wave() -> void:
 		hud.show_banner("마지막 웨이브!" if last else tr("웨이브 %d") % (wave_idx + 1), "적이 몰려옵니다!" if not last else "끝까지 버텨내세요!")
 	Audio.play("horn", 0.0, 0.0)
 	Audio.voice("ann_final" if last else ("ann_wave_first" if wave_idx == 0 else "ann_wave"), 0.0, 1.0)
+	if last and Audio.has_music("final"):
+		# the last wave gets its own, louder piece (a boss in it still takes over when it appears)
+		Audio.play_music("final", 2.0)
 	if tutorial_step == 1:
 		tutorial_step = 2
 		hud.show_hint("영웅 초상화(왼쪽 아래)를 탭한 뒤 땅을 탭하면\n영웅 카엘이 그곳으로 이동해 싸웁니다.")
@@ -1183,7 +1187,7 @@ func on_enemy_killed(e: Enemy) -> void:
 		if e.type == "ogre_king":
 			Game.stat("ogre_king_kills")
 		cine.boss_down(e)
-		Audio.play_music(battle_music(), 2.5)
+		Audio.play_music(wave_music(), 2.5)
 	Audio.play("coin", -10.0, 0.1)
 	if hero:
 		var xp := float(e.d["gold"]) * 2.0 * (1.3 if DB.up("hero_xp") else 1.0)
@@ -1463,6 +1467,7 @@ func _on_radial_chosen(id: String) -> void:
 		Game.stat("towers")
 		set_plot_visible(i, false)
 		_deselect()
+		tower_bark(t, "build")
 		if tutorial_step == 0:
 			tutorial_step = 1
 			hud.show_hint("좋아요! 왼쪽 위 포털의 해골 버튼을 눌러 첫 웨이브를 부르세요.\n일찍 부를수록 보너스 골드를 받습니다.")
@@ -1486,6 +1491,7 @@ func _on_radial_chosen(id: String) -> void:
 		tower.upgrade()
 		Audio.play("upgrade", -2.0)
 		_deselect()
+		tower_bark(tower.type, "up")
 	elif id.begins_with("mastery_"):
 		var mid := id.trim_prefix("mastery_")
 		var md := DB.mastery_def(tower.type, mid)
@@ -1497,6 +1503,7 @@ func _on_radial_chosen(id: String) -> void:
 		tower.apply_mastery(mid)
 		Game.stat("masteries")
 		Audio.play("upgrade", 0.0)
+		tower_bark(tower.type, "master", true)
 		hud.show_banner(md["name"], "전문화 완료!", md["tint"])
 		_deselect()
 		# one-time pointer to the next step (special abilities), for players who have not found it yet
@@ -1601,7 +1608,21 @@ func _handle_targeting(gp: Vector3) -> void:
 					targeting = "rally"
 					return
 				Audio.play("rally", -4.0)
+				if tw.type == "barracks":
+					tower_bark("barracks", "rally")
 			_deselect()
+
+## Tower crews answer when built, upgraded, specialised (and soldiers when sent to a rally point),
+## Kingdom Rush style. At most one line every few seconds so a building spree does not chatter;
+## a specialisation always speaks (it is rare and a big moment).
+var _bark_at := -99.0
+
+func tower_bark(type: String, what: String, always := false) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if not always and now - _bark_at < 5.0:
+		return
+	_bark_at = now
+	Audio.voice("%s_%s" % [type, what], -2.0, 2.0)
 
 # ------------------------------------------------------------------ cards & menus
 
@@ -1840,10 +1861,28 @@ func _celebrate() -> void:
 		at = Vector3(g.x, 0, g.y)
 	cine.victory_fireworks(Vector3(at.x, terrain.height_at(at.x, at.z), at.z))
 
+## Battle music by region (each theme has its own piece); while it is still downloading the
+## first battle's piece plays.
+## (Snow and autumn share pieces for now; a battle_snow / battle_autumn file dropped into
+## assets/audio/music is picked up by the first lookup.)
+const REGION_MUSIC := {"meadow": ["battle"], "river": ["battle_river"], "snow": ["battle_snow", "battle_night"],
+	"night": ["battle_night"], "autumn": ["battle_autumn", "battle"], "necro": ["battle_dark"], "ruins": ["battle_dark"],
+	"swamp": ["battle_dark"]}
+
 func battle_music() -> String:
 	if Game.endless:
 		return "battle"
-	return "battle_dark" if def.get("theme", "") in ["night", "necro", "ruins", "swamp"] else "battle"
+	for m in REGION_MUSIC.get(def.get("theme", ""), ["battle"]):
+		if ResourceLoader.exists("res://assets/audio/music/%s.ogg" % m):
+			# (not downloaded yet on the web: play_music waits for its chunk)
+			return m
+	return "battle"
+
+## The music for the wave being fought: the last wave's piece, or the region's.
+func wave_music() -> String:
+	if not Game.endless and wave_idx == waves.size() - 1 and Audio.has_music("final"):
+		return "final"
+	return battle_music()
 
 func _victory_modal(stars: int, prev_stars: int) -> void:
 	var max_l: int = max_lives

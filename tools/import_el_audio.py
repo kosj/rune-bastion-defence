@@ -41,6 +41,12 @@ VOICE = {
                 ("sera_levelup", "마력이 차오른다!"), ("sera_death", "잠깐... 쉬어야겠어..."), ("sera_respawn", "다시 돌아왔어요!")],
     "vo_ren": [("ren_select", "바람이 길을 알려줄 거야."), ("ren_move", "바람을 따라간다!"), ("ren_skill", "화살비다!"),
                ("ren_levelup", "활이 더 가벼워졌어."), ("ren_death", "여기까지인가..."), ("ren_respawn", "다시 활을 든다!")],
+    # tower barks (build, upgrade, specialisation; barracks also when a rally point is set)
+    "vo_archer": [("archer_build", "궁수대, 배치 완료!"), ("archer_up", "화살은 충분하다!"), ("archer_master", "바람보다 빠르게!")],
+    "vo_barracks": [("barracks_build", "이 길은 못 지나간다!"), ("barracks_up", "방패를 들어라!"),
+                    ("barracks_master", "왕국을 위하여!"), ("barracks_rally", "자리로 이동!")],
+    "vo_mage": [("mage_build", "마력이 깨어난다..."), ("mage_up", "지식은 곧 힘이지."), ("mage_master", "비전의 힘을 보아라!")],
+    "vo_artillery": [("artillery_build", "대포 설치 끝! 쏴 볼까?"), ("artillery_up", "더 큰 포탄으로!"), ("artillery_master", "펑! 하하하!")],
     "vo_announcer": [("ann_wave_first", "적이 몰려옵니다!"), ("ann_wave", "다음 웨이브!"), ("ann_final", "마지막 웨이브다! 버텨라!"),
                      ("ann_boss", "보스가 나타났다!"), ("ann_victory", "승리!"), ("ann_defeat", "성이 함락되었다..."),
                      ("ann_danger", "성문이 위험하다!")],
