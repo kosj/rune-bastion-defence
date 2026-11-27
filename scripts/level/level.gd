@@ -1617,45 +1617,25 @@ func _show_enemy_card(type: String) -> void:
 	vb.add_theme_constant_override("separation", 2)
 	vb.add_child(UI.ink("새로운 적", UI.T_SMALL, UI.EMBER, "ui_black"))
 	vb.add_child(UI.ink(e["name"], 23, UI.INK, "title_kr"))
-	var vs := hud.root.get_viewport_rect().size
-	var tw_w := (vs.x - 16.0 - 84.0 - 12.0 - 40.0) if Game.tall else 236.0
+	var tw_w := hud.note_width() - 84.0 - 12.0 - 26.0
 	var desc := UI.ink(tr(e["desc"]), UI.T_SMALL, UI.INK_SOFT)
 	UI.wrap_words(desc, tw_w)
 	desc.custom_minimum_size.x = tw_w - 6.0
 	vb.add_child(desc)
 	hb.add_child(vb)
 	p.add_child(hb)
-	if Game.tall:
-		# upright: across the width, under the top bar
-		p.anchor_left = 0.0
-		p.anchor_right = 1.0
-		p.offset_left = 8
-		p.offset_right = -8
-		p.offset_top = 66
-	else:
-		p.anchor_left = 1.0
-		p.anchor_right = 1.0
-		p.offset_left = -372
-		p.offset_right = -16
-		p.offset_top = 90
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud.root.add_child(p)
+	# joins the HUD's notice column (under the top bar, after the selection card on an upright
+	# phone), drops in, stays for five seconds, fades out
+	hud.add_note(p)
 	_info_card = p
-	# slides in once laid out (its position is only known after the container pass), stays
-	# for five seconds, fades out
 	p.modulate.a = 0.0
-	(func():
-		if not is_instance_valid(p):
-			return
-		var x0 := p.position.x
-		p.position.x = x0 + 40.0
-		var tw := p.create_tween()
-		tw.set_ignore_time_scale(true)
-		tw.tween_property(p, "modulate:a", 1.0, 0.3)
-		tw.parallel().tween_property(p, "position:x", x0, 0.35).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_interval(5.0)
-		tw.tween_property(p, "modulate:a", 0.0, 0.5)
-		tw.tween_callback(p.queue_free)).call_deferred()
+	var tw := p.create_tween()
+	tw.set_ignore_time_scale(true)
+	tw.tween_property(p, "modulate:a", 1.0, 0.3)
+	tw.tween_interval(5.0)
+	tw.tween_property(p, "modulate:a", 0.0, 0.5)
+	tw.tween_callback(p.queue_free)
 
 func _clear_cards() -> void:
 	if _info_card and is_instance_valid(_info_card):

@@ -17,7 +17,7 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
   - 엔진 클래스: `python3 tools/engine/check_classes.py <godot 4.7.2 소스>`
   - 브라우저 스모크: `python3 tools/browser_test.py build/web_hosted /tmp/s 1280 720 --play --nosw --smoke`
 - 전투 중 셰이더 컴파일 수: `DISPLAY=:77 tools/perf/shader_compiles.sh 2 1`(0이어야 함. 원인 찾기는 `GLSHIM_DUMP=<폴더>`)
-- UI 점검: `DISPLAY=:77 tools/ui_shots.sh /tmp/ui 2`(15개 화면 × PC·폰 세로·폰 가로)
+- UI 점검: `DISPLAY=:77 tools/ui_shots.sh /tmp/ui 2`(16개 화면 × PC·폰 세로·폰 가로)
 - 화면 확인: `DISPLAY=:77 godot --path . --rendering-driver opengl3 --resolution 1600x900 res://scenes/test_runner.tscn -- mode=shots ...`(옵션은 `scripts/tools/test_runner.gd` 머리말)
 
 ## 지켜야 할 규칙
@@ -39,5 +39,6 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
   - `on_close`에 넘기는 람다는 시트를 인자로 받습니다(`func(s): UI.dismiss(s)`). GDScript 람다는 지역 변수를 만들어질 때의 값으로 잡아서, 시트를 담을 변수를 미리 잡으면 null이 됩니다(이 때문에 메뉴 팝업이 닫히지 않았음).
   - 버튼은 역할로 고릅니다: 진행은 `primary`(금, 오른쪽), 그 밖은 `secondary`/`ghost`.
   - 리본은 결과 화면에만 씁니다.
+  - 전투 화면의 알림 카드는 `hud.add_note()`로 알림 열에 넣고, 맵을 따라다니는 버튼은 `hud.markers`에 넣습니다(패널 아래 층). 카드 위치를 `position`으로 애니메이션하지 않습니다(높이가 offset에 박힘).
   - 새 화면은 `Game.tall`(세로)에서도 배치하고, `tools/ui_shots.sh`로 PC·폰 세로·폰 가로를 찍어 확인합니다.
 - **커밋 메시지·문서**: 저장소 문서는 한국어로 씁니다.

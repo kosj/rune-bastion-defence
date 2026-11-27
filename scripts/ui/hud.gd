@@ -37,6 +37,13 @@ var target_hint: Label
 var _circle_tex: Texture2D
 var boss_panel: PanelContainer
 var boss_bar: ProgressBar
+var markers: Control
+## Notices (a new enemy, achievements, tips) stacked in one column so they never overlap each
+## other or the selection card: across the width under the top bar on an upright phone (after
+## the selection card), down the right side under the corner buttons on a wide screen.
+var _notes: Array = []
+var _info_dy := 0.0  # selection card slide-in, eased to 0 in _process
+var _wb_t := -1.0
 var boss_name: Label
 var vignette: TextureRect
 var _vig_pulse := 0.0
@@ -55,6 +62,12 @@ func build(cam: Camera3D) -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.theme = UI.theme()
 	add_child(root)
+	# world-anchored markers (wave call buttons and their previews) draw under every HUD panel:
+	# a selection card or a notice must never be covered by a button that follows the map
+	markers = Control.new()
+	markers.set_anchors_preset(Control.PRESET_FULL_RECT)
+	markers.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(markers)
 	radial = RadialMenu.new()
 	radial.cam = cam
 	root.add_child(radial)
@@ -288,13 +301,16 @@ func show_info(title: String, body: String, stats: Array = []) -> void:
 		info_stats.add_child(UI.stat(st[0], st[1], 16, UI.SAGE if up else UI.INK))
 	info_stats.visible = not stats.is_empty()
 	if not info.visible:
+		# slides 16 in (eased in _process through the offsets) and fades in. The slide never
+		# touches `position`: setting it writes the current height into the offsets, and the
+		# card then kept the height of the tallest text it had shown
 		info.visible = true
 		info.modulate.a = 0.0
-		info.position.y += 16
-		var tw := info.create_tween().set_parallel(true)
+		_info_dy = 16.0
+		_place_info()
+		var tw := info.create_tween()
 		tw.set_ignore_time_scale(true)
 		tw.tween_property(info, "modulate:a", 1.0, 0.15)
-		tw.tween_property(info, "position:y", info.position.y - 16, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func hide_info() -> void:
 	info.visible = false
@@ -525,9 +541,7 @@ func set_wave(cur: int, total: int) -> void:
 func refresh_language() -> void:
 	set_wave(_wave_shown[0], _wave_shown[1])
 
-var _toasts := 0
-
-## Small slide-in notification (achievements).
+## Small slide-in notification (achievements, tips): joins the notice column, fades out.
 func toast(title: String, sub: String, icon: String) -> void:
 	var p := UI.framed("card", 8)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -539,27 +553,91 @@ func toast(title: String, sub: String, icon: String) -> void:
 	var vb := VBoxContainer.new()
 	vb.add_child(UI.ink(title, 21, UI.INK, "ui_black"))
 	var sl := UI.ink(sub, 16, UI.INK_SOFT)
-	UI.wrap_words(sl, 400.0)
+	UI.wrap_words(sl, note_width() - 100.0)
 	vb.add_child(sl)
 	hb.add_child(vb)
-	root.add_child(p)
-	p.anchor_left = 0.5
-	p.anchor_right = 0.5
-	p.offset_left = -200
-	p.offset_right = 200
-	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	var y := 150.0 + _toasts * 98.0
-	_toasts += 1
-	p.offset_top = y - 30
+	add_note(p)
 	p.modulate.a = 0.0
 	var tw := p.create_tween()
+	tw.set_ignore_time_scale(true)
 	tw.tween_property(p, "modulate:a", 1.0, 0.25)
-	tw.parallel().tween_property(p, "offset_top", y, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(3.2 if sl.text.find("\n") < 0 else 5.0)
 	tw.tween_property(p, "modulate:a", 0.0, 0.4)
-	tw.tween_callback(func():
-		_toasts = maxi(_toasts - 1, 0)
-		p.queue_free())
+	tw.tween_callback(p.queue_free)
+
+## Width of a card in the notice column.
+func note_width() -> float:
+	return root.get_viewport_rect().size.x - 16.0 if Game.tall else 356.0
+
+## Puts a notice card (built by the caller, not yet in the tree) into the notice column.
+func add_note(p: Control) -> void:
+	_anchor_note(p)
+	root.add_child(p)
+	_notes.append(p)
+
+func _anchor_note(p: Control) -> void:
+	p.grow_vertical = Control.GROW_DIRECTION_END
+	p.anchor_top = 0.0
+	p.anchor_bottom = 0.0
+	if Game.tall:
+		p.anchor_left = 0.0
+		p.anchor_right = 1.0
+		p.offset_left = 8
+		p.offset_right = -8
+	else:
+		p.anchor_left = 1.0
+		p.anchor_right = 1.0
+		p.offset_left = -372
+		p.offset_right = -16
+
+## The selection card's offsets: both edges equal, so its height always follows its content.
+func _place_info() -> void:
+	if Game.tall:
+		var y := _column_top() + _info_dy
+		info.offset_top = y
+		info.offset_bottom = y
+	else:
+		info.offset_top = -16.0 + _info_dy
+		info.offset_bottom = -16.0 + _info_dy
+
+## Top of the notice column: under the top bar (or the corner buttons), and under the boss bar
+## when it is up and in the way.
+func _column_top() -> float:
+	var y := 66.0 if Game.tall else 90.0
+	if boss_panel and boss_panel.visible:
+		var br := boss_panel.get_rect()
+		var vs := root.get_viewport_rect().size
+		var col_x := 0.0 if Game.tall else vs.x - 372.0
+		if br.end.x > col_x:
+			y = maxf(y, br.end.y + 8.0)
+	return y
+
+## Stacks the notice column: each card eases to its slot, a new card drops in from just above.
+func _layout_notes(k: float) -> void:
+	var y := _column_top()
+	if Game.tall and info.visible:
+		y = info.offset_top - _info_dy + info.size.y + 8.0
+	var keep: Array = []
+	for n in _notes:
+		if not is_instance_valid(n) or (n as Node).is_queued_for_deletion():
+			continue
+		keep.append(n)
+		var c := n as Control
+		if not c.has_meta("slot"):
+			c.set_meta("slot", true)
+			c.offset_top = y - 20.0
+		c.offset_top = lerpf(c.offset_top, y, k)
+		c.offset_bottom = c.offset_top
+		y += c.size.y + 8.0
+	_notes = keep
+
+## Screen rects the wave call buttons stay out of: the selection card, notices, boss bar, hint.
+func _keepout_rects() -> Array:
+	var out: Array = []
+	for c in [info, boss_panel, hint] + _notes:
+		if is_instance_valid(c) and (c as Control).visible and (c as Control).modulate.a > 0.05:
+			out.append((c as Control).get_global_rect().grow(6.0))
+	return out
 
 func set_speed(fast: bool) -> void:
 	speed_b.icon = Assets.tex("speed2" if fast else "speed1")
@@ -572,6 +650,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	var rd := delta / maxf(Engine.time_scale, 0.01)
+	var k := clampf(rd * 14.0, 0.0, 1.0)
+	if info:
+		_info_dy = lerpf(_info_dy, 0.0, k) if absf(_info_dy) > 0.2 else 0.0
+		_place_info()
+		_layout_notes(k)
 	if vignette:
 		_vig_pulse = maxf(_vig_pulse - rd * 1.6, 0.0)
 		var base := (0.28 + sin(Time.get_ticks_msec() * 0.004) * 0.1) if _low_lives else 0.0
@@ -610,16 +693,14 @@ func _apply_layout() -> void:
 	top_right.offset_top = 8 if t else 12
 	# selection card
 	if t:
-		# under the top bar: the bottom of an upright screen belongs to the hero dock and the
-		# wave buttons, and the thumb
+		# under the top bar, at the head of the notice column: the bottom of an upright screen
+		# belongs to the hero dock and the wave buttons, and the thumb
 		info.anchor_left = 0.0
 		info.anchor_top = 0.0
 		info.anchor_bottom = 0.0
 		info.grow_vertical = Control.GROW_DIRECTION_END
 		info.offset_left = 8
 		info.offset_right = -8
-		info.offset_top = 66
-		info.offset_bottom = 66
 		info_body.custom_minimum_size.x = vs.x - 60
 		info_stats.custom_minimum_size.x = vs.x - 60
 	else:
@@ -629,10 +710,12 @@ func _apply_layout() -> void:
 		info.grow_vertical = Control.GROW_DIRECTION_BEGIN
 		info.offset_left = -372
 		info.offset_right = -16
-		info.offset_top = -16
-		info.offset_bottom = -16
 		info_body.custom_minimum_size.x = 320
 		info_stats.custom_minimum_size.x = 320
+	_place_info()
+	for n in _notes:
+		if is_instance_valid(n):
+			_anchor_note(n)
 	# wave banner and boss bar
 	banner.add_theme_font_size_override("font_size", 44 if t else 58)
 	banner.offset_top = 96 if t else 112
@@ -684,11 +767,15 @@ func set_wave_buttons(points: Array) -> void:
 		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(lab)
-		root.add_child(holder)
+		markers.add_child(holder)
 		wave_btns.append({"node": holder, "pos": p, "ring": ring, "label": lab, "button": b})
 
 func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, label: String, t: float) -> void:
 	var vs := root.get_viewport_rect().size
+	var keep := _keepout_rects() if visible_flag else []
+	var dt := clampf(t - _wb_t, 0.0, 0.1) if _wb_t >= 0.0 else 0.0
+	_wb_t = t
+	var kk := clampf(maxf(dt, 0.016) * 12.0, 0.0, 1.0)
 	for w in wave_btns:
 		var n: Control = w["node"]
 		n.visible = visible_flag
@@ -700,7 +787,22 @@ func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, lab
 		# keep clear of the hero/spell dock in the bottom-left corner
 		if sp.x < 420.0 and sp.y > vs.y - 250.0:
 			sp.y = vs.y - 250.0
-		n.position = sp
+		# and step aside from the selection card and notices (below a card in the upper half,
+		# above one in the lower half); the button with its label and preview spans -42..+125
+		var dy := 0.0
+		for _pass in 2:
+			var fr := Rect2(sp.x - 70.0, sp.y + dy - 42.0, 140.0, 167.0)
+			for r in keep:
+				var rr: Rect2 = r
+				if fr.intersects(rr):
+					if rr.get_center().y < vs.y * 0.5:
+						dy = rr.end.y + 44.0 - sp.y
+					else:
+						dy = rr.position.y - 127.0 - sp.y
+					fr.position.y = sp.y + dy - 42.0
+		var cur: float = w.get("dy", dy)
+		w["dy"] = lerpf(cur, dy, kk) if absf(cur - dy) > 0.5 else dy
+		n.position = sp + Vector2(0.0, w["dy"])
 		var s := 1.0 + sin(t * 5.0) * 0.06
 		n.scale = Vector2(s, s)
 		(w["ring"] as TextureProgressBar).value = 1.0 - progress

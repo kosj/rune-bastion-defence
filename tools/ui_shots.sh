@@ -1,5 +1,5 @@
 #!/bin/bash
-# UI 화면 점검: 주요 화면을 PC(D, 1600x900), 폰 세로(P, 430x932), 폰 가로(L, 932x430)로 찍습니다.
+# UI 화면 점검: 주요 화면(선택 카드 + 알림이 겹치지 않는지 보는 notes 포함)을 PC(D, 1600x900), 폰 세로(P, 430x932), 폰 가로(L, 932x430)로 찍습니다.
 # 사용: DISPLAY=:77 tools/ui_shots.sh <출력 폴더> [동시 실행 수] [형태 필터 D|P|L] [화면 필터]
 #   예: tools/ui_shots.sh /tmp/ui 2 "P" "pause|win"
 # 이미 있는 파일은 건너뜁니다. 화면이 느리면(소프트웨어 렌더링) 동시 실행 수를 2 이하로 둡니다.
@@ -25,7 +25,8 @@ for R in "1600x900 D" "430x932 P" "932x430 L"; do
     "lose|$Lv ui=defeat ui_at=3 shot_times=7 max_t=8 end_wait=20" \
     "tower|$Lv ui=tower ui_at=3 shot_times=4.5 max_t=5" \
     "plot|$Lv ui=plot ui_at=3 shot_times=4.5 max_t=5" \
-    "enemy|$Lv ui=enemy ui_at=3 shot_times=5 max_t=5.5"; do
+    "enemy|$Lv ui=enemy ui_at=3 shot_times=5 max_t=5.5" \
+    "notes|$Lv ui=notes ui_at=3 shot_times=4.8 max_t=5.3"; do
     name=${spec%%|*}; a=${spec#*|}
     echo "$2" | grep -qE "$RF" || continue
     echo "$name" | grep -qE "$NF" || continue

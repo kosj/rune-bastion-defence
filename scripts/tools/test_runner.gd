@@ -302,6 +302,9 @@ func _process(delta: float) -> void:
 					var tw: Tower = L2.towers[ks[0]]
 					L2.cam_rig.focus(tw.global_position, float(args.get("zoom", "18")))
 					L2._select_tower(ks[0])
+					if args.get("then", "") == "hero":
+						# then the hero: its card must shrink to its own content
+						L2.get_tree().create_timer(0.6).timeout.connect(L2._select_hero)
 			"plot":
 				for i in L2.plots.size():
 					if not L2.towers.has(i):
@@ -310,6 +313,11 @@ func _process(delta: float) -> void:
 						break
 			"hero":
 				L2._select_hero()
+			"notes":
+				# the selection card plus notices stacked under it (layering check on an upright phone)
+				L2._select_hero()
+				L2.hud.toast("업적 달성: 건축가", "타워 60개 건설 (보상 ★1)", "ic_upgrade")
+				L2._show_enemy_card(str(args.get("enemy_type", "goblin")))
 			"pause":
 				L2._pause()
 			"pause_lang":
