@@ -617,6 +617,11 @@ func _layout_notes(k: float) -> void:
 	var y := _column_top()
 	if Game.tall and info.visible:
 		y = info.offset_top - _info_dy + info.size.y + 8.0
+	# on a wide screen the column runs down the right side towards the selection card in the
+	# corner: a notice that would reach it waits (hidden) until one above it has gone
+	var floor_y := INF
+	if not Game.tall and info.visible:
+		floor_y = info.get_global_rect().position.y - 8.0
 	var keep: Array = []
 	for n in _notes:
 		if not is_instance_valid(n) or (n as Node).is_queued_for_deletion():
@@ -628,6 +633,7 @@ func _layout_notes(k: float) -> void:
 			c.offset_top = y - 20.0
 		c.offset_top = lerpf(c.offset_top, y, k)
 		c.offset_bottom = c.offset_top
+		c.visible = y + c.size.y <= floor_y
 		y += c.size.y + 8.0
 	_notes = keep
 

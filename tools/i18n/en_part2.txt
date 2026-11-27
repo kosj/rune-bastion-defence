@@ -284,3 +284,9 @@ Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅  
 난이도	Difficulty
 철인 도전: 생명 3, 주문 없음, 골드 +40%	Iron Challenge: 3 lives, no spells, gold +40%
 %s의 재능	%s's talents
+오크 족장은 함성으로 주변 적을 빠르게 해요. 명사수나 마법 탑으로 먼저 쓰러뜨리세요.	Orc warchiefs' war cry speeds up nearby enemies. Take them down first with marksmen or mage towers.
+다이어 울프는 매우 빨라요. 병영으로 막고 서리 첨탑으로 느리게 하세요.	Dire wolves are very fast. Block them with barracks and slow them with frost spires.
+떼로 오는 적은 포병의 광역 폭발로 한꺼번에 정리하세요.	Clear swarms all at once with artillery blasts.
+바위 오우거는 내려찍기로 병사를 기절시켜요. 병영 뒤에 마법 탑을 두어 체력을 깎으세요.	Rock ogres stun soldiers with their slam. Put mage towers behind your barracks to wear them down.
+트롤 군주는 체력이 절반이 되면 고블린을 불러요. 유성 낙하를 그때를 위해 아껴 두세요.	The Troll Lord calls goblins at half health. Save a meteor strike for that moment.
+오우거 왕은 병사를 기절시키고 주변 적을 빠르게 해요. 길 끝 쪽에 마지막 방어선을 두세요.	The Ogre King stuns soldiers and speeds up nearby enemies. Keep a last line of defense near the end of the road.

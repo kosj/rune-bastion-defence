@@ -1982,19 +1982,47 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 		pt.tween_interval(t_done + 1.2)
 		pt.tween_callback(func(): ResultFX.breathe(nb))
 
-const DEFEAT_TIPS := [
-	"오크 돌격병은 방어력이 높아요. 마법 탑으로 녹이세요.",
-	"가고일은 하늘을 날아요. 궁수 탑과 마법 탑만 공격할 수 있어요.",
+## Defeat advice: about what actually broke through (most lives lost to it), else about an enemy
+## of this level, else a general tip. (A tip about the lich on the first snow pass helps no one.)
+const LEAK_TIPS := {
+	"orc": "오크 돌격병은 방어력이 높아요. 마법 탑으로 녹이세요.",
+	"warchief": "오크 족장은 함성으로 주변 적을 빠르게 해요. 명사수나 마법 탑으로 먼저 쓰러뜨리세요.",
+	"gargoyle": "가고일은 하늘을 날아요. 궁수 탑과 마법 탑만 공격할 수 있어요.",
+	"shaman": "주술사는 주변 적을 치료해요. 먼저 처치하도록 우선순위를 '강적'으로 바꿔 보세요.",
+	"sapper": "폭탄병은 병사를 무시하고 달려요. 길 초입에 화력을 모으세요.",
+	"wolf": "다이어 울프는 매우 빨라요. 병영으로 막고 서리 첨탑으로 느리게 하세요.",
+	"goblin": "떼로 오는 적은 포병의 광역 폭발로 한꺼번에 정리하세요.",
+	"skeleton": "떼로 오는 적은 포병의 광역 폭발로 한꺼번에 정리하세요.",
+	"ogre": "바위 오우거는 내려찍기로 병사를 기절시켜요. 병영 뒤에 마법 탑을 두어 체력을 깎으세요.",
+	"skeleton_knight": "해골 기사는 한 번 다시 일어나요. 마법 피해가 더 잘 들어요.",
+	"troll": "트롤 군주는 체력이 절반이 되면 고블린을 불러요. 유성 낙하를 그때를 위해 아껴 두세요.",
+	"lich": "리치 군주는 해골을 계속 불러내요. 광역 공격으로 잔챙이를 정리하세요.",
+	"ogre_king": "오우거 왕은 병사를 기절시키고 주변 적을 빠르게 해요. 길 끝 쪽에 마지막 방어선을 두세요.",
+}
+const GENERAL_TIPS := [
 	"병영 병사로 길목을 막으면 궁수와 포병이 안전하게 공격해요.",
 	"웨이브 버튼을 일찍 누르면 보너스 골드를 받아요. 여유가 있을 때 활용하세요.",
-	"주술사는 주변 적을 치료해요. 먼저 처치하도록 우선순위를 '강적'으로 바꿔 보세요.",
 	"유성 낙하는 적이 뭉쳤을 때 쓰면 효과가 커요.",
-	"폭탄병은 병사를 무시하고 달려요. 길 초입에 화력을 모으세요.",
 	"레벨 3 타워의 전문화가 전세를 뒤집어요. 상황에 맞는 쪽을 고르세요.",
-	"해골 기사는 한 번 다시 일어나요. 마법 피해가 더 잘 들어요.",
 	"전문화한 타워를 다시 탭하면 특수 능력을 배울 수 있어요.",
-	"리치 군주는 해골을 계속 불러내요. 광역 공격으로 잔챙이를 정리하세요.",
 ]
+
+func _defeat_tip() -> String:
+	var worst := ""
+	for k in _leaks:
+		if LEAK_TIPS.has(k) and (worst == "" or int(_leaks[k]) > int(_leaks[worst])):
+			worst = k
+	if worst != "":
+		return LEAK_TIPS[worst]
+	var pool := []
+	for w in waves:
+		for g in w:
+			var tp: String = LEAK_TIPS.get(g[0], "")
+			if tp != "" and not pool.has(tp):
+				pool.append(tp)
+	if pool.is_empty():
+		pool = GENERAL_TIPS
+	return pool[randi() % pool.size()]
 
 func _defeat() -> void:
 	if state == "lost":
@@ -2029,7 +2057,7 @@ func _after_defeat() -> void:
 		var tipp := UI.framed("well", 8)
 		var th := HBoxContainer.new()
 		th.add_theme_constant_override("separation", 12)
-		var tip := UI.ink(str(DEFEAT_TIPS[randi() % DEFEAT_TIPS.size()]), UI.T_BODY, UI.INK)
+		var tip := UI.ink(_defeat_tip(), UI.T_BODY, UI.INK)
 		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		tip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		th.add_child(UI.ink("팁", UI.T_SMALL, UI.GOLD, "ui_black"))
