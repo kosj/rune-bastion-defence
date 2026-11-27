@@ -643,25 +643,37 @@ static func with_close(panel: Control, on_close: Callable, sz := 50) -> Control:
 
 ## A labelled row of option chips (the chosen one gold), e.g. the UI size or language setting.
 ## options: [[value, caption], ...]; cb gets the picked value.
-static func choice(label_text: String, options: Array, current: Variant, cb: Callable, btn_w := 98.0) -> HBoxContainer:
+static func choice(label_text: String, options: Array, current: Variant, cb: Callable, btn_w := 98.0) -> BoxContainer:
+	# four or more options (the languages) get their own full-width row under the label, so the
+	# row fits an upright phone
+	var many := options.size() > 3
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 6)
 	var l := label(label_text, T_BODY, TEXT, 0, "ui")
 	l.custom_minimum_size.x = 92
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hb.add_child(l)
+	var vb: VBoxContainer = null
+	if many:
+		vb = VBoxContainer.new()
+		vb.add_theme_constant_override("separation", 4)
+		vb.add_child(l)
+		vb.add_child(hb)
+	else:
+		hb.add_child(l)
 	for op in options:
 		var sel: bool = str(op[0]) == str(current) or (op[0] is float and current is float and absf(float(op[0]) - float(current)) < 0.01)
-		var b := button(op[1], 17, false, Vector2(btn_w, 44), "primary" if sel else "ghost")
+		var b := button(op[1], 17, false, Vector2(0.0 if many else btn_w, 44), "primary" if sel else "ghost")
+		if many:
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var v: Variant = op[0]
 		b.pressed.connect(func():
 			Audio.play("click", -4.0)
 			cb.call(v))
 		hb.add_child(b)
-	return hb
+	return vb if many else hb
 
 ## The language options shown in the settings (title screen and battle pause menu).
-const LANGUAGES := [["", "자동"], ["ko", "한국어"], ["en", "English"]]
+const LANGUAGES := [["", "자동"], ["ko", "한국어"], ["en", "English"], ["ja", "日本語"]]
 
 
 

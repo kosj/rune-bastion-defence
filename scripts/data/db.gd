@@ -113,6 +113,11 @@ const ENEMIES := {
 		"gold": 22, "lives": 2, "dmg": [5, 9], "atk_rate": 1.3, "scale": 2.25, "tint": Color(0.48, 0.62, 1.0),
 		"aura": 0.3, "aura_r": 3.0,
 		"desc": "방패 진형 - 주변 적의 방어력 +30% → 마법으로 먼저 처치"},
+	"shade": {"title": "그림자를 다스리는 자", "name": "그림자 왕 녹스", "model": "goblin", "hp": 6000, "speed": 0.85, "armor": 0.3, "mr": 0.3,
+		"gold": 550, "lives": 20, "dmg": [38, 56], "atk_rate": 1.5, "scale": 3.3, "boss": true, "tint": Color(0.32, 0.26, 0.55),
+		"vanish": true, "summon": "rogue", "summon_n": 3, "summon_cd": 11.0, "enrage_summon": "rogue", "enrage_n": 6,
+		"enrage_text": "그림자 도적 떼가 몰려옵니다",
+		"desc": "보스 - 12초마다 3초 동안 그림자에 숨어(마법사 탑만 공격 가능) 그림자 도적을 부르고, 체력 50%에서 도적 떼를 소환"},
 	"troll": {"name": "트롤 군주 그롬", "model": "troll", "hp": 4200, "speed": 0.8, "armor": 0.3, "mr": 0.3,
 		"gold": 400, "lives": 10, "dmg": [35, 55], "atk_rate": 2.2, "scale": 4.2, "boss": true, "slam": true, "enrage_summon": "goblin", "title": "협곡을 짓밟는 자",
 		"desc": "보스 - 체력 50%에서 격노하여 고블린 소환"},
@@ -158,7 +163,11 @@ const STORY := {
 		["hero", "왕국을 지킬 마지막 싸움입니다. 끝까지 버팁시다!"]],
 	"epilogue": [["captain", "오우거 왕이 쓰러졌습니다! 왕국이... 살아남았습니다!"],
 		["hero", "모두가 함께 싸운 덕분이에요. 그래도 성벽은 계속 지켜야겠죠."],
-		["captain", "무한 모드의 고대 열주 터에서 남은 무리가 계속 몰려온다고 합니다. 언제든 다시 불러 주십시오!"]],
+		["captain", "무한 모드의 고대 열주 터에서 남은 무리가 계속 몰려온다고 합니다. 언제든 다시 불러 주십시오!"],
+		["captain", "그리고... 달빛 숲 깊은 곳, 그림자 심연에서 수상한 움직임이 보인다는 보고가 들어왔습니다."]],
+	"hollow": [["captain", "그림자 심연입니다. 고르막의 패잔병을 그림자 도적들이 모아 이끌고 있습니다."],
+		["shade", "빛이 닿지 않는 곳은 모두 나의 영토다. 너희 탑은 나를 보지도 못하겠지."],
+		["hero", "그렇다면 빛을 밝히면 되겠군요. 등대와 마법사 탑을 믿어 봅시다!"]],
 }
 const CAPTAIN := {"name": "경비대장 브란", "portrait": "portrait_footman"}
 
@@ -263,18 +272,19 @@ const ACHIEVEMENTS := [
 	{"id": "master", "name": "대가의 길", "desc": "타워 전문화 8회", "stat": "masteries", "goal": 8, "icon": "m_arcane"},
 	{"id": "troll", "name": "트롤 사냥꾼", "desc": "트롤 왕 처치", "stat": "boss_kills", "goal": 1, "icon": "portrait_troll"},
 	{"id": "heroic", "name": "영웅의 길", "desc": "영웅 난이도로 지역 클리어", "stat": "heroic_wins", "goal": 1, "icon": "star"},
-	{"id": "allstars", "name": "별의 수호자", "desc": "모든 지역 별 3개", "stat": "stars", "goal": 30, "icon": "star"},
+	{"id": "allstars", "name": "별의 수호자", "desc": "모든 지역 별 3개", "stat": "stars", "goal": 33, "icon": "star"},
 	{"id": "meteor", "name": "하늘의 분노", "desc": "유성 낙하 25회 사용", "stat": "meteors", "goal": 25, "icon": "spell_meteor"},
 	{"id": "gold", "name": "왕실 금고", "desc": "누적 골드 20,000 획득", "stat": "gold", "goal": 20000, "icon": "coin"},
 	{"id": "sera", "name": "별빛의 동료", "desc": "세라와 함께 지역 클리어", "stat": "sera_wins", "goal": 1, "icon": "portrait_sera"},
 	{"id": "ogre_king", "name": "왕도의 수호자", "desc": "오우거 왕 고르막 처치", "stat": "ogre_king_kills", "goal": 1, "icon": "crown"},
 	{"id": "ren", "name": "바람의 동료", "desc": "렌과 함께 지역 클리어", "stat": "ren_wins", "goal": 1, "icon": "portrait_ranger"},
 	{"id": "iron", "name": "강철 의지", "desc": "철인 도전 1회 성공", "stat": "iron_clears", "goal": 1, "icon": "skull"},
-	{"id": "iron_all", "name": "철인 군주", "desc": "모든 지역 철인 도전 성공", "stat": "iron_clears", "goal": 10, "icon": "crown"},
+	{"id": "iron_all", "name": "철인 군주", "desc": "모든 지역 철인 도전 성공", "stat": "iron_clears", "goal": 11, "icon": "crown"},
 	{"id": "endless15", "name": "끝없는 전쟁", "desc": "무한 모드 15웨이브 도달", "stat": "endless_wave", "goal": 15, "icon": "wave_call"},
 	{"id": "endless30", "name": "불멸의 성채", "desc": "무한 모드 30웨이브 도달", "stat": "endless_wave", "goal": 30, "icon": "crown"},
 	{"id": "lich", "name": "망자의 안식", "desc": "리치 군주 모르가스 처치", "stat": "lich_kills", "goal": 1, "icon": "portrait_lich"},
 	{"id": "abilities", "name": "룬 장인", "desc": "타워 특수 능력 10회 습득", "stat": "abilities", "goal": 10, "icon": "a_teleport"},
+	{"id": "shade", "name": "빛을 든 자", "desc": "그림자 왕 녹스 처치", "stat": "shade_kills", "goal": 1, "icon": "portrait_shade"},
 	{"id": "daily1", "name": "오늘의 용사", "desc": "오늘의 도전 첫 성공", "stat": "daily_wins", "goal": 1, "icon": "ic_daily"},
 	{"id": "daily7", "name": "한 주의 수호자", "desc": "오늘의 도전 7회 성공", "stat": "daily_wins", "goal": 7, "icon": "ic_daily"},
 	{"id": "streak3", "name": "꾸준한 방패", "desc": "오늘의 도전 3일 연속 성공", "stat": "daily_streak_best", "goal": 3, "icon": "ic_daily"},
@@ -390,6 +400,8 @@ const UPGRADES := [
 	{"id": "runes", "name": "룬 각인술", "desc": "타워 특수 능력 비용 -25%", "cost": 3, "icon": "a_freeze"},
 ]
 
+## The main campaign ends at the capital (epilogue, "kingdom saved"); regions after it are bonus.
+const FINAL_LEVEL := 9
 const LEVELS := [
 	{
 		"id": "greenvale", "name": "그린베일 고개", "subtitle": "왕국의 첫 관문",
@@ -633,6 +645,33 @@ const LEVELS := [
 			[["warchief", 2, 3.5, 0.0, 0], ["ogre", 5, 2.25, 2.0, 2], ["sapper", 11, 0.63, 5.0, 1], ["spear", 16, 0.47, 7.0, 0]],
 			[["ogre", 4, 4.0, 0.0, 1], ["shield", 6, 1.8, 2.0, 2], ["gargoyle", 14, 0.55, 6.0, 0]],
 			[["ogre_king", 1, 1.0, 6.0, 0], ["orc", 18, 0.72, 0.0, 0], ["warchief", 2, 4.0, 8.0, 1], ["ogre", 2, 6.0, 12.0, 2], ["gargoyle", 15, 0.51, 16.0, 1], ["wolf", 17, 0.33, 20.0, 2]],
+		],
+	},
+	{
+		# bonus region after the campaign: the shadow rogues' lair (stealth everywhere, two beacons)
+		"id": "hollow", "name": "그림자 심연", "subtitle": "끝나지 않은 밤",
+		"desc": "달빛 숲 깊은 곳, 그림자 왕 녹스가 숨어 다니는 도적 떼를 이끕니다. 등대를 밝히고 마법사 탑으로 그림자를 꿰뚫으세요.",
+		"gold": 1000, "lives": 20, "hp_mult": 1.2, "theme": "night",
+		"paths": [
+			[[-38, 8], [-28, 8], [-22, 2], [-22, -6], [-15, -11], [-7, -11], [-2, -5], [-2, 2], [3, 7], [10, 7], [15, 1], [15, -6], [21, -11], [28, -8], [31, -2], [37, -2]],
+			[[-8, 30], [-8, 21], [-12, 15], [-9, 10], [-3, 8], [3, 7], [10, 7], [15, 1], [15, -6], [21, -11], [28, -8], [31, -2], [37, -2]],
+		],
+		"plots_auto": 16, "hero_start": [8, 2], "bounds": [-30, 30, -18, 17],
+		"waves": [
+			[["goblin", 16, 0.43, 0.0, 0], ["rogue", 5, 1.0, 3.0, 1]],
+			[["spear", 12, 0.51, 0.0, 0], ["wolf", 12, 0.32, 2.0, 1]],
+			[["rogue", 12, 0.57, 0.0, 1], ["shaman", 4, 1.33, 3.0, 0]],
+			[["shield", 2, 4.0, 0.0, 0], ["orc", 2, 3.52, 1.0, 0], ["rogue", 4, 1.44, 4.0, 1]],
+			[["gargoyle", 10, 0.7, 0.0, 1], ["spear", 10, 0.62, 2.0, 0]],
+			[["ogre", 1, 1.0, 0.0, 0], ["rogue", 8, 0.86, 2.0, 1], ["sapper", 4, 1.2, 4.0, 0]],
+			[["warchief", 1, 1.0, 0.0, 0], ["shield", 3, 3.0, 1.0, 0], ["orc", 5, 2.0, 2.0, 1], ["shaman", 5, 1.0, 5.0, 0]],
+			[["rogue", 11, 0.65, 0.0, 0], ["rogue", 8, 0.79, 2.0, 1], ["gargoyle", 5, 1.28, 5.0, 0]],
+			[["ogre", 2, 5.0, 0.0, 1], ["spear", 14, 0.51, 2.0, 0], ["wolf", 17, 0.29, 5.0, 1]],
+			[["warchief", 1, 3.5, 0.0, 0], ["shield", 5, 2.0, 2.0, 1], ["skeleton_knight", 3, 3.0, 4.0, 0], ["rogue", 9, 0.67, 6.0, 1]],
+			[["gargoyle", 18, 0.4, 0.0, 1], ["sapper", 11, 0.55, 3.0, 0], ["rogue", 15, 0.41, 6.0, 0]],
+			[["ogre", 2, 6.0, 0.0, 0], ["shield", 4, 1.6, 2.0, 1], ["spear", 8, 0.93, 4.0, 0], ["shaman", 5, 1.11, 7.0, 1]],
+			[["warchief", 2, 4.8, 0.0, 1], ["ogre", 2, 5.0, 3.0, 0], ["rogue", 18, 0.39, 5.0, 0], ["gargoyle", 11, 0.66, 9.0, 1]],
+			[["shade", 1, 1.0, 6.0, 0], ["rogue", 19, 0.38, 0.0, 1], ["shield", 8, 1.29, 3.0, 0], ["ogre", 2, 6.0, 10.0, 1], ["spear", 21, 0.34, 14.0, 0], ["gargoyle", 15, 0.47, 18.0, 1]],
 		],
 	},
 ]

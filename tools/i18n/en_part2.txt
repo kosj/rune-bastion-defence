@@ -344,3 +344,16 @@ Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅  
 첫 승리 보상: 영웅 경험치 +%d	First win reward: hero XP +%d
 연속 %d일 · 최고 %d일	Streak %d days · best %d
 도전	Start
+그림자를 다스리는 자	Master of Shadows
+그림자 왕 녹스	Nox the Shadow King
+그림자 도적 떼가 몰려옵니다	A pack of shadow rogues closes in
+보스 - 12초마다 3초 동안 그림자에 숨어(마법사 탑만 공격 가능) 그림자 도적을 부르고, 체력 50%에서 도적 떼를 소환	Boss: every 12 seconds hides in the shadows for 3 seconds (only mage towers can hit him) and calls shadow rogues; at 50% health summons a whole pack
+그리고... 달빛 숲 깊은 곳, 그림자 심연에서 수상한 움직임이 보인다는 보고가 들어왔습니다.	And... there are reports of something stirring deep in the moonlit forest, in the Shadow Hollow.
+그림자 심연입니다. 고르막의 패잔병을 그림자 도적들이 모아 이끌고 있습니다.	This is the Shadow Hollow. The shadow rogues have gathered what is left of Gormak's army.
+빛이 닿지 않는 곳은 모두 나의 영토다. 너희 탑은 나를 보지도 못하겠지.	Wherever light cannot reach is my domain. Your towers will not even see me.
+그렇다면 빛을 밝히면 되겠군요. 등대와 마법사 탑을 믿어 봅시다!	Then we bring the light. Let's trust the beacons and the mage towers!
+빛을 든 자	Lightbearer
+그림자 왕 녹스 처치	Defeat Nox the Shadow King
+그림자 심연	Shadow Hollow
+끝나지 않은 밤	The Endless Night
+달빛 숲 깊은 곳, 그림자 왕 녹스가 숨어 다니는 도적 떼를 이끕니다. 등대를 밝히고 마법사 탑으로 그림자를 꿰뚫으세요.	Deep in the moonlit forest, Nox the Shadow King leads a band of hidden rogues. Light the beacons and pierce the shadows with mage towers.

@@ -9,7 +9,8 @@ const MAP_SIZE := Vector2(1536, 864)
 # the south harbour and the royal capital),
 # plus the old hill-top colonnade in the north-west for endless mode
 const NODES := [Vector2(0.30, 0.625), Vector2(0.335, 0.435), Vector2(0.462, 0.17), Vector2(0.645, 0.45), Vector2(0.872, 0.315),
-	Vector2(0.785, 0.16), Vector2(0.925, 0.555), Vector2(0.805, 0.735), Vector2(0.37, 0.835), Vector2(0.165, 0.42)]
+	Vector2(0.785, 0.16), Vector2(0.925, 0.555), Vector2(0.805, 0.735), Vector2(0.37, 0.835), Vector2(0.165, 0.42),
+	Vector2(0.70, 0.635)]  # bonus: the shadow hollow, deep in the moonlit forest
 const ENDLESS := Vector2(0.115, 0.15)
 const ROADS := [
 	[Vector2(0.30, 0.625), Vector2(0.293, 0.53), Vector2(0.335, 0.435)],
@@ -22,6 +23,8 @@ const ROADS := [
 	# by sea from the temple to the south harbour, then north through the town to the capital
 	[Vector2(0.805, 0.735), Vector2(0.74, 0.83), Vector2(0.62, 0.90), Vector2(0.47, 0.925), Vector2(0.40, 0.895), Vector2(0.37, 0.835)],
 	[Vector2(0.37, 0.835), Vector2(0.31, 0.80), Vector2(0.245, 0.745), Vector2(0.205, 0.665), Vector2(0.215, 0.58), Vector2(0.195, 0.51), Vector2(0.165, 0.42)],
+	# the bonus region opens after the capital; its path leads from the moonlit forest's glade
+	[Vector2(0.645, 0.45), Vector2(0.665, 0.52), Vector2(0.71, 0.565), Vector2(0.70, 0.635)],
 ]
 
 var menu: Node  # main menu (opens the hero / bestiary / upgrade overlays)
@@ -633,8 +636,8 @@ class _Roads extends Control:
 			return
 		for si in WorldMap.ROADS.size():
 			var reached := Game.unlocked(si + 1)
-			if not Game.unlocked(si):
-				continue
+			if not Game.unlocked(si) or (si + 1 > DB.FINAL_LEVEL and not reached):
+				continue  # (a bonus region's road appears once it opens)
 			var pts: Array = []
 			for uv in WorldMap.ROADS[si]:
 				pts.append(owner_map.uv_to_screen(uv))

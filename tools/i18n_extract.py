@@ -13,7 +13,7 @@ LIT = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 def literals():
     found = {}
     for f in sorted(glob.glob("scripts/**/*.gd", recursive=True)):
-        if "/tools/" in f or f.endswith("lang_en.gd"):
+        if "/tools/" in f or "/i18n/lang_" in f:
             continue
         for ln, line in enumerate(open(f, encoding="utf-8"), 1):
             code = line.split("#")[0] if line.lstrip().startswith("#") else line
@@ -24,8 +24,8 @@ def literals():
     return found
 
 
-def table():
-    src = open("scripts/i18n/lang_en.gd", encoding="utf-8").read()
+def table(code="en"):
+    src = open("scripts/i18n/lang_%s.gd" % code, encoding="utf-8").read()
     keys = set()
     for m in re.finditer(r'^\s*"((?:[^"\\]|\\.)*)"\s*:', src, re.M):
         keys.add(m.group(1))
@@ -34,6 +34,13 @@ def table():
 
 if __name__ == "__main__":
     found = literals()
+    if "--missing-lang" in sys.argv:
+        # another language's coverage (missing lines fall back to English)
+        code = sys.argv[sys.argv.index("--missing-lang") + 1]
+        keys = table(code)
+        miss = [s for s in found if s not in keys]
+        print("%s: %d of %d strings translated" % (code, len(found) - len(miss), len(found)), file=sys.stderr)
+        sys.exit(0)
     keys = table()
     miss = [s for s in found if s not in keys]
     if "--json" in sys.argv:

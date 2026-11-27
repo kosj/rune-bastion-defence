@@ -79,7 +79,7 @@
 
 1. 곡선 보기: `godot --headless --path . res://scenes/test_runner.tscn -- curve=1 | grep -E '^(CURVE|ENEMIES|TOWERS)' > /tmp/curve.jsonl` 다음 `python3 tools/balance/curve.py /tmp/curve.jsonl --png /tmp/curve.png`
 2. 웨이브를 곡선에 맞추기: `python3 tools/balance/shape_waves.py /tmp/curve.jsonl`. `scripts/data/db.gd`의 웨이브 줄을 고칩니다. `--dry`로 미리 보고, `--levels 3`으로 한 레벨만 할 수 있습니다. 반복해도 같은 목표로 수렴합니다.
-3. AI 플레이: `python3 tools/balance/sim.py --levels 0-9 --skills expert,casual --diffs 0,1,2 --seeds 6 --out /tmp/sim.json`. 레벨마다 승률, 평균 생명, 별 분포, 웨이브별 생명 손실, 호출 때 남은 골드를 보여 줍니다.
+3. AI 플레이: `python3 tools/balance/sim.py --levels 0-10 --skills expert,casual --diffs 0,1,2 --seeds 6 --out /tmp/sim.json`. 레벨마다 승률, 평균 생명, 별 분포, 웨이브별 생명 손실, 호출 때 남은 골드를 보여 줍니다.
 4. 보정: `python3 tools/balance/calibrate.py /tmp/sim.json --apply`. 튀는 웨이브와 너무 쉬운 레벨을 tuning.json에 반영합니다. 그다음 2부터 다시 합니다.
 5. 검사(CI): `tools/check_balance.sh`. 웨이브 데이터가 곡선(보정 포함)에서 20% 넘게 벗어나면 실패합니다. 웨이브를 손으로 고쳤다면 2~4를 거칩니다.
 
@@ -141,3 +141,11 @@
 - 보통·casual: 앞 다섯 레벨 83~100%, 뒤로 갈수록 내려가는 모양은 그대로입니다(검은 성채 33%, 통곡의 폭포 17%, 마지막 두 레벨 0%).
 - 쉬움·casual: 모든 레벨 83% 이상. 영웅·expert: 83~100%.
 
+
+### 보너스 지역: 그림자 심연 (11)
+
+왕도 뒤에 여는 보너스 지역입니다. 그림자 도적이 많고 마지막에 그림자 왕 녹스(12초마다 3초 동안 숨음, 도적 소환)가 나옵니다. 캠페인 곡선을 그대로 이어 R0 = 1.75 x 0.9(보스 레벨 다음)에서 시작하고, 레벨 배수 x0.9, 6웨이브 x0.90, 11웨이브 x0.8, 12웨이브 x0.75로 보정했습니다. 캠페인에서 가장 어려운 지역으로 남겨 두었습니다.
+
+| 보통 · expert | 보통 · casual | 쉬움 · casual | 영웅 · expert |
+|---|---|---|---|
+| 100% / 15.5 | 50% / 3.2 | 100% / 19.2 | 67% / 2.7 |

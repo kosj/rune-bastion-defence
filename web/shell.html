@@ -204,20 +204,39 @@ const engine = new Engine(GODOT_CONFIG);
   const tip = document.getElementById('tip');
   let lang = 'ko';
   try { lang = localStorage.getItem('rb_lang') || ''; } catch (e) {}
-  if (lang !== 'ko' && lang !== 'en') lang = /^ko/i.test(navigator.language || '') ? 'ko' : 'en';
+  if (lang !== 'ko' && lang !== 'en' && lang !== 'ja') lang = /^ko/i.test(navigator.language || '') ? 'ko' : (/^ja/i.test(navigator.language || '') ? 'ja' : 'en');
+  const JA = lang === 'ja';
   const EN = lang === 'en';
-  const L = EN ? { prep: 'Preparing the battlefield... ', init: 'Starting the engine... ', fail: 'Loading failed: ',
+  const L = JA ? { prep: '戦場を準備しています... ', init: 'エンジンを起動しています... ', fail: '読み込みに失敗しました: ',
+      need: 'WebGL2に対応した最新のブラウザ(Chrome、Safari 16.4以上、Edge、Firefox)で開いてください。',
+      missing: '必要なブラウザ機能がありません:\n' }
+    : EN ? { prep: 'Preparing the battlefield... ', init: 'Starting the engine... ', fail: 'Loading failed: ',
       need: 'Please open this page in an up-to-date browser with WebGL2 (Chrome, Safari 16.4+, Edge, Firefox).',
       missing: 'Required browser features are missing:\n' }
     : { prep: '전장을 준비하는 중... ', init: '엔진 초기화 중... ', fail: '로딩 실패: ',
       need: 'WebGL2를 지원하는 최신 브라우저(Chrome, Safari 16.4+, Edge, Firefox)에서 열어주세요.',
       missing: '필요한 브라우저 기능이 없습니다:\n' };
+  if (JA) {
+    document.documentElement.lang = 'ja';
+    document.getElementById('sub').textContent = 'DEFENDER OF THE REALM';
+    pct.textContent = L.prep + '0%';
+  }
   if (EN) {
     document.documentElement.lang = 'en';
     document.getElementById('sub').textContent = 'DEFENDER OF THE REALM';
     pct.textContent = L.prep + '0%';
   }
-  const tips = EN ? [
+  const tips = JA ? [
+    '空いている建設地をタップすると弓兵・兵舎・魔法使い・砲兵のタワーを建てられます。',
+    'オーク突撃兵は重装甲!魔法使いの塔の魔法ダメージが効果的です。',
+    'ガーゴイルは空を飛びます。兵舎と砲兵は攻撃できません。',
+    '髑髏ボタンで次のウェーブを早く呼ぶとボーナスゴールドがもらえます。',
+    '英雄をタップしてから地面をタップすると、好きな場所へ移動します。',
+    'レベル3のタワーは二つの専門化から一つを選べます。',
+    '専門化したタワーは特殊能力をもう一つ習得できます。',
+    '骸骨騎士は倒れても一度だけ起き上がります。魔法が特効!',
+    '英雄は戦闘経験を積むほどランクが上がり、才能を習得します。',
+  ] : EN ? [
     'Tap an empty build plot to raise Archer, Barracks, Mage or Artillery towers.',
     'Orc raiders wear heavy armor! Magic damage from mage towers works best.',
     'Gargoyles fly. Barracks and artillery cannot hit them.',

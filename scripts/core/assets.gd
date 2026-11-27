@@ -217,6 +217,26 @@ static func tex_path(p: String) -> Texture2D:
 		return null
 	return load(p) if ResourceLoader.exists(p) else null
 
+static var _ja_font := false
+
+## Japanese glyphs (fonts/ui_ja.ttf, in the "menu" download chunk) as a fallback of the UI font:
+## every face falls back to "ui", so all of them can show Japanese. False while the chunk is missing.
+static func add_ja_font() -> bool:
+	if _ja_font:
+		return true
+	var p := "res://assets/fonts/ui_ja.ttf"
+	if not Content.allows(p) or not ResourceLoader.exists(p):
+		return false
+	var ja: Font = load(p)
+	var ui := font("ui") as FontFile
+	if ui == null or ja == null:
+		return false
+	var fb: Array[Font] = ui.fallbacks.duplicate()
+	fb.append(ja)
+	ui.fallbacks = fb
+	_ja_font = true
+	return true
+
 static func font(kind := "ui") -> Font:
 	if not _fonts.has(kind):
 		var p := "res://assets/fonts/%s.ttf" % kind

@@ -440,7 +440,7 @@ const PORTAL_HOLE := Vector3(0.0, 2.25, 0.55)
 const EVENTS := {"greenvale": ["cache"], "twinfords": ["cache", "mortar"], "frostwind": ["rockfall"],
 	"moonwood": ["beacon", "altar"], "trollgorge": ["rockfall", "rockfall"], "citadel": ["altar", "mortar"],
 	"falls": ["rockfall", "holy"], "temple": ["holy", "altar"], "harbor": ["cache", "mortar"],
-	"capital": ["beacon", "mortar"]}
+	"capital": ["beacon", "mortar"], "hollow": ["beacon", "beacon"]}
 const EVENT_CD := {"rockfall": 50.0, "altar": 40.0, "beacon": 45.0, "mortar": 45.0, "holy": 45.0}
 const EVENT_HINT := {"cache": "길가의 금빛 ‘!’를 탭하면 숨은 보급품(골드)을 얻습니다",
 	"rockfall": "금빛 ‘!’가 뜬 바위를 탭하면 길 위로 굴러 떨어져 적을 덮칩니다",
@@ -1347,6 +1347,8 @@ func on_enemy_killed(e: Enemy) -> void:
 			Game.stat("lich_kills")
 		if e.type == "ogre_king":
 			Game.stat("ogre_king_kills")
+		if e.type == "shade":
+			Game.stat("shade_kills")
 		cine.boss_down(e)
 		Audio.play_music(wave_music(), 2.5)
 	Audio.play("coin", -10.0, 0.1)
@@ -2036,7 +2038,7 @@ func _victory() -> void:
 	Audio.play("victory", 0.0, 0.0)
 	Audio.play_music("menu", 3.0)
 	_clear_cards()
-	if level_idx == DB.LEVELS.size() - 1 and prev_stars == 0 and not Game.endless and not Game.testing:
+	if level_idx == DB.FINAL_LEVEL and prev_stars == 0 and not Game.endless and not Game.testing:
 		# first time the campaign is won: the epilogue plays before the results
 		get_tree().create_timer(1.8, true, false, true).timeout.connect(func(): cine.story(DB.STORY["epilogue"], func(): _victory_modal(stars, prev_stars)))
 	else:
@@ -2143,7 +2145,7 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 			notes.append(UI.label("철인 도전 성공! 지역 카드에 철인 배지가 붙었습니다", 19, Color(1.0, 0.62, 0.45), 5, "ui_black"))
 		elif gained > 0 or (Game.difficulty == 1):
 			notes.append(UI.label((tr("새로 얻은 ★ %d  — 왕국 강화에 사용하세요") % gained) if gained > 0 else "영웅 난이도 클리어!", 19, UI.GOLD, 5, "ui_black"))
-		if level_idx >= DB.LEVELS.size() - 1:
+		if level_idx == DB.FINAL_LEVEL:
 			notes.append(UI.label("왕국을 지켜냈습니다! 모든 지역 정복", 21, UI.GOLD, 5, "ui_black"))
 		for nl in notes:
 			# long lines (English especially) wrap inside the card instead of running past its edge

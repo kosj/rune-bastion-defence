@@ -71,6 +71,10 @@ var _move_on := 0.0
 var _shot_tgt: Soldier
 var _aim_yaw := 0.0
 var _throwing := false
+# shadow king: every 12 s slips into the shadows for 3 s (towers but mages lose him; hits do not
+# bring him out)
+var _vanish_cd := 7.0
+var _vanish_t := 0.0
 const GHOST := 0.68     # how see-through a hidden rogue is (0 solid, 1 invisible)
 
 func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
@@ -95,7 +99,7 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		lane = randf_range(-1.6, 1.6)
 	var weapon := ""
 	match d["model"]:
-		"goblin": weapon = "w_dagger" if type in ["goblin", "rogue"] else ("p_arrow" if type == "spear" else "")
+		"goblin": weapon = "w_dagger" if type in ["goblin", "rogue", "shade"] else ("p_arrow" if type == "spear" else "")
 		"skeleton_knight": weapon = "w_sword" if type == "skeleton_knight" else "w_dagger"
 		"lich": weapon = ""
 		"orc": weapon = "w_axe"
@@ -111,7 +115,7 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		add_child(staff)
 	if d.has("aura"):
 		_aura_ring = LevelMain.I.fx.ground_ring(self, float(d.get("aura_r", 3.0)), Color(0.25, 0.5, 1.0, 0.65))
-	if d.get("stealth", false) and model.body:
+	if (d.get("stealth", false) or d.get("vanish", false)) and model.body:
 		# its own copy of the (tinted) material with alpha, so each rogue fades on its own
 		_solid_mat = model.body.material_override if model.body.material_override else model.body.mesh.surface_get_material(0)
 		if _solid_mat is StandardMaterial3D:
@@ -120,7 +124,7 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		for g in model.find_children("*", "GeometryInstance3D", true, false):
 			if g != model.body:
 				_ghost_meshes.append(g)
-		set_ghost(GHOST)
+		set_ghost(GHOST if d.get("stealth", false) else 0.0)
 	if d["model"] == "wolf" and model.anim == null:
 		model.position.y = 0.42 * sc
 		model.blob_y = 0.14 - model.position.y
@@ -193,11 +197,20 @@ func _process(delta: float) -> void:
 			aura_armor = 0.0
 	if d.has("aura"):
 		_shield_aura(delta)
-	if d.get("stealth", false):
+	if d.get("vanish", false):
+		_vanish_t = maxf(_vanish_t - delta, 0.0)
+		_vanish_cd -= delta
+		if _vanish_cd <= 0.0:
+			_vanish_cd = 12.0
+			_vanish_t = 3.0
+			LevelMain.I.fx.smoke(aim_point(), 1.6)
+			LevelMain.I.fx.magic_burst(aim_point(), Color(0.45, 0.3, 0.8), 1.3)
+			Audio.play("magic", -4.0, 0.1)
+	if d.get("stealth", false) or d.get("vanish", false):
 		reveal_t = maxf(reveal_t - delta, 0.0)
 		if engaged:
 			reveal_t = maxf(reveal_t, 0.4)
-		var want := 0.0 if reveal_t > 0.0 else GHOST
+		var want := GHOST if hidden() else 0.0
 		if absf(_ghost - want) > 0.001:
 			if _ghost == GHOST or _ghost == 0.0:
 				# a wisp of smoke as it slips in or out of the shadows
@@ -453,7 +466,11 @@ func damage(amount: float, dtype: String, flash := true, pierce := 0.0) -> void:
 
 ## Stealth: can this enemy be seen by towers that cannot see through it (all but mages)?
 func hidden() -> bool:
-	return alive and reveal_t <= 0.0 and d.get("stealth", false)
+	if not alive:
+		return false
+	if _vanish_t > 0.0:
+		return true
+	return reveal_t <= 0.0 and d.get("stealth", false)
 
 ## Fades the model toward see-through (0 = solid, GHOST = hidden). Solid uses the normal
 ## material again (no alpha sorting); the weapon and shadow go while it is faded.

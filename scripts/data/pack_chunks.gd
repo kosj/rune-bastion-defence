@@ -6,7 +6,8 @@ class_name PackChunks
 ##   core   index.pck            engine data, scripts, fonts, UI kit, the default title picture,
 ##                               the menu click sounds: everything the title screen needs
 ##   menu   index_menu.pck       world map, level / tower / character pictures, voices, sound
-##                               effects, the menu music, the other heroes' title pictures
+##                               effects, the menu music, the other heroes' title pictures, the
+##                               Japanese font (English shows until it is here)
 ##   stage1 index_stage1.pck     the first battle (level 1 with Kael): terrain, effects, props,
 ##                               castle, portal, level-1 towers and their crews, its enemies
 ##   towers index_towers.pck     tower levels 2-3 (upgrades) and the troll: completes the 3D title
@@ -33,7 +34,7 @@ const DATA := {
 		"menu": [
 			"assets/ui/world_map.*", "assets/ui/level_*", "assets/ui/portrait_*", "assets/ui/tower_*",
 			"assets/ui/backdrop/menu_sera.*", "assets/ui/backdrop/menu_ranger.*",
-			"assets/audio/voice/*", "assets/audio/sfx/*", "assets/audio/music/menu.*"
+			"assets/audio/voice/*", "assets/audio/sfx/*", "assets/audio/music/menu.*", "assets/fonts/ui_ja.*"
 		],
 		"stage1": [
 			"assets/models/*", "assets/characters/*", "assets/fx/*", "assets/textures/*",
