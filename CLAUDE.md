@@ -14,6 +14,7 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
   - `tools/check_spawn.sh`: 레벨마다 영웅 시작 위치가 부지·강·소품과 겹치지 않는지
   - 셀프 테스트: `test_runner.tscn -- selftest=1`
   - AI 플레이: `LEVELS="0 4 8" tools/balance.sh smart 0`
+  - 밸런스 곡선: `tools/check_balance.sh`(웨이브가 `docs/BALANCE.md`의 곡선을 따르는지)
   - 엔진 클래스: `python3 tools/engine/check_classes.py <godot 4.7.2 소스>`
   - 브라우저 스모크: `python3 tools/browser_test.py build/web_hosted /tmp/s 1280 720 --play --nosw --smoke`
 - 전투 중 셰이더 컴파일 수: `DISPLAY=:77 tools/perf/shader_compiles.sh 2 1`(0이어야 함. 원인 찾기는 `GLSHIM_DUMP=<폴더>`)
@@ -32,6 +33,7 @@ Godot 4.7.2 (Compatibility 렌더러) 3D 타워 디펜스입니다. 웹(데스�
 - **경량 엔진 템플릿**(`tools/engine/web_template.env`)은 물리·내비게이션·XR·네트워크·RegEx·mp3 등을 뺍니다. 그런 클래스를 쓰려면 env에서 해당 옵션을 지웁니다. 그러면 CI가 템플릿을 다시 빌드합니다. 엔진 소스 수정은 `tools/engine/patches/*.patch`(파일 머리에 이유)로 두고, `build_template.sh`가 적용합니다. 패치를 바꾸면 템플릿 캐시 키가 바뀌어 CI가 다시 빌드합니다(~40분, 실패하면 공식 템플릿으로 배포). `python3 tools/engine/check_classes.py <godot 소스>`가 빠진 클래스 사용을 잡습니다.
 - **웹에는 셰이더 바이너리 캐시(PSO 캐시)가 없습니다**. 전투에 처음 나오는 것은 `ShaderWarmup`(`scripts/level/shader_warmup.gd`)이 로딩 화면 뒤에서 한 번씩 그려 컴파일해 둡니다. 새 이펙트·투사체·조명을 넣으면 워밍업에도 넣고, 위 명령으로 전투 중 컴파일이 0인지 확인합니다(`docs/PERFORMANCE.md` 7절).
 - **게시 전 브라우저 스모크 테스트**(`browser_test.py --smoke`)가 실패하면 배포되지 않습니다.
+- **웨이브·적 체력·현상금을 바꾸면** `docs/BALANCE.md`의 순서를 따릅니다: `tools/balance/shape_waves.py`로 곡선에 맞추고, `tools/balance/sim.py`(expert·casual x 보통·영웅·쉬움)로 확인하고, 튀는 곳은 `calibrate.py`로 `tuning.json`에 반영합니다. 웨이브 줄을 손으로만 고치면 CI(`check_balance.sh`)에서 걸립니다.
 - **텍스트를 추가하면** 영어를 `tools/i18n/en_*.txt`에 넣고 `python3 tools/i18n_build.py`를 돌립니다(`lang_en.gd`는 생성 파일). 그다음 `python3 tools/make_fonts.py`로 폰트를 다시 만듭니다. CI가 `i18n_build.py --check`로 빠진 영어를 잡습니다.
 - **타이틀 디오라마를 바꾸면** `tools/render_backdrops.sh`(화면 필요, Xvfb)로 타이틀 그림을 다시 렌더링합니다.
 - **UI**(`docs/UI.md`):

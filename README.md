@@ -96,6 +96,7 @@ Kingdom Rush · Bloons TD 6 계열(경로형 타워 디펜스 + 영웅 + 스킬 
 ```
 - `build/web`: 일반 Godot 웹 빌드와 `index_mobile.pck`, 그리고 각각의 청크(`index[_mobile]_<청크>.pck`)입니다.
 - `build/web_hosted`: wasm과 pck를 gzip으로 압축해 15MB 단위로 나눈 버전입니다. Brotli로 5% 넘게 줄어드는 파일(엔진)에는 Brotli 파트도 넣습니다. 브라우저가 DecompressionStream으로 압축을 풉니다.
+- 밸런스 곡선: 웨이브의 세기는 Kingdom Rush 계열의 지수 추세 x 톱니 곡선을 따르고, 현상금은 체력의 0.75제곱에 비례합니다. 곡선 맞추기(`tools/balance/shape_waves.py`), AI 플레이 시뮬레이션(`tools/balance/sim.py`, 한 판에 몇 초), 보정(`tools/balance/calibrate.py`)의 순서와 결과는 `docs/BALANCE.md`에 있습니다. CI는 `tools/check_balance.sh`로 웨이브가 곡선을 따르는지 봅니다.
 - 밸런스 테스트: `tools/balance.sh smart 0`(AI가 각 지역을 플레이). `skill=casual`을 붙이면 처음 하는 사람처럼 플레이합니다(느린 판단, 절반은 무작위 타워, 무작위 부지와 전문화, 특수 능력 안 삼, 주문 드물게, 영웅 조작 안 함). 난이도 인자는 0 일반, 1 영웅, 2 쉬움입니다. 화면 테스트: `tools/browser_test.py`.
 - 플레이 기록 분석: 설정 → ‘플레이 기록 보내기’에서 받은 코드를 `python3 tools/playlog_decode.py <코드>`로 풀면 판마다 도달 웨이브, 웨이브별로 잃은 생명, 새어 나간 적, 지은 타워가 나옵니다.
 

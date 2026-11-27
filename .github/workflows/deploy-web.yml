@@ -90,7 +90,7 @@ jobs:
           test -f build/web_hosted/index.wasm.br0.bin
           ls -la build/web_hosted
 
-      - name: Checks (every string has English, fonts cover all text, scenes load only chunks they wait for, every dialog closes, heroes spawn clear)
+      - name: Checks (every string has English, fonts cover all text, scenes load only chunks they wait for, every dialog closes, heroes spawn clear, waves follow the balance curve)
         run: |
           export GODOT=~/godot/godot
           pip install --quiet fonttools
@@ -99,6 +99,7 @@ jobs:
           bash tools/check_chunks.sh
           bash tools/check_sheets.sh
           bash tools/check_spawn.sh
+          bash tools/check_balance.sh
 
       - name: Browser smoke test (headless Chrome plays the built page; nothing is published if it fails)
         run: |

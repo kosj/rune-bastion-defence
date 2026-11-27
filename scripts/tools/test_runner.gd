@@ -51,6 +51,11 @@ func _ready() -> void:
 	if args.get("selftest", "0") == "1":
 		_selftest()
 		return
+	if args.get("curve", "0") == "1":
+		_curve_report()
+		return
+	if args.has("seed"):
+		seed(int(args["seed"]))
 	if mode == "menu":
 		if args.get("progress", "0") == "1":
 			# fake a mid-game save so locked content shows up unlocked
@@ -125,6 +130,23 @@ func _ready() -> void:
 			if u["id"] == id and budget >= int(u["cost"]):
 				budget -= int(u["cost"])
 				Game.upgrades[id] = true
+	# hero rank a player would have by this level: every kill gives the hero 2 x its bounty in
+	# lifetime experience, so take the bounties of all earlier levels; talents spent in turn
+	if mode == "smart" and args.get("hero_prog", "1") == "1":
+		var xp := float(args.get("hero_xp", "-1"))
+		if xp < 0.0:
+			xp = 0.0
+			for li in Game.current_level:
+				for w in DB.LEVELS[li]["waves"]:
+					for g in w:
+						xp += 2.0 * int(g[1]) * int(DB.ENEMIES[g[0]]["gold"])
+		Game.hero_xp = {Game.hero_id: xp}
+		var tal := {}
+		var pts := maxi(DB.hero_rank(Game.hero_id) - 1, 0)
+		var order := ["dmg", "hp", "skill", "cd"]
+		for i in mini(pts, 12):
+			tal[order[i % 4]] = int(tal.get(order[i % 4], 0)) + 1
+		Game.hero_talents = {Game.hero_id: tal}
 	if args.has("prewarm"):
 		# what the briefing card preloads (Content.warm), done up front: first-use hitch comparison
 		var t0 := Time.get_ticks_msec()
@@ -575,9 +597,25 @@ func _ai_tick(delta: float) -> void:
 				L.hero.move_to(lead.global_position)
 	if L.state == "ready":
 		L._call_wave()
+	if args.get("bosslog", "0") == "1" and t > _next_boss_log:
+		# boss fight trace: health and progress along the path every two seconds
+		_next_boss_log = t + 2.0 / maxf(Engine.time_scale, 1.0)
+		for e: Enemy in L.enemies:
+			if e.alive and e.boss:
+				print("BOSS %s hp=%d/%d at=%.0f%% towers_in_range=%d" % [e.type, e.hp, e.max_hp, 100.0 * e.dist / e.path.length,
+					L.towers.values().filter(func(tw): return Vector2(tw.global_position.x, tw.global_position.z).distance_to(Vector2(e.global_position.x, e.global_position.z)) <= tw.range_r()).size()])
 	if t > _next_report:
 		_next_report = t + 10.0
 		print("[t=%.0f] wave %d/%d enemies=%d towers=%d lives=%d gold=%d" % [t, L.wave_idx + 1, L.waves.size(), L.enemies.size(), L.towers.size(), L.lives, L.gold])
+	# per-wave telemetry for tools/balance/sim.py: lives and gold when each wave is called, and
+	# how much is invested in towers (the defence the economy has paid for so far)
+	if L.wave_idx != _tele_wave or L.state == "won" or L.state == "lost":
+		var inv := 0
+		for k in L.towers:
+			inv += int(L.towers[k].invested)
+		if L.wave_idx != _tele_wave:
+			print("WAVE %d lives=%d gold=%d invested=%d towers=%d" % [L.wave_idx + 1, L.lives, L.gold, inv, L.towers.size()])
+			_tele_wave = L.wave_idx
 	if L.state == "won" or L.state == "lost":
 		var lv := []
 		for k in L.towers.keys():
@@ -636,6 +674,8 @@ func _desired_type(L: LevelMain) -> String:
 	return best
 
 var _last_lives := 999
+var _tele_wave := -1
+var _next_boss_log := 0.0
 
 func _ai_build(L: LevelMain, want: String) -> void:
 	var free := []
@@ -644,8 +684,30 @@ func _ai_build(L: LevelMain, want: String) -> void:
 			free.append(i)
 	if free.is_empty():
 		return
-	# a beginner taps whichever empty plot catches the eye; the expert fills plots in order
-	var pick: int = free[randi() % free.size()] if _casual() else free[0]
+	# a beginner taps whichever empty plot catches the eye; the expert takes the plot that covers
+	# the most road (every path sampled each metre, shared stretches counted once per path) and,
+	# for a barracks, the plot closest to the road
+	var pick: int = free[randi() % free.size()]
+	if not _casual():
+		var rng_r: float = DB.TOWERS[want]["levels"][0]["range"]
+		var best := -1.0
+		for i in free:
+			var pp: Vector2 = L.plots[i]
+			var cov := 0.0
+			for lp: LanePath in L.paths:
+				var d := 0.0
+				while d < lp.length:
+					if lp.sample(d).distance_to(pp) <= rng_r:
+						cov += 1.0
+					d += 1.0
+			if want == "barracks":
+				var near := 1e9
+				for lp: LanePath in L.paths:
+					near = minf(near, lp.closest(pp).x)  # (distance, offset along the path)
+				cov = cov * 0.2 - near * 3.0
+			if cov > best:
+				best = cov
+				pick = i
 	L._select_plot(pick)
 	L._on_radial_chosen("build_" + want)
 
@@ -757,13 +819,34 @@ func _smart_tick(delta: float) -> void:
 		L._call_wave()
 	elif L.state == "playing" and L._spawning_done() and L.enemies.is_empty() and args.get("early", "1") == "1" and not _casual():
 		L._call_wave()
+	if args.get("bosslog", "0") == "1" and t > _next_boss_log:
+		# boss fight trace: health and progress along the path every two seconds
+		_next_boss_log = t + 2.0 / maxf(Engine.time_scale, 1.0)
+		for e: Enemy in L.enemies:
+			if e.alive and e.boss:
+				print("BOSS %s hp=%d/%d at=%.0f%% towers_in_range=%d" % [e.type, e.hp, e.max_hp, 100.0 * e.dist / e.path.length,
+					L.towers.values().filter(func(tw): return Vector2(tw.global_position.x, tw.global_position.z).distance_to(Vector2(e.global_position.x, e.global_position.z)) <= tw.range_r()).size()])
 	if t > _next_report:
 		_next_report = t + 10.0
 		print("[t=%.0f] wave %d/%d enemies=%d towers=%d lives=%d gold=%d" % [t, L.wave_idx + 1, L.waves.size(), L.enemies.size(), L.towers.size(), L.lives, L.gold])
+	# per-wave telemetry for tools/balance/sim.py: lives and gold when each wave is called, and
+	# how much is invested in towers (the defence the economy has paid for so far)
+	if L.wave_idx != _tele_wave or L.state == "won" or L.state == "lost":
+		var inv := 0
+		for k in L.towers:
+			inv += int(L.towers[k].invested)
+		if L.wave_idx != _tele_wave:
+			print("WAVE %d lives=%d gold=%d invested=%d towers=%d" % [L.wave_idx + 1, L.lives, L.gold, inv, L.towers.size()])
+			_tele_wave = L.wave_idx
 	if L.state == "won" or L.state == "lost":
 		var lv := []
 		for k in L.towers.keys():
 			lv.append("%s%d%s" % [L.towers[k].type.substr(0, 2), L.towers[k].level, L.towers[k].mastery.substr(0, 2)])
+		if L.state == "lost":
+			# what broke through: type, health left and how far along its path
+			for e: Enemy in L.enemies:
+				if e.alive:
+					print("LEFT %s hp=%d/%d at=%.0f%%" % [e.type, e.hp, e.max_hp, 100.0 * e.dist / e.path.length])
 		print("RESULT ", L.state, " wave=", L.wave_idx + 1, "/", L.waves.size(), " lives=", L.lives, "/", L.max_lives, " towers=", lv)
 		get_tree().quit()
 
@@ -788,6 +871,51 @@ func _build_all() -> void:
 			if args.get("abilities", "0") == "1":
 				tw.buy_ability()
 	L.hud.set_gold(L.gold)
+
+## curve=1 (headless): every level's waves as data for tools/balance/curve.py — per wave the
+## enemy count, raw HP, effective HP (armour / magic resistance against an even physical-magic
+## mix; a reviving knight counts 1.5 times), spawn span, bounty and the lives it can take, plus
+## each path's length and the level's start gold and HP multiplier. One "CURVE {json}" line per level.
+func _curve_report() -> void:
+	var en := {}
+	for k in DB.ENEMIES:
+		var d: Dictionary = DB.ENEMIES[k]
+		en[k] = {"hp": d["hp"], "gold": d["gold"], "armor": d["armor"], "mr": d["mr"], "speed": d["speed"], "lives": d["lives"], "boss": d.get("boss", false), "revive": d.has("revive"), "flying": d.get("flying", false),
+			"mech": ["slam", "warcry", "heal", "explode", "summon"].filter(func(m): return d.has(m))}
+	print("ENEMIES ", JSON.stringify(en))
+	var tw := {}
+	for k in DB.TOWERS:
+		tw[k] = DB.TOWERS[k]
+	print("TOWERS ", JSON.stringify(tw))
+	for li in DB.LEVELS.size():
+		var lv: Dictionary = DB.LEVELS[li]
+		var plens := []
+		for p in lv["paths"]:
+			var ln := 0.0
+			for i in range(1, (p as Array).size()):
+				ln += Vector2(p[i][0], p[i][1]).distance_to(Vector2(p[i - 1][0], p[i - 1][1]))
+			plens.append(ln)
+		var ws := []
+		for w in lv["waves"]:
+			var o := {"n": 0, "hp": 0.0, "ehp": 0.0, "span": 0.0, "gold": 0, "lives": 0, "slow": 0.0, "types": {}}
+			for g in w:
+				var d: Dictionary = DB.ENEMIES[g[0]]
+				var c := int(g[1])
+				var hp := float(d["hp"]) * float(lv["hp_mult"]) * (1.5 if d.has("revive") else 1.0)
+				var f := 1.0 / (0.5 * (1.0 - float(d["armor"])) + 0.5 * (1.0 - maxf(float(d["mr"]), -0.5)))
+				o["n"] += c
+				o["hp"] += c * hp
+				o["ehp"] += c * hp * f
+				o["gold"] += c * int(d["gold"])
+				o["lives"] += c * int(d["lives"])
+				o["span"] = maxf(o["span"], float(g[3]) + (c - 1) * float(g[2]))
+				# time the slowest group needs to walk its path (it is under fire that long)
+				var pl: float = plens[mini(int(g[4]), plens.size() - 1)]
+				o["slow"] = maxf(o["slow"], pl / float(d["speed"]))
+				o["types"][g[0]] = int(o["types"].get(g[0], 0)) + c
+			ws.append(o)
+		print("CURVE ", JSON.stringify({"level": li, "id": lv["id"], "gold": lv["gold"], "lives": lv["lives"], "hp_mult": lv["hp_mult"], "paths": plens, "waves": ws}))
+	get_tree().quit()
 
 ## Save-code round trip, corrupted codes, talent math (headless).
 func _selftest() -> void:
