@@ -1758,7 +1758,7 @@ func _pause() -> void:
 		var b1 := UI.button("계속하기", 24, true, Vector2(0, 60), "primary")
 		b1.icon = Assets.tex("ic_play")
 		b1.pressed.connect(_resume)
-		b1.grab_focus.call_deferred()
+		b1.grab_focus.call_deferred(true)  # Enter presses it; the ring shows only once the keyboard moves focus
 		vb.add_child(b1), 440, "", _resume)
 
 ## The phone was turned during the pause menu: open it again, laid out for the new shape.

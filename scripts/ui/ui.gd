@@ -82,32 +82,25 @@ static func flat(bg: Color, radius: float, pad := Vector4(12, 12, 12, 12), shado
 ## Surface styles by role: "sheet" (dialogs), "card" (floating HUD cards), "well" (rows inside a
 ## sheet), "bar" (the HUD resource capsule), "pill" (small tags). The old kit names map onto them:
 ## "dark" -> sheet, "parch" -> well, "slim" -> bar, "leather" -> card.
+## The surfaces are forged pieces (tools/make_ui_forge.py): a slate plate in a gold trim with rune
+## studs (sheet), a lighter trim (card, bar), a carved inset (well). The trim sits on the control's
+## edge; the baked shadow is drawn outside it (StyleBoxHD.expand).
 static func frame(kind := "sheet", pad := 12.0) -> StyleBox:
 	match kind:
 		"dark", "sheet":
-			var s := flat(SLATE, 20, Vector4(pad + 6, pad + 4, pad + 6, pad + 6), 22, 0.5)
-			s.border_width_top = 1
-			s.border_color = Color(1, 1, 1, 0.07)
-			return s
+			return hd("fs_sheet", Vector4(38, 38, 38, 38), Vector4(16, 16, 16, 16), Vector4(pad + 10, pad + 8, pad + 10, pad + 10))
 		"card", "leather":
-			var c := flat(Color(SLATE, 0.94), 16, Vector4(pad + 4, pad + 2, pad + 4, pad + 4), 14, 0.38)
-			c.border_width_top = 1
-			c.border_color = Color(1, 1, 1, 0.07)
-			return c
+			return hd("fs_card", Vector4(28, 28, 28, 28), Vector4(10, 10, 10, 10), Vector4(pad + 7, pad + 5, pad + 7, pad + 6))
 		"slim", "bar":
-			return flat(Color(0.07, 0.1, 0.14, 0.82), 18, Vector4(pad + 10, pad + 2, pad + 10, pad + 2), 8, 0.3)
+			return hd("fs_bar", Vector4(32, 32, 32, 32), Vector4(8, 8, 8, 8), Vector4(pad + 12, pad + 3, pad + 12, pad + 3))
 		"pill":
-			return flat(Color(0.05, 0.07, 0.1, 0.8), 14, Vector4(pad + 8, pad + 1, pad + 8, pad + 2))
+			return hd("fs_capsule", Vector4(28, 27, 28, 27), Vector4(4, 4, 4, 4), Vector4(pad + 12, pad + 2, pad + 12, pad + 3))
 		_:  # "parch", "well"
-			return flat(WELL, 14, Vector4(pad + 6, pad + 4, pad + 6, pad + 4))
+			return hd("fs_well", Vector4(14, 14, 14, 14), Vector4(1, 1, 1, 1), Vector4(pad + 6, pad + 4, pad + 6, pad + 4))
 
 ## A well marked as chosen / owned / done: the same inset with a gold edge.
-static func well_on(pad := 8.0) -> StyleBoxFlat:
-	var s := frame("well", pad) as StyleBoxFlat
-	s.bg_color = Color(0.2, 0.16, 0.06, 0.55)
-	s.set_border_width_all(2)
-	s.border_color = Color(GOLD, 0.85)
-	return s
+static func well_on(pad := 8.0) -> StyleBox:
+	return hd("fs_well_on", Vector4(14, 14, 14, 14), Vector4(1, 1, 1, 1), Vector4(pad + 6, pad + 4, pad + 6, pad + 4))
 
 ## Backwards-compatible style helper (light colours meant parchment: those are wells now).
 static func box(bg: Color, _border := GOLD_DARK, _radius := 14, _bw := 3, _shadow := 8, pad := 12) -> StyleBox:
@@ -139,8 +132,13 @@ static func label(text: String, size := 22, color := TEXT, outline := 6, font :=
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	if outline > 0:
+		# outlined text floats over the battlefield or art: a soft drop shadow seats it
 		l.add_theme_constant_override("outline_size", outline)
 		l.add_theme_color_override("font_outline_color", Color(0.03, 0.03, 0.06, 0.95))
+		l.add_theme_constant_override("shadow_offset_x", 0)
+		l.add_theme_constant_override("shadow_offset_y", maxi(2, size / 11))
+		l.add_theme_constant_override("shadow_outline_size", outline)
+		l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.42))
 	return l
 
 ## Text set on a sheet or card (no outline; the surface gives the contrast).
@@ -255,15 +253,20 @@ void fragment() {
 
 ## Buttons by role. Colour says what a button does, not which screen it is on:
 ## primary (gold) moves the game forward, secondary (slate) is everything else, ghost is an
-## unpicked option, special (arcane) opens a mode, danger wipes something. The old kit colours
-## map onto these: red/green/gold -> primary, blue -> secondary, gray -> ghost, purple -> special.
+## unpicked option (a carved slot), special (arcane) opens a mode, danger wipes something.
+## The old kit colours map onto these: red/green/gold -> primary,
+## blue -> secondary, gray -> ghost, purple -> special.
+## Each role: [label colour, label outline colour]. Labels are light on every plate, held by an
+## outline in the plate's own dark tone (the way game buttons stay legible over any face colour).
 const BTN_ROLES := {
-	"primary": [GOLD, GOLD_DARK, Color(0.17, 0.1, 0.03)],
-	"secondary": [RIDGE, RIDGE_LIP, VELLUM],
-	"special": [ARCANE, Color(0.15, 0.11, 0.25), VELLUM],
-	"danger": [Color(0.75, 0.27, 0.21), Color(0.42, 0.13, 0.1), Color(1, 0.96, 0.92)],
-	"ghost": [Color(1, 1, 1, 0.0), Color(1, 1, 1, 0.0), LICHEN],
+	"primary": [Color(1.0, 0.98, 0.9), Color(0.4, 0.2, 0.02)],
+	"secondary": [Color(0.97, 0.97, 1.0), Color(0.05, 0.09, 0.17)],
+	"special": [Color(1.0, 0.97, 1.0), Color(0.15, 0.07, 0.32)],
+	"danger": [Color(1.0, 0.97, 0.94), Color(0.33, 0.05, 0.03)],
+	"ghost": [LICHEN, Color(0, 0, 0, 0)],
 }
+## Round medallion roles (round_button / icon_button).
+const MEDAL_ROLES := ["primary", "secondary", "danger"]
 
 static func role_of(kind: String) -> String:
 	match kind:
@@ -277,58 +280,56 @@ static func role_of(kind: String) -> String:
 			return "danger"
 	return "secondary"
 
+## Forged plate geometry (canvas units, tools/make_ui_forge.py): 6 of shadow round the plate, a
+## 6-unit lip under the face; a pressed face sinks 5 onto the lip.
+const PLATE_LIP := 6.0
+
 static func _btn_styles(b: Button, kind: String) -> void:
 	var role := role_of(kind)
 	var c: Array = BTN_ROLES[role]
-	var lip := 4
+	var h := b.custom_minimum_size.y
+	var px := 18.0 if h >= 48.0 else 12.0
 	for st in ["normal", "hover", "pressed", "disabled"]:
-		var bg: Color = c[0]
-		if st == "hover":
-			bg = bg.lightened(0.08)
-		elif st == "pressed":
-			bg = bg.darkened(0.06)
-		var s := flat(bg, 14, Vector4(18, 9, 18, 9 + lip))
+		var s: StyleBox
 		if role == "ghost":
-			s.set_border_width_all(2)
-			s.border_color = Color(1, 1, 1, 0.22 if st != "hover" else 0.34)
-			s.content_margin_bottom = 9
-		elif st == "pressed":
-			# the face sinks onto its lip
-			s.border_width_bottom = 1
-			s.border_color = c[1]
-			s.content_margin_top = 9 + lip - 1
-			s.content_margin_bottom = 9
-		elif st == "disabled":
-			s.bg_color = Color(0.16, 0.2, 0.26, 0.7)
-			s.content_margin_bottom = 9 + lip
+			# an unpicked option is a slot carved into the sheet: it has no lip to press
+			var w := hd("fs_well", Vector4(14, 14, 14, 14), Vector4(1, 1, 1, 1), Vector4(px, 8, px, 8))
+			if st == "hover":
+				w.modulate_color = Color(1.35, 1.35, 1.4)
+			elif st == "pressed":
+				w.modulate_color = Color(0.8, 0.8, 0.8)
+			s = w
 		else:
-			s.border_width_bottom = lip
-			s.border_color = c[1]
+			var top := 8.0 + (PLATE_LIP - 1.0 if st == "pressed" else 0.0)
+			var bot := 8.0 + (1.0 if st == "pressed" else PLATE_LIP)
+			s = hd("fb_%s_%s" % [role, st], Vector4(22, 22, 22, 28), Vector4(6, 6, 6, 6), Vector4(px, top, px, bot))
 		b.add_theme_stylebox_override(st, s)
 	b.add_theme_stylebox_override("hover_pressed", b.get_theme_stylebox("pressed"))
 	# keyboard focus (also the default action a sheet focuses, which Enter presses): a quiet ring
 	var f := flat(Color(0, 0, 0, 0), 16)
 	f.draw_center = false
 	f.set_border_width_all(2)
-	f.border_color = Color(1, 1, 1, 0.3)
-	f.expand_margin_left = 3
-	f.expand_margin_right = 3
-	f.expand_margin_top = 3
-	f.expand_margin_bottom = 3
+	f.border_color = Color(1, 0.92, 0.7, 0.45)
+	f.expand_margin_left = 4
+	f.expand_margin_right = 4
+	f.expand_margin_top = 4
+	f.expand_margin_bottom = 4
 	b.add_theme_stylebox_override("focus", f)
-	var fc: Color = c[2]
+	var fc: Color = c[0]
+	var oc: Color = c[1]
 	b.add_theme_color_override("font_color", fc)
-	b.add_theme_color_override("font_hover_color", fc.lightened(0.1) if role != "primary" else fc)
+	b.add_theme_color_override("font_hover_color", fc if role != "ghost" else VELLUM)
 	b.add_theme_color_override("font_pressed_color", fc)
 	b.add_theme_color_override("font_hover_pressed_color", fc)
 	b.add_theme_color_override("font_focus_color", fc)
-	b.add_theme_color_override("font_disabled_color", Color(0.55, 0.6, 0.67))
-	b.add_theme_color_override("icon_normal_color", fc)
-	b.add_theme_color_override("icon_hover_color", fc)
-	b.add_theme_color_override("icon_pressed_color", fc)
-	b.add_theme_color_override("icon_hover_pressed_color", fc)
-	b.add_theme_color_override("icon_focus_color", fc)
-	b.add_theme_constant_override("outline_size", 0)
+	b.add_theme_color_override("font_disabled_color", Color(0.66, 0.7, 0.76))
+	b.add_theme_color_override("font_outline_color", oc if role != "ghost" else Color(0, 0, 0, 0))
+	# the icons are full-colour glyphs with their own dark outline: they read on any plate untinted
+	for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
+		b.add_theme_color_override(k, Color.WHITE)
+	b.add_theme_color_override("icon_disabled_color", Color(1, 1, 1, 0.5))
+	var fs := b.get_theme_font_size("font_size") if b.has_theme_font_size_override("font_size") else 20
+	b.add_theme_constant_override("outline_size", 0 if role == "ghost" else (6 if fs >= 22 else 5))
 
 static func button(text: String, size := 24, primary := true, min_size := Vector2(200, 64), kind := "") -> Button:
 	var b := Button.new()
@@ -344,7 +345,21 @@ static func button(text: String, size := 24, primary := true, min_size := Vector
 	juice(b)
 	return b
 
-## A round flat utility button (close, back, pause...) in the sheet's own material.
+## Medallion styles (a domed disc in a metal rim) for a round button of diameter `sz`.
+static func _medal_styles(b: Button, role: String, sz: float, pad: float) -> void:
+	if not role in MEDAL_ROLES:
+		role = "secondary"
+	var e := sz * 6.0 / 84.0  # the disc is 84 of the texture's 96 units; the rest is its shadow
+	for st in ["normal", "hover", "pressed", "disabled"]:
+		var dy := 1.5 * sz / 84.0 if st == "pressed" else 0.0
+		b.add_theme_stylebox_override(st, hd("fr_%s_%s" % [role, st], Vector4(48, 48, 48, 48), Vector4(e, e, e, e), Vector4(pad, pad + dy, pad, pad - dy)))
+	b.add_theme_stylebox_override("hover_pressed", b.get_theme_stylebox("pressed"))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
+		b.add_theme_color_override(k, Color.WHITE)
+	b.add_theme_color_override("icon_disabled_color", Color(0.8, 0.8, 0.8, 0.6))
+
+## A round utility button (close, back, pause...): a small medallion. The close button is "danger".
 static func round_button(tex: Texture2D, sz := 48, role := "secondary") -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(sz, sz)
@@ -353,19 +368,8 @@ static func round_button(tex: Texture2D, sz := 48, role := "secondary") -> Butto
 	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	b.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 	b.add_theme_constant_override("icon_max_width", int(sz * 0.5))
-	var c: Array = BTN_ROLES[role]
-	for st in ["normal", "hover", "pressed", "disabled"]:
-		var bg: Color = c[0]
-		if st == "hover":
-			bg = bg.lightened(0.1)
-		elif st == "pressed":
-			bg = bg.darkened(0.1)
-		# no padding: icon_max_width sets the glyph size, so the button can be resized later
-		b.add_theme_stylebox_override(st, flat(Color(bg, 0.92), sz * 0.5, Vector4(4, 4, 4, 4)))
-	b.add_theme_stylebox_override("hover_pressed", b.get_theme_stylebox("pressed"))
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
-		b.add_theme_color_override(k, c[2])
+	# small padding: icon_max_width sets the glyph size, so the button can be resized later
+	_medal_styles(b, "secondary" if role == "ghost" else role, sz, 4.0)
 	b.pressed.connect(func(): Audio.play("click", -4.0, 0.05))
 	juice(b)
 	return b
@@ -378,12 +382,13 @@ static func icon_button(tex: Texture2D, sz := 72, bg := NAVY_LIGHT, radius := 40
 	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	b.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 	b.add_theme_constant_override("icon_max_width", int(sz * 0.6))
+	# game-object buttons (hero, skills, spells, wave calls, the radial menu) keep the gold-ringed
+	# slots: they belong to the battlefield, the steel medallions (round_button) to the interface
 	var k := kind if kind != "" else _slot_kind_for(bg)
 	var e := sz * 4.0 / 88.0
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		var pad := sz * 0.17
-		var s := hd("slot_%s_%s" % [k, st], Vector4(48, 48, 48, 48), Vector4(e, e, e, e), Vector4(pad, pad, pad, pad))
-		b.add_theme_stylebox_override(st, s)
+		b.add_theme_stylebox_override(st, hd("slot_%s_%s" % [k, st], Vector4(48, 48, 48, 48), Vector4(e, e, e, e), Vector4(pad, pad, pad, pad)))
 	b.add_theme_stylebox_override("hover_pressed", b.get_theme_stylebox("pressed"))
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	b.pressed.connect(func(): Audio.play("click", -4.0, 0.05))
@@ -460,6 +465,32 @@ static func divider(w := 320.0) -> Control:
 	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return c
+
+## The gold trim rule under a sheet title: two tapering lines meeting at a rune diamond. Built
+## from three pieces of one texture so the diamond keeps its shape at any width.
+static func rule(w := 0.0) -> Control:
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 0)
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL if w <= 0.0 else Control.SIZE_SHRINK_CENTER
+	if w > 0.0:
+		hb.custom_minimum_size.x = w
+	var tex := kit("fs_divider")
+	for part in [Rect2(0, 0, 290, 32), Rect2(290, 0, 60, 32), Rect2(350, 0, 290, 32)]:
+		var at := AtlasTexture.new()
+		at.atlas = tex
+		at.region = part
+		var t := TextureRect.new()
+		t.texture = at
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		t.stretch_mode = TextureRect.STRETCH_SCALE
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		t.custom_minimum_size = Vector2(30 if part.size.x == 60 else 0, 16)
+		t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		if part.size.x != 60:
+			t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hb.add_child(t)
+	return hb
 
 ## Framed progress bar ("green" / "gold" / "red" / "blue" fill).
 static func bar(fill := "green", w := 120.0, h := 14.0) -> ProgressBar:
@@ -600,7 +631,7 @@ static func with_close(panel: Control, on_close: Callable, sz := 50) -> Control:
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(panel)
-	var x := icon_button(Assets.tex("ic_close"), sz, NAVY, sz / 2, "red")
+	var x := round_button(Assets.tex("ic_close"), sz, "danger")
 	x.pressed.connect(on_close)
 	holder.add_child(x)
 	var fit := func():
@@ -645,6 +676,8 @@ const LANGUAGES := [["", "자동"], ["ko", "한국어"], ["en", "English"]]
 ## the result screens put their title on a ribbon over the top edge instead), dim (backdrop alpha).
 ## Returns the backdrop; its metas: "body" (VBoxContainer to fill), "sheet"/"panel", "ribbon",
 ## "center" (the layer that carries the sheet; ResultFX shakes it), "width" (body width).
+const BODY_INSET := 6
+
 static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 	var vs := parent.get_viewport_rect().size
 	var upright := Game.tall
@@ -659,13 +692,14 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 	shade.add_child(layer)
 	var p := PanelContainer.new()
 	p.name = "Sheet"
-	var st := frame("sheet", 12) as StyleBoxFlat
+	# the body sits in an inner margin (BODY_INSET) inside the scroll area, so the baked shadows of
+	# buttons and wells at its edges are not clipped by the scroll container
+	var st := frame("sheet", 6)
+	st.content_margin_bottom -= 2
 	var ribbon_kind: String = opts.get("ribbon", "")
 	if upright:
-		st.corner_radius_bottom_left = 0
-		st.corner_radius_bottom_right = 0
-		st.content_margin_bottom += 8
-		st.shadow_offset = Vector2(0, -4)
+		# a bottom sheet: its trim runs off the bottom edge of the screen
+		st = hd("fs_sheet_up", Vector4(38, 38, 38, 8), Vector4(16, 16, 16, 0), Vector4(st.content_margin_left, st.content_margin_top, st.content_margin_right, st.content_margin_bottom + 8))
 	if ribbon_kind != "":
 		st.content_margin_top += 30
 	p.add_theme_stylebox_override("panel", st)
@@ -700,33 +734,61 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 		rib = ribbon(title_text, 36, ribbon_kind, minf(420.0, w - 40.0))
 		layer.add_child(rib)
 	else:
+		# header: the title centred in gold over a trim rule; the aside and the close medallion on
+		# the right, balanced by a spacer of the same width on the left
 		var head := HBoxContainer.new()
-		head.add_theme_constant_override("separation", 12)
-		var tl := label(title_text, T_TITLE - (2 if upright else 0), VELLUM, 0, "title_kr")
+		head.add_theme_constant_override("separation", 10)
+		var lsp := Control.new()
+		lsp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		head.add_child(lsp)
+		var tl := title(title_text, T_TITLE - (2 if upright else 0), "title_kr", 6)
 		tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		tl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		tl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		tl.clip_text = true
+		tl.name = "Title"
 		head.add_child(tl)
+		var right := HBoxContainer.new()
+		right.add_theme_constant_override("separation", 10)
 		var aside: Control = opts.get("aside", null)
 		if aside:
 			aside.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			head.add_child(aside)
+			right.add_child(aside)
 		if on_close.is_valid():
-			var x := round_button(Assets.tex("ic_close"), 44)
+			var x := round_button(Assets.tex("ic_close"), 46, "danger")
 			x.name = "Close"
 			x.pressed.connect(func(): on_close.call())
-			head.add_child(x)
-		col.add_child(head)
+			right.add_child(x)
+		head.add_child(right)
+		var bal := func():
+			if is_instance_valid(lsp):
+				lsp.custom_minimum_size.x = right.get_combined_minimum_size().x
+		right.minimum_size_changed.connect(bal)
+		bal.call()
+		var hv := VBoxContainer.new()
+		hv.add_theme_constant_override("separation", 2)
+		hv.add_child(head)
+		var r := rule()
+		r.custom_minimum_size.y = 12
+		hv.add_child(r)
+		col.add_child(hv)
 	var sc := ScrollContainer.new()
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_child(sc)
+	var inner := MarginContainer.new()
+	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side in ["left", "right"]:
+		inner.add_theme_constant_override("margin_" + side, BODY_INSET)
+	inner.add_theme_constant_override("margin_top", 4)
+	inner.add_theme_constant_override("margin_bottom", 8)
+	sc.add_child(inner)
 	var body := VBoxContainer.new()
 	body.add_theme_constant_override("separation", 12)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sc.add_child(body)
-	var body_w := w - st.content_margin_left - st.content_margin_right
+	inner.add_child(body)
+	var body_w := w - st.content_margin_left - st.content_margin_right - 2.0 * BODY_INSET
 	# the body grows with its content until the sheet would leave the screen, then it scrolls
 	var place := func():
 		if not is_instance_valid(p) or not p.is_inside_tree():
@@ -734,7 +796,7 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 		var v := parent.get_viewport_rect().size
 		var head_h := col.get_combined_minimum_size().y - sc.get_combined_minimum_size().y
 		var room := v.y * (0.92 if upright else 1.0) - 2.0 * margin - st.content_margin_top - st.content_margin_bottom - head_h - (24.0 if rib else 0.0)
-		sc.custom_minimum_size.y = minf(body.get_combined_minimum_size().y, maxf(room, 120.0))
+		sc.custom_minimum_size.y = minf(inner.get_combined_minimum_size().y, maxf(room, 120.0))
 		p.size = Vector2(p.custom_minimum_size.x, 0)
 		p.size = p.get_combined_minimum_size()
 		if upright:
@@ -743,7 +805,7 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 			p.position = ((v - p.size) * 0.5).round() + Vector2(0, 14 if rib else 0)
 		if rib:
 			rib.position = Vector2(p.position.x + (p.size.x - rib.size.x) * 0.5, p.position.y - rib.size.y * 0.55)
-	body.minimum_size_changed.connect(place)
+	inner.minimum_size_changed.connect(place)
 	shade.resized.connect(place)
 	place.call_deferred()
 	if on_close.is_valid():

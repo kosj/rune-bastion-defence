@@ -499,7 +499,7 @@ func _open_card(i: int) -> void:
 	var go := UI.button("출전", 26, true, Vector2(0, 58), "primary")
 	go.icon = Assets.tex("ic_play")
 	go.pressed.connect(func(): Game.start_level(i))
-	go.grab_focus.call_deferred()  # Enter starts the battle
+	go.grab_focus.call_deferred(true)  # Enter starts the battle (ring hidden until keyboard navigation)
 	btns.append(go)
 	var ar := UI.action_row(btns)
 	go.size_flags_stretch_ratio = 1.6
@@ -553,7 +553,7 @@ func _open_endless_card() -> void:
 	var go := UI.button("출전", 26, true, Vector2(0, 58), "primary")
 	go.icon = Assets.tex("ic_play")
 	go.pressed.connect(func(): Game.start_endless(mi))
-	go.grab_focus.call_deferred()
+	go.grab_focus.call_deferred(true)
 	vb.add_child(UI.action_row([go]))
 
 # ---------------------------------------------------------------- dotted roads

@@ -375,7 +375,7 @@ func _build_title(first := false) -> void:
 	play.pressed.connect(_open_select)
 	vb.add_child(play)
 	# Enter / Space starts (the default action of the screen)
-	play.grab_focus.call_deferred()
+	play.grab_focus.call_deferred(true)
 	var btns: Array = []
 	for it in [["영웅", "ic_hero", _open_heroes], ["도감", "ic_book", _open_bestiary], ["업적", "ic_trophy", _open_achievements]]:
 		var b := UI.button(it[0], 20, false, Vector2(0, 58), "secondary")
@@ -1140,6 +1140,9 @@ func _open_upgrades() -> void:
 			b2.text = "" if owned else str(cell[3])
 			b2.icon = Assets.tex("check") if owned else Assets.tex("star")
 			UI._btn_styles(b2, "ghost" if owned else "primary")
+			if owned:
+				b2.add_theme_color_override("icon_disabled_color", Color.WHITE)  # the check stays green
+			b2.add_theme_constant_override("icon_max_width", 28 if owned else 20)
 			b2.disabled = owned or not afford
 	refresh.call()
 	var reset := UI.button("전부 환불", 19, false, Vector2(200, 52), "secondary")

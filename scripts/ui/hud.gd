@@ -96,8 +96,8 @@ func _res_item(icon: String, txt: String, col: Color, min_w := 58) -> Array:
 
 func _vsep() -> Control:
 	var c := ColorRect.new()
-	c.color = Color(1, 1, 1, 0.14)
-	c.custom_minimum_size = Vector2(1, 26)
+	c.color = Color(0.93, 0.74, 0.36, 0.32)  # a hairline in the trim's gold
+	c.custom_minimum_size = Vector2(2, 28)
 	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return c

@@ -435,14 +435,7 @@ def toggle(name, on, w=60, h=32):
 
 
 if __name__ == "__main__":
-    framed_panel("panel_dark", 128, 30, 7, 18, enamel)
-    framed_panel("panel_slim", 96, 20, 4, 14, enamel, rivets=False)
-    framed_panel("panel_parch", 128, 28, 5, 14, parchment)
-    framed_panel("panel_leather", 128, 30, 6, 16, leather)
-    for nm, a, b in (("red", "e8573f", "9c2216"), ("blue", "4a6fc0", "1f2f66"), ("green", "5cbc4e", "26702a"),
-                     ("gold", "f6cf63", "b07a1c"), ("gray", "7a7e88", "41444c"), ("purple", "8e5fd6", "472883")):
-        for st in ("normal", "hover", "pressed", "disabled"):
-            gem_button("btn_%s_%s" % (nm, st), hexc(a), hexc(b), st)
+    # panels, rectangular buttons, the divider and pills moved to the forged set (make_ui_forge.py)
     for nm, a, b in (("navy", "34477e", "10172f"), ("red", "c8402e", "5a120c"), ("purple", "7650c2", "261247"),
                      ("brown", "8a4a2a", "2e150a"), ("green", "46a24a", "123a14"), ("teal", "2f8f99", "0b2e36")):
         for st in ("normal", "hover", "pressed", "disabled"):
@@ -458,8 +451,6 @@ if __name__ == "__main__":
     badge("badge")
     glow("glow")
     rays("rays")
-    divider("divider")
-    pill("pill")
     shield_flag("flag_locked", hexc("6f7380"), hexc("3a3d46"))
     shield_flag("flag_open", hexc("4f74c8"), hexc("1f2d68"))
     shield_flag("flag_done", hexc("d84a38"), hexc("7d1a12"))
