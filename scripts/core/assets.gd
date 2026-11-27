@@ -236,10 +236,39 @@ static func add_ja_font() -> bool:
 	var fb: Array[Font] = ui.fallbacks.duplicate()
 	fb.append(ja)
 	ui.fallbacks = fb
+	# bold faces (buttons, numbers, small display text): Japanese in Noto Sans CJK JP Bold; large
+	# display text (headings, banners, 26 and up: "title_kr_big") in Dela Gothic One, which turns
+	# to mush at button sizes
+	var pb := "res://assets/fonts/ui_ja_bold.ttf"
+	var jb: Font = load(pb) if Content.allows(pb) and ResourceLoader.exists(pb) else null
+	if jb:
+		for k in ["title_kr", "ui_black"]:
+			var bf := font(k) as FontFile
+			if bf:
+				var bfb: Array[Font] = [jb]
+				bfb.append_array(bf.fallbacks)
+				bf.fallbacks = bfb
+	var pd := "res://assets/fonts/title_ja.ttf"
+	if Content.allows(pd) and ResourceLoader.exists(pd):
+		var jd: Font = load(pd)
+		var big := (font("title_kr") as FontFile).duplicate() as FontFile
+		var gfb: Array[Font] = [jd]
+		for f in (font("title_kr") as FontFile).fallbacks:
+			if f != jd:
+				gfb.append(f)
+		big.fallbacks = gfb
+		_fonts["title_kr_big"] = big
+		var lg := font("title") as FontFile
+		if lg:
+			var lfb: Array[Font] = [jd]
+			lfb.append_array(lg.fallbacks)
+			lg.fallbacks = lfb
 	_ja_font = true
 	return true
 
 static func font(kind := "ui") -> Font:
+	if kind == "title_kr_big" and not _fonts.has(kind):
+		return font("title_kr")  # (until the Japanese display face is in: the same face)
 	if not _fonts.has(kind):
 		var p := "res://assets/fonts/%s.ttf" % kind
 		var f: Font = load(p) if ResourceLoader.exists(p) else ThemeDB.fallback_font

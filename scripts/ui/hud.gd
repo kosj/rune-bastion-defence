@@ -32,6 +32,8 @@ var info: PanelContainer
 var info_title: Label
 var info_body: Label
 var banner: Label
+## Screen-space layer under the panels: the wave call buttons and the radial build menu.
+var world_ui: Control
 var banner_sub: Label
 var hint: PanelContainer
 var hint_l: Label
@@ -64,7 +66,7 @@ func build(cam: Camera3D) -> void:
 	# world-anchored markers (wave call buttons and their previews) draw under every HUD panel:
 	# a selection card or a notice must never be covered by a button that follows the map. They
 	# live in screen space (the whole screen); the panels in `root`, inside the safe area.
-	var world_ui := Control.new()
+	world_ui = Control.new()
 	world_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
 	world_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	world_ui.theme = UI.theme()
@@ -370,23 +372,33 @@ func show_info(title: String, body: String, stats: Array = []) -> void:
 func hide_info() -> void:
 	info.visible = false
 
+## The announcement band (waves, bosses, specialisations): a pennant plate across the top centre
+## with the title in the display face and a line under it. It wipes open from the left, holds, and
+## slides off to the right.
+var banner_band: PanelContainer
+var _banner_tw: Tween
+
 func _build_banner() -> void:
-	banner = UI.title("", 58, "title_kr", 12)
-	banner.anchor_left = 0.0
-	banner.anchor_right = 1.0
-	banner.offset_top = 112
+	banner_band = PanelContainer.new()
+	banner_band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_band.anchor_left = 0.5
+	banner_band.anchor_right = 0.5
+	banner_band.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	banner_band.offset_top = 112
+	banner_band.modulate.a = 0.0
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", -2)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_band.add_child(vb)
+	banner = UI.label("", 50, UI.SABLE, 0, "title_kr")
 	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	banner.modulate.a = 0.0
-	root.add_child(banner)
-	banner_sub = UI.label("", 26, UI.TEXT, 7, "ui_black")
-	banner_sub.anchor_left = 0.0
-	banner_sub.anchor_right = 1.0
-	banner_sub.offset_top = 190
+	vb.add_child(banner)
+	banner_sub = UI.label("", 22, UI.SABLE, 0, "ui_black")
 	banner_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	banner_sub.modulate.a = 0.0
-	root.add_child(banner_sub)
+	vb.add_child(banner_sub)
+	root.add_child(banner_band)
 	# tutorial hints sit low and centred, clear of the wave banner and the corner widgets
 	hint = UI.framed("card", 8)
 	hint_l = UI.ink("", 19, UI.INK, "ui")
@@ -407,20 +419,58 @@ func _build_banner() -> void:
 	root.add_child(hint)
 
 func show_banner(title: String, sub := "", col := UI.GOLD) -> void:
+	# the caller's colour names the kind: or for the usual announcements, a red for bosses and
+	# danger, a blue for the daily twist; anything else becomes a dark plate in its own hue
+	var face := UI.GOLD
+	var ink := UI.SABLE
+	if col != UI.GOLD:
+		ink = UI.VELLUM
+		if col.r > 0.8 and col.g < 0.6 and col.b < 0.5:
+			face = UI.EMBER
+		elif col.b > col.r and col.b > 0.8:
+			face = UI.AZURE
+		elif col.r > 0.9 and col.g > 0.7 and col.b < 0.6:
+			face = UI.GOLD
+			ink = UI.SABLE
+		else:
+			face = Color.from_hsv(col.h, minf(col.s + 0.2, 0.75), 0.48)
+	banner_band.add_theme_stylebox_override("panel", UI.plate(face, 6, Vector4(56, 6, 56, 10), 7.0, Color(UI.SABLE, 0.7), 0.22))
 	banner.text = title
-	# gold gradient for normal announcements; other colours (boss / danger) drop the gradient
-	var gold := col == UI.GOLD
-	banner.add_theme_color_override("font_color", Color.WHITE if gold else col)
 	banner_sub.text = sub
+	banner_sub.visible = sub != ""
 	for l in [banner, banner_sub]:
-		var tw := (l as Control).create_tween()
-		(l as Control).pivot_offset = (l as Control).size * 0.5
-		(l as Control).scale = Vector2(1.4, 1.4)
-		tw.set_parallel(true)
-		tw.tween_property(l, "modulate:a", 1.0, 0.25)
-		tw.tween_property(l, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.chain().tween_interval(1.8)
-		tw.chain().tween_property(l, "modulate:a", 0.0, 0.5)
+		(l as Label).add_theme_color_override("font_color", ink)
+	# a long title steps its size down; a long line (the daily twists, a narrow phone) wraps
+	var bfs := 40 if Game.tall else 50
+	var bf: Font = banner.get_theme_font("font")
+	while bfs > 26 and bf.get_string_size(tr(title), HORIZONTAL_ALIGNMENT_LEFT, -1, bfs).x > Game.safe_size().x - 160.0:
+		bfs -= 2
+	banner.add_theme_font_size_override("font_size", bfs)
+	banner_sub.autowrap_mode = TextServer.AUTOWRAP_OFF
+	banner_sub.custom_minimum_size.x = 0
+	var max_w := Game.safe_size().x - 40.0
+	if banner_band.get_combined_minimum_size().x > max_w:
+		banner_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		banner_sub.custom_minimum_size.x = max_w - 120.0
+	banner_band.size = Vector2.ZERO
+	banner_band.reset_size()
+	var w := minf(banner_band.get_combined_minimum_size().x, max_w)
+	banner_band.offset_left = -w * 0.5
+	banner_band.offset_right = w * 0.5
+	banner_band.pivot_offset = Vector2(0, banner_band.get_combined_minimum_size().y * 0.5)
+	if _banner_tw and _banner_tw.is_valid():
+		_banner_tw.kill()
+	banner_band.scale = Vector2(0.0, 1.0)
+	banner_band.modulate.a = 1.0
+	var tw := banner_band.create_tween()
+	_banner_tw = tw
+	tw.tween_property(banner_band, "scale:x", 1.0, 0.2).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(1.7)
+	tw.tween_property(banner_band, "modulate:a", 0.0, 0.22)
+	var base_l := banner_band.offset_left
+	var base_r := banner_band.offset_right
+	tw.parallel().tween_property(banner_band, "offset_left", base_l + 60.0, 0.22).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(banner_band, "offset_right", base_r + 60.0, 0.22).set_ease(Tween.EASE_IN)
 
 func show_hint(txt: String) -> void:
 	if txt == "":
@@ -781,10 +831,9 @@ func _apply_layout() -> void:
 		if is_instance_valid(n):
 			_anchor_note(n)
 	# wave banner and boss bar
-	banner.add_theme_font_size_override("font_size", 44 if t else 58)
-	banner.offset_top = 96 if t else 112
-	banner_sub.add_theme_font_size_override("font_size", 21 if t else 26)
-	banner_sub.offset_top = 156 if t else 190
+	banner.add_theme_font_size_override("font_size", 40 if t else 50)
+	banner_band.offset_top = 92 if t else 108
+	banner_sub.add_theme_font_size_override("font_size", 19 if t else 22)
 	var bw := minf(480.0, vs.x - 24.0)
 	boss_panel.offset_left = -bw * 0.5
 	boss_panel.offset_right = bw * 0.5
@@ -825,14 +874,19 @@ func set_wave_buttons(points: Array) -> void:
 		ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		ring.tint_progress = Color(1, 1, 1, 0.6)
 		holder.add_child(ring)
-		var lab := UI.label("", 21, UI.GOLD, 6, "ui_black")
-		lab.position = Vector2(-60, 38)
-		lab.size = Vector2(120, 30)
+		# the call to action under the button: an or pennant tag with dark text, centred
+		var tag := PanelContainer.new()
+		tag.add_theme_stylebox_override("panel", UI.plate(UI.GOLD, 5, Vector4(12, 1, 12, 3), 3.0, Color(UI.SABLE, 0.7), UI.CUT))
+		tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var lab := UI.label("", 21, UI.SABLE, 0, "title_kr")
 		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(lab)
+		tag.add_child(lab)
+		tag.position = Vector2(-60, 40)
+		tag.visible = false
+		holder.add_child(tag)
 		markers.add_child(holder)
-		wave_btns.append({"node": holder, "pos": p, "ring": ring, "label": lab, "button": b})
+		wave_btns.append({"node": holder, "pos": p, "ring": ring, "label": lab, "tag": tag, "button": b})
 
 func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, label: String, t: float) -> void:
 	var vs := root.get_viewport_rect().size
@@ -900,7 +954,13 @@ func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, lab
 		var s := 1.0 + sin(t * 5.0) * 0.06
 		n.scale = Vector2(s, s)
 		(w["ring"] as TextureProgressBar).value = 1.0 - progress
-		(w["label"] as Label).text = label
+		var lab := w["label"] as Label
+		if lab.text != label:
+			lab.text = label
+			var tag := w["tag"] as Control
+			tag.visible = label != ""
+			tag.size = tag.get_combined_minimum_size()
+			tag.position = Vector2(-tag.size.x * 0.5, 40)
 
 # ---------------------------------------------------------------- menus
 

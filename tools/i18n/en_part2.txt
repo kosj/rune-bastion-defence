@@ -366,7 +366,7 @@ NCSOFT VARCO 3D 생성형 AI, Blender로 다듬음	NCSOFT VARCO 3D generative AI
 음성과 음악	Voices and music
 ElevenLabs 음성·음악 생성, 일부 곡은 자체 작곡 도구	ElevenLabs voice and music generation; some tracks from our own composing tool
 글꼴	Fonts
-Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)	Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)
+Noto Sans CJK, Black Han Sans, Dela Gothic One (SIL Open Font License)	Noto Sans CJK, Black Han Sans, Dela Gothic One (SIL Open Font License)
 게임 디자인과 개발	Game design and development
 룬 바스티온 팀	The Rune Bastion team
 다음 웨이브	next wave

@@ -381,19 +381,30 @@ func _build_title(first := false) -> void:
 	_title_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(_title_root)
 	ui.move_child(_title_root, 2 if _backdrop else 1)
-	var title := UI.title("RUNE BASTION", 52 if t else 96, "title", 9 if t else 14)
+	# the logo: the name in the display face over a gules pennant with the Korean title. On a wide
+	# screen it heads the left column, above the buttons (the diorama keeps the right); upright it
+	# is centred under the settings gear
+	# (upright, the wide face needs two lines to fit a phone's width)
+	var title := UI.title("RUNE\nBASTION" if t else "RUNE BASTION", 62 if t else 88, "title", 10 if t else 14)
+	title.add_theme_constant_override("line_spacing", -14 if t else 0)
 	title.anchor_left = 0.0
 	title.anchor_right = 1.0
-	title.offset_top = 76 if t else 22  # upright: below the settings gear, which the wide word reaches
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.offset_top = 70 if t else 26
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if t else HORIZONTAL_ALIGNMENT_LEFT
+	if not t:
+		title.offset_left = 44
 	_title_root.add_child(title)
-	var rw := 360.0 if t else 460.0
-	var sub := UI.ribbon("룬 바스티온 · 왕국 수호전", 20 if t else 26, "red", rw)
-	sub.anchor_left = 0.5
-	sub.anchor_right = 0.5
-	sub.offset_left = -rw * 0.5
-	sub.offset_right = rw * 0.5
-	sub.offset_top = 152 if t else 132
+	var rw := 360.0 if t else 430.0
+	var sub := UI.ribbon("룬 바스티온 · 왕국 수호전", 20 if t else 25, "red", rw)
+	if t:
+		sub.anchor_left = 0.5
+		sub.anchor_right = 0.5
+		sub.offset_left = -rw * 0.5
+		sub.offset_right = rw * 0.5
+	else:
+		sub.offset_left = 52
+		sub.offset_right = 52 + rw
+	sub.offset_top = 234 if t else 140
 	_title_root.add_child(sub)
 	var gear := UI.round_button(Assets.tex("ic_gear"), 52 if t else 60)
 	gear.anchor_left = 1.0
@@ -404,7 +415,7 @@ func _build_title(first := false) -> void:
 	gear.tooltip_text = tr("설정")
 	gear.pressed.connect(_open_settings)
 	_title_root.add_child(gear)
-	var cw := (vs.x - 48.0) if t else 400.0
+	var cw := (vs.x - 48.0) if t else 440.0
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 12)
 	vb.anchor_top = 1.0
@@ -1327,6 +1338,7 @@ func _open_settings() -> void:
 		# a tester's tool (a code to paste back to the developer), not a player feature
 		var pl := UI.button("플레이 기록 보내기 (밸런스 피드백)", 17, false, Vector2(0, 48), "secondary")
 		pl.pressed.connect(func(): _swap(shade, _open_playlog))
+		UI.fit_label(pl)
 		right.add_child(pl)
 	# installable web app (PWA): Chrome/Edge/Android hand us their install prompt; iOS needs Safari's share menu
 	if OS.has_feature("web") and not bool(JavaScriptBridge.eval("!!(window.rbStandalone && window.rbStandalone())", true)):
@@ -1336,6 +1348,7 @@ func _open_settings() -> void:
 			ib.pressed.connect(func():
 				JavaScriptBridge.eval("window.rbInstall && window.rbInstall()", true)
 				ib.disabled = true)
+			UI.fit_label(ib)
 			right.add_child(ib)
 		elif OS.has_feature("web_ios"):
 			var il := UI.ink("Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 화면으로 실행됩니다.", 15, UI.MUTED)
@@ -1362,6 +1375,7 @@ func _open_settings() -> void:
 		rs.text = tr("초기화 완료")
 		UI._btn_styles(rs, "ghost")
 		rs.disabled = true)
+	UI.fit_label(rs)
 	right.add_child(rs)
 	right.add_child(_section("정보"))
 	var cr := UI.button("크레딧", 18, false, Vector2(0, 48), "ghost")
@@ -1382,7 +1396,7 @@ func _open_credits() -> void:
 	for row in [["엔진", "Godot Engine 4 (MIT 라이선스)"],
 			["3D 모델", "NCSOFT VARCO 3D 생성형 AI, Blender로 다듬음"],
 			["음성과 음악", "ElevenLabs 음성·음악 생성, 일부 곡은 자체 작곡 도구"],
-			["글꼴", "Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)"],
+			["글꼴", "Noto Sans CJK, Black Han Sans, Dela Gothic One (SIL Open Font License)"],
 			["게임 디자인과 개발", "룬 바스티온 팀"]]:
 		var c := VBoxContainer.new()
 		c.add_theme_constant_override("separation", 2)

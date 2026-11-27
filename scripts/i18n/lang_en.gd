@@ -21,7 +21,7 @@ const T := {
 	"Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅   Q, E 영웅 스킬": "Esc pause   Space next wave   F speed   1, 2 spells   H hero   Q, E hero skills",
 	"Godot Engine 4 (MIT 라이선스)": "Godot Engine 4 (MIT license)",
 	"NCSOFT VARCO 3D 생성형 AI, Blender로 다듬음": "NCSOFT VARCO 3D generative AI, refined in Blender",
-	"Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)": "Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)",
+	"Noto Sans CJK, Black Han Sans, Dela Gothic One (SIL Open Font License)": "Noto Sans CJK, Black Han Sans, Dela Gothic One (SIL Open Font License)",
 	"Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 화면으로 실행됩니다.": "In Safari, tap Share → 'Add to Home Screen' to play full-screen.",
 	"UI 크기": "UI size",
 	"∞ 무한 모드": "∞ Endless",

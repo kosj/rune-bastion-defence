@@ -44,6 +44,7 @@ var battery_saver := false  # cap the frame rate at 30 (cooler, longer-lasting p
 var _fade_layer: CanvasLayer
 var _fade_rect: ColorRect
 var _fade_note: Label  # "preparing the battlefield" while the shader warm-up holds the frames
+var _wipe: SceneWipe    # the scene change: a slanted ink panel sweeps across with an or edge
 var _busy := false
 var _vis_cb: JavaScriptObject  # kept alive: the page calls it on visibilitychange / pagehide
 
@@ -84,6 +85,8 @@ func _ready() -> void:
 	_fade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_fade_layer.add_child(_fade_rect)
+	_wipe = SceneWipe.new()
+	_fade_layer.add_child(_wipe)
 	_fade_note = Label.new()
 	_fade_note.visible = false
 	_fade_note.set_anchors_preset(Control.PRESET_CENTER)
@@ -292,9 +295,7 @@ func goto_scene(path: String) -> void:
 		# the battle needs its download chunks (web): wait for them behind a progress card
 		await Content.ensure(Content.level_needs(current_level), "전장을 준비하는 중...")
 	_fade_rect.mouse_filter = Control.MOUSE_FILTER_STOP
-	var tw := create_tween()
-	tw.tween_property(_fade_rect, "color:a", 1.0, 0.35)
-	await tw.finished
+	await _wipe.cover(0.34)
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	get_tree().change_scene_to_file(path)
@@ -307,9 +308,7 @@ func goto_scene(path: String) -> void:
 		await get_tree().process_frame  # the note is on screen before the compiles hold the frames
 		await ShaderWarmup.run(LevelMain.I)
 		_fade_note.visible = false
-	var tw2 := create_tween()
-	tw2.tween_property(_fade_rect, "color:a", 0.0, 0.5)
-	await tw2.finished
+	await _wipe.uncover(0.42)
 	_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_busy = false
 

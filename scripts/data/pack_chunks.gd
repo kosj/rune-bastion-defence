@@ -35,7 +35,7 @@ const DATA := {
 		"menu": [
 			"assets/ui/world_map.*", "assets/ui/level_*", "assets/ui/portrait_*", "assets/ui/tower_*",
 			"assets/ui/backdrop/menu_sera.*", "assets/ui/backdrop/menu_ranger.*",
-			"assets/audio/voice/*", "assets/audio/sfx/*", "assets/audio/music/menu.*", "assets/fonts/ui_ja.*"
+			"assets/audio/voice/*", "assets/audio/sfx/*", "assets/audio/music/menu.*", "assets/fonts/ui_ja.*", "assets/fonts/ui_ja_bold.*", "assets/fonts/title_ja.*"
 		],
 		"stage1": [
 			"assets/models/*", "assets/characters/*", "assets/fx/*", "assets/textures/*",

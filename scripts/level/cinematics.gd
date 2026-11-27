@@ -87,6 +87,7 @@ func _letterbox(on: bool, t := 0.4) -> void:
 func _hud_visible(on: bool, t := 0.25) -> void:
 	var tw := _rt()
 	tw.tween_property(lv.hud.root, "modulate:a", 1.0 if on else 0.0, t)
+	tw.parallel().tween_property(lv.hud.world_ui, "modulate:a", 1.0 if on else 0.0, t)
 	lv.hud.overlay.visible = on
 
 ## Enter a skippable cut: bars in, HUD out, camera input off, taps go to `skip`.
@@ -112,6 +113,7 @@ func _finish(immediate := false) -> void:
 		_top.anchor_bottom = 0.0
 		_bot.anchor_top = 1.0
 		lv.hud.root.modulate.a = 1.0
+		lv.hud.world_ui.modulate.a = 1.0
 		lv.hud.overlay.visible = true
 		if _card and is_instance_valid(_card):
 			_card.queue_free()
@@ -212,65 +214,72 @@ func _end_intro(home: Vector3) -> void:
 	_cam_to(home, 30.0, 0.45)
 	_finish()
 
+## The chapter card of a level intro: set low on the left, over the lower letterbox bar. The region
+## number on an or pennant tag, the name in the display face, the subtitle under it. The tag cuts
+## in, the name and the line slide in after it; _drop_card slides them out.
 func _show_title(kicker: String, title: String, sub: String) -> void:
 	_drop_card()
 	var box := VBoxContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.anchor_left = 0.0
-	box.anchor_right = 1.0
-	box.anchor_top = 0.16
-	box.anchor_bottom = 0.16
-	box.alignment = BoxContainer.ALIGNMENT_BEGIN
-	box.add_theme_constant_override("separation", 2)
-	var krow := HBoxContainer.new()
-	krow.alignment = BoxContainer.ALIGNMENT_CENTER
-	krow.add_theme_constant_override("separation", 14)
-	krow.add_child(_rule(true))
-	var k := UI.label(kicker, 22, UI.GOLD, 5, "ui_black")
-	krow.add_child(k)
-	krow.add_child(_rule(false))
-	box.add_child(krow)
-	var t := UI.title(title, 66, "title_kr", 14)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_color_override("font_color", Color.WHITE)
+	box.anchor_right = 0.0
+	box.anchor_top = 1.0 - BAR
+	box.anchor_bottom = 1.0 - BAR
+	box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	var left := 40.0 + Game.safe.x
+	box.offset_left = left
+	box.offset_bottom = -18.0
+	box.add_theme_constant_override("separation", 0)
+	var tag := PanelContainer.new()
+	tag.add_theme_stylebox_override("panel", UI.plate(UI.GOLD, 5, Vector4(14, 1, 14, 3), 4.0, Color(UI.SABLE, 0.75), UI.CUT))
+	tag.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tag.add_child(UI.label(kicker, 22, UI.SABLE, 0, "title_kr"))
+	box.add_child(tag)
+	# the name on one line inside the screen: a long one (English on a phone) steps its size down
+	var max_w := Game.safe_size().x - left - 24.0
+	var fs := 76 if not Game.tall else 56
+	var t := UI.title(title, fs, "title_kr", 12)
+	var tf: Font = t.get_theme_font("font")
+	while fs > 30 and tf.get_string_size(t.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > max_w:
+		fs -= 2
+	t.add_theme_font_size_override("font_size", fs)
 	box.add_child(t)
-	var s := UI.label(sub, 25, UI.TEXT, 7, "ui_black")
-	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var s := UI.label(sub, 25 if not Game.tall else 21, UI.TEXT, 6, "ui_black")
+	s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	s.custom_minimum_size.x = minf(max_w, 640.0)
 	box.add_child(s)
 	root.add_child(box)
 	root.move_child(box, _catch.get_index())
 	_card = box
-	box.modulate.a = 0.0
-	box.pivot_offset = Vector2(640, 60)
-	box.scale = Vector2(1.08, 1.08)
-	var tw := _rt().set_parallel(true)
-	tw.tween_property(box, "modulate:a", 1.0, 0.6).set_delay(0.25)
-	tw.tween_property(box, "scale", Vector2.ONE, 1.4).set_delay(0.25).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-
-func _rule(left: bool) -> Control:
-	var tr2 := TextureRect.new()
-	var g := Gradient.new()
-	var gold := Color(UI.GOLD.r, UI.GOLD.g, UI.GOLD.b, 0.9)
-	g.set_color(0, Color(gold.r, gold.g, gold.b, 0.0) if left else gold)
-	g.set_color(1, gold if left else Color(gold.r, gold.g, gold.b, 0.0))
-	var gt := GradientTexture2D.new()
-	gt.gradient = g
-	gt.width = 128
-	gt.height = 3
-	tr2.texture = gt
-	tr2.stretch_mode = TextureRect.STRETCH_SCALE
-	tr2.custom_minimum_size = Vector2(120, 3)
-	tr2.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	tr2.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return tr2
+	# cut in: the tag opens from its left edge, then the name and the line slide in from the left
+	tag.pivot_offset = Vector2.ZERO
+	tag.scale = Vector2(0.0, 1.0)
+	for c in [t, s]:
+		(c as Control).modulate.a = 0.0
+	var tw := _rt()
+	tw.tween_interval(0.3)
+	tw.tween_property(tag, "scale:x", 1.0, 0.18).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+	var d := 0.36
+	for c in [t, s]:
+		var cc := c as Control
+		var tc := _rt()
+		tc.tween_interval(d)
+		tc.tween_callback(func():
+			if is_instance_valid(cc):
+				cc.position.x -= 36.0)
+		tc.tween_property(cc, "modulate:a", 1.0, 0.22)
+		tc.parallel().tween_property(cc, "position:x", 0.0, 0.34).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+		d += 0.1
 
 func _drop_card() -> void:
 	if _card and is_instance_valid(_card):
 		var c := _card
 		_card = null
-		var tw := _rt()
-		tw.tween_property(c, "modulate:a", 0.0, 0.35)
-		tw.tween_callback(c.queue_free)
+		var tw := _rt().set_parallel(true)
+		tw.tween_property(c, "modulate:a", 0.0, 0.25)
+		tw.tween_property(c, "offset_left", c.offset_left - 40.0, 0.25).set_ease(Tween.EASE_IN)
+		tw.chain().tween_callback(c.queue_free)
 
 # ------------------------------------------------------------------ story
 
@@ -345,7 +354,13 @@ func _story_next() -> void:
 	vb.add_theme_constant_override("separation", 4)
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var enemy: bool = sp[2]
-	vb.add_child(UI.ink(tr(sp[0]), 20, Color(1.0, 0.62, 0.52) if enemy else Color(0.62, 0.78, 1.0), "ui_black"))
+	# the speaker on a pennant tag: azure for the realm, gules for the enemy
+	var nt := PanelContainer.new()
+	nt.add_theme_stylebox_override("panel", UI.plate(UI.EMBER if enemy else UI.AZURE, 5, Vector4(12, 0, 12, 2), 3.0, Color(UI.SABLE, 0.6), UI.CUT))
+	nt.size_flags_horizontal = Control.SIZE_SHRINK_END if enemy else Control.SIZE_SHRINK_BEGIN
+	nt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	nt.add_child(UI.label(tr(sp[0]), 21, UI.VELLUM, 0, "title_kr"))
+	vb.add_child(nt)
 	var txw := minf(610.0, pw - psz - 16.0 - 40.0)
 	_story_text = UI.ink(tr(String(line[1])), 20 if Game.tall else 21, UI.INK)
 	UI.wrap_words(_story_text, txw)
@@ -457,55 +472,60 @@ func _end_boss() -> void:
 	_restore_time()
 	_finish()
 
+## The boss card: a gules pennant band that runs in from the left edge, carrying the boss's bust,
+## a "boss" tag and the name in the display face. It cuts open in a fifth of a second (the camera
+## and the roar carry the weight) and drifts a little while it holds.
 func _boss_card(e: Enemy) -> void:
 	_drop_card()
 	var d: Dictionary = e.d
-	var band := TextureRect.new()
-	var g := Gradient.new()
-	g.set_color(0, Color(0.25, 0.02, 0.02, 0.0))
-	g.set_color(1, Color(0.25, 0.02, 0.02, 0.0))
-	g.add_point(0.25, Color(0.16, 0.01, 0.02, 0.88))
-	g.add_point(0.75, Color(0.16, 0.01, 0.02, 0.88))
-	var gt := GradientTexture2D.new()
-	gt.gradient = g
-	gt.width = 256
-	gt.height = 4
-	band.texture = gt
-	band.stretch_mode = TextureRect.STRETCH_SCALE
+	var band := PanelContainer.new()
+	band.add_theme_stylebox_override("panel", UI.plate(UI.EMBER, 6, Vector4(70 + Game.safe.x, 6, 70, 8), 9.0, Color(UI.SABLE, 0.75), 0.22))
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	band.anchor_left = 0.0
-	band.anchor_right = 1.0
+	band.anchor_right = 0.0
 	band.anchor_top = 0.6
 	band.anchor_bottom = 0.6
-	band.offset_top = -78
-	band.offset_bottom = 78
+	band.offset_left = -40.0
+	band.grow_vertical = Control.GROW_DIRECTION_BOTH
 	var hb := HBoxContainer.new()
-	hb.set_anchors_preset(Control.PRESET_FULL_RECT)
-	hb.alignment = BoxContainer.ALIGNMENT_CENTER
-	hb.add_theme_constant_override("separation", 22)
+	hb.add_theme_constant_override("separation", 18)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var por := UI.bust(Assets.tex("portrait_" + e.type), 150, 1.15)
+	var psz := 112.0 if Game.tall else 140.0
+	var por := UI.bust(Assets.tex("portrait_" + e.type), psz, 1.15)
 	hb.add_child(por)
 	var vb := VBoxContainer.new()
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
 	vb.add_theme_constant_override("separation", 0)
-	vb.add_child(UI.label("보스", 20, Color(1.0, 0.55, 0.42), 5, "ui_black"))
-	var nm := UI.title(tr(d["name"]), 54, "title_kr", 12)
-	nm.add_theme_color_override("font_color", Color(1.0, 0.86, 0.78))
+	var tag := PanelContainer.new()
+	tag.add_theme_stylebox_override("panel", UI.plate(UI.SABLE, 4, Vector4(10, 0, 10, 2), 0.0, Color(), UI.CUT))
+	tag.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tag.add_child(UI.label("보스", 19, UI.GOLD, 0, "title_kr"))
+	vb.add_child(tag)
+	var nfs := 44 if Game.tall else 58
+	var nm := UI.title(tr(d["name"]), nfs, "title_kr", 10)
+	var room := Game.safe_size().x - psz - 18.0 - 70.0 - 60.0
+	var nf: Font = nm.get_theme_font("font")
+	while nfs > 28 and nf.get_string_size(nm.text, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs).x > room:
+		nfs -= 2
+	nm.add_theme_font_size_override("font_size", nfs)
 	vb.add_child(nm)
 	if d.has("title"):
-		vb.add_child(UI.label(tr(d["title"]), 23, UI.TEXT, 6, "ui_black"))
+		vb.add_child(UI.label(tr(d["title"]), 21 if Game.tall else 23, UI.VELLUM, 0, "ui_black"))
 	hb.add_child(vb)
 	band.add_child(hb)
 	root.add_child(band)
 	root.move_child(band, _catch.get_index())
 	_card = band
-	band.modulate.a = 0.0
-	hb.position.x = -140.0
-	var tw := _rt().set_parallel(true)
-	tw.tween_property(band, "modulate:a", 1.0, 0.3)
-	tw.tween_property(hb, "position:x", 0.0, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(hb, "position:x", 24.0, 2.4).set_delay(0.5)
+	band.pivot_offset = Vector2.ZERO
+	band.scale = Vector2(0.0, 1.0)
+	(func():
+		if is_instance_valid(band):
+			band.offset_top = -band.size.y * 0.5
+			band.offset_bottom = band.size.y * 0.5).call_deferred()
+	var tw := _rt()
+	tw.tween_property(band, "scale:x", 1.0, 0.2).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+	tw.tween_property(hb, "position:x", 18.0, 2.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 ## A boss falls: brief slow motion and a flash on the spot; the camera does not move away.
 func boss_down(e: Enemy) -> void:

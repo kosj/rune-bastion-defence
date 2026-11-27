@@ -522,7 +522,7 @@ NCSOFT VARCO 3D 생성형 AI, Blender로 다듬음	NCSOFT VARCO 3D 生成AI、Bl
 음성과 음악	ボイスと音楽
 ElevenLabs 음성·음악 생성, 일부 곡은 자체 작곡 도구	ElevenLabsによるボイス・音楽生成、一部の曲は自作の作曲ツール
 글꼴	フォント
-Noto Sans CJK, Noto Serif CJK, Cardo (SIL Open Font License)	Noto Sans CJK、Noto Serif CJK、Cardo(SIL Open Font License)
+Noto Sans CJK, Black Han Sans, Dela Gothic One (SIL Open Font License)	Noto Sans CJK、Black Han Sans、Dela Gothic One(SIL Open Font License)
 게임 디자인과 개발	ゲームデザインと開発
 룬 바스티온 팀	ルーン・バスティオン チーム
 다음 웨이브	次のウェーブ

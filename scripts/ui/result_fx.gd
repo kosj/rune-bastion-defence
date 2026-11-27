@@ -49,52 +49,51 @@ func reveal(c: Control, delay: float) -> void:
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	(func():
 		c.pivot_offset = c.size * 0.5
-		c.scale = Vector2(0.86, 0.86)
+		c.scale = Vector2(0.94, 0.94)
 		var t := tween(c).set_parallel(true)
-		t.tween_property(c, "modulate:a", 1.0, 0.22).set_delay(delay)
-		t.tween_property(c, "scale", Vector2.ONE, 0.32).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		t.tween_property(c, "modulate:a", 1.0, 0.16).set_delay(delay)
+		t.tween_property(c, "scale", Vector2.ONE, 0.22).set_delay(delay).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
 		t.tween_callback(func(): c.mouse_filter = mf).set_delay(delay)).call_deferred()
 
-## The title ribbon drops onto the panel (scale 2 -> 1, eased in) and the panel takes the hit.
+## The title pennant cuts open across the top of the card (from its left edge) and the card takes
+## a small knock.
 func slam(c: Control, delay: float) -> void:
 	c.modulate.a = 0.0
 	(func():
-		c.pivot_offset = c.size * 0.5
-		c.scale = Vector2(2.0, 2.0)
+		c.pivot_offset = Vector2(0, c.size.y * 0.5)
+		c.scale = Vector2(0.0, 1.0)
 		var t := tween(c)
 		t.tween_interval(delay)
 		# parallel() joins only the next step to the one before it (set_parallel would also join
 		# the waiting interval, and everything would start at once)
-		t.tween_property(c, "modulate:a", 1.0, 0.08)
-		t.parallel().tween_property(c, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		t.tween_callback(func(): shake(5.0))
-		t.tween_property(c, "scale", Vector2(1.06, 0.94), 0.05)
-		t.tween_property(c, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)).call_deferred()
+		t.tween_property(c, "modulate:a", 1.0, 0.04)
+		t.parallel().tween_property(c, "scale:x", 1.0, 0.2).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+		t.tween_callback(func(): shake(3.0))).call_deferred()
 
-## One earned star: falls in from 4x with a twist, then flash, ring, sparks, shake, haptics, chime.
+## One earned star: stamped onto the card (down from 1.7x, a squash on contact, settled without
+## wobble), then a flat ring, a few sparks, a knock, haptics and the chime.
 func star(parent: Control, center: Vector2, sz: float, delay: float, i: int) -> void:
 	var st := UI.icon(Assets.tex("star"), int(sz))
 	st.size = Vector2(sz, sz)
 	st.position = center - st.size * 0.5
 	st.pivot_offset = st.size * 0.5
-	st.scale = Vector2(4.0, 4.0)
-	st.rotation = -0.7
+	st.scale = Vector2(1.7, 1.7)
+	st.rotation = -0.18
 	st.modulate.a = 0.0
 	parent.add_child(st)
 	var t := tween(st)
 	t.tween_interval(delay)
-	t.tween_property(st, "scale", Vector2.ONE, 0.24).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	t.parallel().tween_property(st, "modulate:a", 1.0, 0.1)
-	t.parallel().tween_property(st, "rotation", 0.0, 0.24).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	t.tween_property(st, "scale", Vector2.ONE, 0.13).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+	t.parallel().tween_property(st, "modulate:a", 1.0, 0.06)
+	t.parallel().tween_property(st, "rotation", 0.0, 0.13)
 	t.tween_callback(func(): _impact(parent, center, sz, i))
-	t.tween_property(st, "scale", Vector2(1.28, 0.82), 0.06)
-	t.tween_property(st, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	t.tween_property(st, "scale", Vector2(1.14, 0.86), 0.05)
+	t.tween_property(st, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
 
 func _impact(parent: Control, c: Vector2, sz: float, i: int) -> void:
 	Audio.play_pitched("star", -2.0 + i * 1.5, 1.0 + i * 0.125)
-	flash(parent, c, sz * 2.8)
-	ring(parent, c, sz * 0.4, sz * 1.45)
-	sparks(parent, c, 16 if i == 1 else 12, sz)
+	ring(parent, c, sz * 0.45, sz * 1.2)
+	sparks(parent, c, 8 if i == 1 else 6, sz)
 	shake(4.0 + 2.5 * i)
 	Game.vibrate(20 + 10 * i)
 
@@ -118,12 +117,11 @@ func ring(parent: Control, c: Vector2, r0: float, r1: float) -> void:
 	var rc := Control.new()
 	rc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rc.position = c
-	rc.material = additive()
 	parent.add_child(rc)
 	rc.set_meta("k", 0.0)
 	rc.draw.connect(func():
 		var k: float = rc.get_meta("k")
-		rc.draw_arc(Vector2.ZERO, lerpf(r0, r1, k), 0.0, TAU, 56, Color(1.0, 0.9, 0.55, 1.0 - k), lerpf(6.0, 1.0, k), true))
+		rc.draw_arc(Vector2.ZERO, lerpf(r0, r1, k), 0.0, TAU, 56, Color(UI.GOLD, 1.0 - k), lerpf(5.0, 1.5, k), true))
 	var t := tween(rc)
 	t.tween_method(func(k: float):
 		rc.set_meta("k", k)
@@ -139,7 +137,6 @@ func sparks(parent: Control, c: Vector2, n: int, sz: float) -> void:
 		s.position = c - s.size * 0.5
 		s.pivot_offset = s.size * 0.5
 		s.scale = Vector2(0.3, 0.3)
-		s.material = additive()
 		parent.add_child(s)
 		var ang := TAU * k / n + randf_range(-0.12, 0.12)
 		var dist := sz * randf_range(0.9, 1.7)
@@ -180,7 +177,7 @@ func count_up(l: Label, fmt: Callable, target: int, delay: float, dur := 0.7) ->
 ## Confetti over the whole screen for a perfect clear.
 func confetti(n: int, delay: float) -> void:
 	var vs := root.get_viewport_rect().size
-	var cols := [Color(1.0, 0.82, 0.25), Color(0.95, 0.3, 0.3), Color(0.35, 0.65, 1.0), Color(0.45, 0.9, 0.45), Color(1, 1, 1)]
+	var cols := [UI.GOLD, UI.EMBER, UI.AZURE, UI.VELLUM]
 	for k in n:
 		var p := ColorRect.new()
 		p.mouse_filter = Control.MOUSE_FILTER_IGNORE

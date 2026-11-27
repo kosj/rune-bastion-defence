@@ -28,6 +28,11 @@ func _ready() -> void:
 		# safe=l,t,r,b: notch / home-indicator insets in canvas units (safe-area layout checks)
 		Game.safe_override = args["safe"]
 		Game._fit_ui()
+	if args.has("wipe_k"):
+		# wipe_k=<0..1>[,out]: freeze the scene-change wipe at that point (out: the uncover half)
+		var wk: PackedStringArray = (args["wipe_k"] as String).split(",")
+		Game._wipe._leaving = wk.size() > 1
+		Game._wipe._set_k(float(wk[0]))
 	if args.get("restored", "0") == "1":
 		Game.restored_from_backup = true  # the menu's "save restored" notice
 	if args.get("cine", "0") == "1":
@@ -486,6 +491,7 @@ func _process(delta: float) -> void:
 			LevelMain.I.cam_rig.target = Vector3(b.get_center().x, 0, b.get_center().y)
 			LevelMain.I.cam_rig._pos = LevelMain.I.cam_rig.target
 			LevelMain.I.hud.root.visible = args.get("hud", "1") == "1"
+			LevelMain.I.hud.world_ui.visible = LevelMain.I.hud.root.visible
 			LevelMain.I.hud.overlay.visible = args.get("hud", "1") == "1"
 			await get_tree().process_frame
 		if args.has("focus") and LevelMain.I:
@@ -520,6 +526,7 @@ func _process(delta: float) -> void:
 			L2.cam_rig.target = fp
 			L2.cam_rig._pos = fp
 			L2.hud.root.visible = args.get("hud", "1") == "1"
+			L2.hud.world_ui.visible = L2.hud.root.visible
 			L2.hud.overlay.visible = args.get("hud", "1") == "1"
 			await get_tree().process_frame
 		if args.get("follow", "0") == "1" and LevelMain.I and not LevelMain.I.enemies.is_empty():

@@ -188,6 +188,8 @@ func _ready() -> void:
 	if first:
 		Game.stat(intro_key)
 	var story: Array = DB.STORY.get(def["id"], [])
+	if OS.get_environment("RB_NOSTORY") != "":
+		story = []  # (test runs: the road fly-over and its chapter card without the dialogue)
 	if first and not story.is_empty():
 		# first visit: a short scene in front of the enemy portal, then the road fly-over
 		var s0: Vector2 = (paths[0] as LanePath).sample(2.0)
@@ -2133,16 +2135,6 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 		stage.name = "StarStage"
 		vb.add_child(stage)
 		var mid := Vector2(210, 64)
-		var rays := UI.icon(UI.kit("rays"), 320)
-		rays.name = "Rays"
-		rays.size = Vector2(320, 320)
-		rays.position = mid - rays.size * 0.5
-		rays.pivot_offset = rays.size * 0.5
-		rays.modulate = Color(1, 0.9, 0.6, 0.0)
-		stage.add_child(rays)
-		var rt := rays.create_tween().set_loops()
-		rt.set_ignore_time_scale(true)
-		rt.tween_property(rays, "rotation", TAU, 14.0).from(0.0)
 		var spots := [[Vector2(210 - 124, 86), 84.0], [mid, 108.0], [Vector2(210 + 124, 86), 84.0]]
 		for i in 3:
 			var sz: float = spots[i][1]
@@ -2222,18 +2214,14 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 	var spots := [[Vector2(210 - 124, 86), 84.0], [Vector2(210, 64), 108.0], [Vector2(210 + 124, 86), 84.0]]
 	for i in stars:
 		fx.star(stage, spots[i][0], spots[i][1], t0 + i * 0.42, i)
-	# (a lambda's assignments stay inside it: the parts built there are looked up by name)
-	var rays: Control = stage.get_node("Rays")
-	var rt := fx.tween(rays)
-	rt.tween_property(rays, "modulate:a", 0.45 + 0.15 * stars, 0.5).set_delay(t0 + 0.2)
 	if stars >= 3:
-		# a perfect clear gets the full celebration
+		# a perfect clear gets the full celebration: a wide ring and tincture confetti
 		var ct := fx.tween(_modal)
 		ct.tween_interval(t_done - 0.1)
 		ct.tween_callback(func():
 			Audio.play("levelup", -4.0)
-			fx.flash(stage, Vector2(210, 64), 360.0, Color(1.0, 0.9, 0.55)))
-		fx.confetti(70, t_done - 0.1)
+			fx.ring(stage, Vector2(210, 64), 60.0, 230.0))
+		fx.confetti(56, t_done - 0.1)
 	var k := 0
 	for stl in _modal.find_children("*", "HBoxContainer", true, false):
 		if not stl.has_meta("fmt"):
