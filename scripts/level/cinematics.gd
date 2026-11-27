@@ -367,9 +367,9 @@ func _story_next() -> void:
 		var sk := UI.button("건너뛰기  ▶▶", 17, false, Vector2(170, 46), "secondary")
 		sk.anchor_left = 1.0
 		sk.anchor_right = 1.0
-		sk.offset_left = -190
-		sk.offset_right = -20
-		sk.offset_top = 16
+		sk.offset_left = -190 - Game.safe.z  # clear of a notch in the corner
+		sk.offset_right = -20 - Game.safe.z
+		sk.offset_top = 16 + Game.safe.y
 		sk.name = "StorySkip"
 		sk.pressed.connect(func():
 			_story_i = _story_lines.size()

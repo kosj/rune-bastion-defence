@@ -29,6 +29,57 @@ func _ready() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	Game.mark("menu_first_frame")
+	_storage_notices()
+
+static var _storage_noted := false
+
+## Once per visit: tell the player when their progress is at risk. A browser that refuses site
+## storage (private windows, blocked cookies) keeps the save only until the tab closes; a save file
+## that could not be read was replaced by its backup.
+func _storage_notices() -> void:
+	if _storage_noted or not is_inside_tree() or Game._busy:
+		return
+	_storage_noted = true
+	if Game.restored_from_backup:
+		_menu_notice("ic_retry", "저장 파일을 복구했습니다", "저장 파일을 읽을 수 없어 마지막 백업에서 진행을 되살렸습니다.")
+	if OS.has_feature("web") and not OS.is_userfs_persistent():
+		_menu_notice("ic_gear", "진행이 저장되지 않는 브라우저입니다", "시크릿 창이나 사이트 데이터 차단에서는 탭을 닫으면 진행이 사라집니다. 설정 → 저장 코드 내보내기로 옮겨 둘 수 있어요.")
+
+## A notice card at the top of the menu: fades in, stays a few seconds (a tap closes it sooner).
+func _menu_notice(icon: String, title: String, sub: String) -> void:
+	var sr := Game.safe_rect()
+	var w := minf(sr.size.x - 24.0, 520.0)
+	var p := UI.framed("card", 8)
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 12)
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(hb)
+	var ic := UI.icon(Assets.tex(icon), 44)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hb.add_child(ic)
+	var vb := VBoxContainer.new()
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(UI.ink(title, 20, UI.INK, "ui_black"))
+	var sl := UI.ink(tr(sub), UI.T_SMALL, UI.INK_SOFT)  # translated first: wrap_words rewrites the text
+	UI.wrap_words(sl, w - 100.0)
+	vb.add_child(sl)
+	hb.add_child(vb)
+	p.offset_left = sr.position.x + (sr.size.x - w) * 0.5
+	p.offset_right = p.offset_left + w
+	p.offset_top = sr.position.y + (220.0 if Game.tall else 190.0) + _notice_n * 130.0  # under the title ribbon
+	_notice_n += 1
+	ui.add_child(p)
+	p.modulate.a = 0.0
+	var tw := p.create_tween()
+	tw.tween_property(p, "modulate:a", 1.0, 0.3)
+	tw.tween_interval(7.0)
+	tw.tween_property(p, "modulate:a", 0.0, 0.5)
+	tw.tween_callback(p.queue_free)
+	p.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed and is_instance_valid(p):
+			p.queue_free())
+
+var _notice_n := 0
 
 var _backdrop: TextureRect
 var _async_build := false
@@ -324,16 +375,16 @@ func _build_title(first := false) -> void:
 	if _title_root:
 		_title_root.queue_free()
 	var t := Game.tall
-	var vs := get_viewport().get_visible_rect().size
+	var vs := Game.safe_size()
 	_title_root = Control.new()
-	_title_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	Game.apply_safe(_title_root)  # logo and buttons clear of a notch and the home indicator
 	_title_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(_title_root)
 	ui.move_child(_title_root, 2 if _backdrop else 1)
 	var title := UI.title("RUNE BASTION", 52 if t else 96, "title", 9 if t else 14)
 	title.anchor_left = 0.0
 	title.anchor_right = 1.0
-	title.offset_top = 48 if t else 22
+	title.offset_top = 76 if t else 22  # upright: below the settings gear, which the wide word reaches
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_root.add_child(title)
 	var rw := 360.0 if t else 460.0
@@ -342,7 +393,7 @@ func _build_title(first := false) -> void:
 	sub.anchor_right = 0.5
 	sub.offset_left = -rw * 0.5
 	sub.offset_right = rw * 0.5
-	sub.offset_top = 124 if t else 132
+	sub.offset_top = 152 if t else 132
 	_title_root.add_child(sub)
 	var gear := UI.round_button(Assets.tex("ic_gear"), 52 if t else 60)
 	gear.anchor_left = 1.0

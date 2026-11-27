@@ -24,6 +24,12 @@ func _ready() -> void:
 		var wh: PackedStringArray = (args["win"] as String).split("x")
 		get_tree().root.size = Vector2i(int(wh[0]), int(wh[1]))
 		Game._fit_ui()
+	if args.has("safe"):
+		# safe=l,t,r,b: notch / home-indicator insets in canvas units (safe-area layout checks)
+		Game.safe_override = args["safe"]
+		Game._fit_ui()
+	if args.get("restored", "0") == "1":
+		Game.restored_from_backup = true  # the menu's "save restored" notice
 	if args.get("cine", "0") == "1":
 		Game.testing = false  # review runs: keep the level intro / boss cinematics
 	var mode: String = args.get("mode", "auto")
@@ -1418,7 +1424,10 @@ func _ct_fit(name: String, sh: Control) -> void:
 	if panel == null:
 		return
 	var r := panel.get_global_rect()
-	var vr := Rect2(Vector2.ZERO, sh.get_viewport_rect().size).grow(2.0)
+	# inside the safe area (an upright sheet may run on under the home indicator at the bottom)
+	var vr := Game.safe_rect().grow(2.0)
+	if Game.tall:
+		vr.size.y += Game.safe.w
 	if not vr.encloses(r):
 		print("CLOSETEST %-22s %-9s FAIL (panel %s outside %s)" % [name, "fit", r, vr.size])
 		_ct_fails += 1

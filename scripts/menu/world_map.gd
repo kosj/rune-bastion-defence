@@ -77,6 +77,7 @@ func _ready() -> void:
 	_build_chrome()
 	resized.connect(_layout)
 	Game.layout_changed.connect(_on_layout_changed)
+	Game.safe_changed.connect(_layout)
 	_layout.call_deferred()
 	modulate.a = 0.0
 	var tw := create_tween()
@@ -108,21 +109,50 @@ func _map_rect() -> Rect2:
 			_pan_x = vs.x * 0.5 - focus.x * mw
 		_pan_x = clampf(_pan_x, minf(vs.x - mw, 0.0), 0.0)
 		return Rect2(Vector2(_pan_x, 0), MAP_SIZE * st)
+	# the painting covers the whole screen; the flags fit inside the safe area (clear of a notch)
+	var sr := Game.safe_rect()
 	var cover := maxf(vs.x / MAP_SIZE.x, vs.y / MAP_SIZE.y)
 	var contain := minf(vs.x / MAP_SIZE.x, vs.y / MAP_SIZE.y)
-	var fit_x := vs.x / (MAP_SIZE.x * (FLAG_SPAN_X.y - FLAG_SPAN_X.x))
-	var fit_y := vs.y / (MAP_SIZE.y * (FLAG_SPAN_Y.y - FLAG_SPAN_Y.x))
+	var fit_x := sr.size.x / (MAP_SIZE.x * (FLAG_SPAN_X.y - FLAG_SPAN_X.x))
+	var fit_y := sr.size.y / (MAP_SIZE.y * (FLAG_SPAN_Y.y - FLAG_SPAN_Y.x))
 	var s := maxf(minf(cover, minf(fit_x, fit_y)), contain)
+	# a short, wide screen (a phone held sideways): the button dock in the bottom-left corner can
+	# land on a low flag (the harbour); shrink the painting a little more until every flag is clear
+	var dock_r := _dock_rect(sr)
+	var r := _map_rect_at(s, vs, sr)
+	while s > contain and dock_r.size.x > 0.0 and _flags_hit(r, dock_r):
+		s = maxf(s * 0.97, contain)
+		r = _map_rect_at(s, vs, sr)
+	return r
+
+func _map_rect_at(s: float, vs: Vector2, sr: Rect2) -> Rect2:
 	var ms := MAP_SIZE * s
 	var off := Vector2.ZERO
 	for ax in 2:
 		var span: Vector2 = FLAG_SPAN_X if ax == 0 else FLAG_SPAN_Y
 		if ms[ax] > vs[ax]:
 			# larger than the screen on this axis: centre the flags, never uncover an edge
-			off[ax] = clampf(vs[ax] * 0.5 - (span.x + span.y) * 0.5 * ms[ax], vs[ax] - ms[ax], 0.0)
+			off[ax] = clampf(sr.get_center()[ax] - (span.x + span.y) * 0.5 * ms[ax], vs[ax] - ms[ax], 0.0)
 		else:
 			off[ax] = (vs[ax] - ms[ax]) * 0.5
 	return Rect2(off, ms)
+
+## The bottom dock's screen rect (wide layout; empty until it exists).
+func _dock_rect(sr: Rect2) -> Rect2:
+	if _dock == null or not is_instance_valid(_dock) or Game.tall:
+		return Rect2()
+	var dsz := _dock.get_combined_minimum_size()
+	if _side_dock():
+		return Rect2(sr.position + Vector2(8, 78), dsz).grow(6.0)
+	return Rect2(sr.position.x + 16.0, sr.end.y - 12.0 - dsz.y, dsz.x, dsz.y).grow(6.0)
+
+## Whether a flag (its pin above the spot, its name plate below) would sit under `rect`.
+func _flags_hit(map_r: Rect2, rect: Rect2) -> bool:
+	for i in DB.LEVELS.size():
+		var p: Vector2 = map_r.position + NODES[i] * map_r.size
+		if Rect2(p + Vector2(-72, -80), Vector2(144, 122)).intersects(rect):
+			return true
+	return false
 
 ## A point of the painting in the painting's own coordinates (the world layer is moved to the map
 ## rect, so this is also where the flags and roads are drawn).
@@ -141,6 +171,8 @@ func _gui_input(ev: InputEvent) -> void:
 var _bands: Array = []
 
 func _layout() -> void:
+	if _dock and is_instance_valid(_dock) and (_dock is VBoxContainer) != _side_dock():
+		_rebuild_chrome()  # the window went from short to tall enough (or back): the other dock
 	var r := _map_rect()
 	_world.position = r.position
 	_world.size = r.size
@@ -206,14 +238,27 @@ func _rebuild_chrome() -> void:
 	_chrome.clear()
 	_build_chrome()
 
+var _chrome_root: Control
+var _dock: BoxContainer
+
+## A phone held sideways (short and wide): the dock goes down the left edge.
+func _side_dock() -> bool:
+	return not Game.tall and Game.safe_size().y < 600.0  # (a phone's landscape canvas is 540 high)
+
 func _build_chrome() -> void:
 	var t := Game.tall
+	if _chrome_root == null:
+		# the buttons sit inside the safe area (a notch, the home indicator); the painting does not
+		_chrome_root = Control.new()
+		_chrome_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_chrome_root)
+		Game.apply_safe(_chrome_root)
 	var back := UI.round_button(Assets.tex("ic_close"), 52 if t else 58)
 	back.position = Vector2(14, 14)
 	back.pressed.connect(func():
 		if menu and menu.has_method("_close_select"):
 			menu.call("_close_select"))
-	add_child(back)
+	_chrome_root.add_child(back)
 	# stars counter (kingdom upgrades currency)
 	var plate := UI.framed("bar", 2)
 	plate.anchor_left = 1.0
@@ -230,26 +275,34 @@ func _build_chrome() -> void:
 	_stars_l = UI.label("%d / %d" % [DB.total_stars(), DB.max_stars()], 22 if t else 24, UI.GOLD, 0, "ui_black")
 	hb.add_child(_stars_l)
 	plate.add_child(hb)
-	add_child(plate)
-	# bottom dock: upgrades / heroes / bestiary / achievements (centred under the thumb upright)
-	var dock := HBoxContainer.new()
-	dock.add_theme_constant_override("separation", 14 if t else 12)
-	dock.anchor_top = 1.0
-	dock.anchor_bottom = 1.0
-	dock.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	if t:
-		dock.anchor_left = 0.5
-		dock.anchor_right = 0.5
-		dock.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_chrome_root.add_child(plate)
+	# bottom dock: upgrades / heroes / bestiary / achievements (centred under the thumb upright).
+	# A phone held sideways has too little height for a bottom row that stays off the low flags
+	# (the harbour sits right where it would be): there the dock runs down the left edge instead.
+	var side := _side_dock()
+	var dock: BoxContainer = VBoxContainer.new() if side else HBoxContainer.new()
+	dock.add_theme_constant_override("separation", 6 if side else (14 if t else 12))
+	if side:
+		dock.offset_left = 8
+		dock.offset_top = 78
 	else:
-		dock.offset_left = 16
-	dock.offset_bottom = -12
+		dock.anchor_top = 1.0
+		dock.anchor_bottom = 1.0
+		dock.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		if t:
+			dock.anchor_left = 0.5
+			dock.anchor_right = 0.5
+			dock.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		else:
+			dock.offset_left = 16
+		dock.offset_bottom = -12
+	var bsz := 46 if side else 62
 	for it in [["ic_upgrade", "강화", "_open_upgrades"], ["ic_hero", "영웅", "_open_heroes"], ["ic_book", "도감", "_open_bestiary"], ["ic_trophy", "업적", "_open_achievements"], ["ic_daily", "오늘의 도전", "_open_daily"]]:
 		var col := VBoxContainer.new()
-		col.add_theme_constant_override("separation", 2)
+		col.add_theme_constant_override("separation", 0 if side else 2)
 		col.alignment = BoxContainer.ALIGNMENT_END
-		var b := UI.round_button(Assets.tex(it[0]), 62)
-		b.add_theme_constant_override("icon_max_width", 36)
+		var b := UI.round_button(Assets.tex(it[0]), bsz)
+		b.add_theme_constant_override("icon_max_width", 28 if side else 36)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		var fn: String = it[2]
 		b.pressed.connect(func():
@@ -260,7 +313,7 @@ func _build_chrome() -> void:
 		if fn == "_open_daily" and not Game.daily_unlocked():
 			b.self_modulate = Color(0.6, 0.6, 0.66)
 		col.add_child(b)
-		var l := UI.label(it[1], 16, UI.TEXT, 5, "ui_black")
+		var l := UI.label(it[1], 13 if side else 16, UI.TEXT, 4 if side else 5, "ui_black")
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		col.add_child(l)
 		var n := 0
@@ -271,11 +324,12 @@ func _build_chrome() -> void:
 		elif it[0] == "ic_daily" and Game.daily_unlocked() and not Game.daily_done_today():
 			n = 1
 		if n > 0:
-			var bd := UI.badge(str(n) if it[0] != "ic_daily" else "!", 26, 14)
-			bd.position = Vector2(42, -4)
+			var bd := UI.badge(str(n) if it[0] != "ic_daily" else "!", 22 if side else 26, 12 if side else 14)
+			bd.position = Vector2(bsz - 18, -4)
 			b.add_child(bd)
 		dock.add_child(col)
-	add_child(dock)
+	_chrome_root.add_child(dock)
+	_dock = dock
 	_chrome = [back, plate, dock]
 
 func refresh_stars() -> void:

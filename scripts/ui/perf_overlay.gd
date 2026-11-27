@@ -36,7 +36,7 @@ func _ready() -> void:
 	sb.content_margin_bottom = 4
 	panel.add_theme_stylebox_override("panel", sb)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.position = Vector2(8, 70)
+	panel.position = Vector2(8 + Game.safe.x, 70 + Game.safe.y)
 	add_child(panel)
 	_label = Label.new()
 	_label.add_theme_font_size_override("font_size", 13)
@@ -64,6 +64,7 @@ func _process(delta: float) -> void:
 		"vram %.0f MB  ram %.0f MB" % [RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_VIDEO_MEM_USED) / 1048576.0,
 			OS.get_static_memory_usage() / 1048576.0],
 		"%dx%d (window %dx%d)  %s%s" % [vs.x, vs.y, win.x, win.y, "HQ" if Game.high_quality else "LQ", "  30fps" if Game.battery_saver else ""],
+		"safe area l%d t%d r%d b%d" % [Game.safe.x, Game.safe.y, Game.safe.z, Game.safe.w],
 		_gpu,
 	]
 	if LevelMain.I and is_instance_valid(LevelMain.I):

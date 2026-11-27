@@ -109,9 +109,9 @@ func _update_pos() -> void:
 	if cam == null:
 		return
 	var sp := cam.unproject_position(world_pos)
-	var vs := get_viewport_rect().size
-	sp.x = clampf(sp.x, radius + 40, vs.x - radius - 40)
-	sp.y = clampf(sp.y, radius + 60, vs.y - radius - 50)
+	var sr := Game.safe_rect()  # the whole ring on screen, clear of a notch
+	sp.x = clampf(sp.x, sr.position.x + radius + 40, sr.end.x - radius - 40)
+	sp.y = clampf(sp.y, sr.position.y + radius + 60, sr.end.y - radius - 50)
 	position = sp
 
 class _RingDraw extends Control:

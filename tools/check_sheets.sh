@@ -23,6 +23,9 @@ done
 for L in en ja; do
   run "메뉴 폰 가로 $L" res://scenes/test_runner.tscn -- win=932x430 mode=menu progress=1 progress_all=1 closetest=1 max_t=900 lang=$L
 done
+# 노치·홈 표시줄 여백(캔버스 단위)이 있을 때: 시트가 안전 영역 안에 들어가는지
+run "메뉴 폰 가로 노치 en" res://scenes/test_runner.tscn -- win=932x430 mode=menu progress=1 progress_all=1 closetest=1 max_t=900 lang=en safe=64,0,64,28
+run "메뉴 세로 노치 ko" res://scenes/test_runner.tscn -- win=430x932 mode=menu progress=1 progress_all=1 closetest=1 max_t=900 lang=ko safe=0,66,0,38
 run "전투 가로 en" res://scenes/test_runner.tscn -- win=1280x720 level=2 mode=shots intro=0 nowave=1 closetest=1 max_t=900 lang=en
 run "전투 세로 en" res://scenes/test_runner.tscn -- win=430x932 level=2 mode=shots intro=0 nowave=1 closetest=1 max_t=900 lang=en
 exit $fail

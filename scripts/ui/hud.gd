@@ -61,20 +61,26 @@ func build(cam: Camera3D) -> void:
 	overlay = Overlay.new()
 	overlay.cam = cam
 	add_child(overlay)
-	root = Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.theme = UI.theme()
-	add_child(root)
 	# world-anchored markers (wave call buttons and their previews) draw under every HUD panel:
-	# a selection card or a notice must never be covered by a button that follows the map
+	# a selection card or a notice must never be covered by a button that follows the map. They
+	# live in screen space (the whole screen); the panels in `root`, inside the safe area.
+	var world_ui := Control.new()
+	world_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	world_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	world_ui.theme = UI.theme()
+	add_child(world_ui)
 	markers = Control.new()
 	markers.set_anchors_preset(Control.PRESET_FULL_RECT)
 	markers.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(markers)
+	world_ui.add_child(markers)
 	radial = RadialMenu.new()
 	radial.cam = cam
-	root.add_child(radial)
+	world_ui.add_child(radial)
+	root = Control.new()
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UI.theme()
+	add_child(root)
+	Game.apply_safe(root)
 	_build_top()
 	_build_bottom()
 	_build_info()
@@ -476,6 +482,7 @@ func _build_vignette() -> void:
 	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vignette.modulate.a = 0.0
 	root.add_child(vignette)
+	Game.apply_safe(vignette, true)  # the danger glow reaches the screen edges
 	root.move_child(vignette, 0)
 
 ## Full-screen colour flash that fades out (the winning moment).
@@ -537,7 +544,9 @@ func fly_coins(from: Vector2, n: int) -> void:
 	if gold_l == null:
 		return
 	var tex := Assets.tex("coin")
-	var target := gold_l.get_global_rect().position + Vector2(-26, gold_l.size.y * 0.5)
+	# screen points to the HUD's own space (it sits inside the safe area)
+	from -= root.global_position
+	var target := gold_l.get_global_rect().position + Vector2(-26, gold_l.size.y * 0.5) - root.global_position
 	for i in mini(n, 3):
 		if _coins_live >= 24:
 			return
@@ -616,7 +625,7 @@ func toast(title: String, sub: String, icon: String) -> void:
 
 ## Width of a card in the notice column.
 func note_width() -> float:
-	return root.get_viewport_rect().size.x - 16.0 if Game.tall else 356.0
+	return Game.safe_size().x - 16.0 if Game.tall else 356.0
 
 ## Puts a notice card (built by the caller, not yet in the tree) into the notice column.
 func add_note(p: Control) -> void:
@@ -655,7 +664,7 @@ func _column_top() -> float:
 	var y := 66.0 if Game.tall else 90.0
 	if boss_panel and boss_panel.visible:
 		var br := boss_panel.get_rect()
-		var vs := root.get_viewport_rect().size
+		var vs := Game.safe_size()
 		var col_x := 0.0 if Game.tall else vs.x - 372.0
 		if br.end.x > col_x:
 			y = maxf(y, br.end.y + 8.0)
@@ -670,7 +679,7 @@ func _layout_notes(k: float) -> void:
 	# corner: a notice that would reach it waits (hidden) until one above it has gone
 	var floor_y := INF
 	if not Game.tall and info.visible:
-		floor_y = info.get_global_rect().position.y - 8.0
+		floor_y = info.get_global_rect().position.y - root.global_position.y - 8.0
 	var keep: Array = []
 	for n in _notes:
 		if not is_instance_valid(n) or (n as Node).is_queued_for_deletion():
@@ -727,7 +736,7 @@ func _process(delta: float) -> void:
 ## would cover half of). Runs again when the phone is turned.
 func _apply_layout() -> void:
 	var t := Game.tall
-	var vs := root.get_viewport_rect().size
+	var vs := Game.safe_size()
 	var fs := 22 if t else 28
 	var isz := 28 if t else 36
 	for it in _res_items:
@@ -827,6 +836,9 @@ func set_wave_buttons(points: Array) -> void:
 
 func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, label: String, t: float) -> void:
 	var vs := root.get_viewport_rect().size
+	var sr := Game.safe_rect()  # buttons stay clear of a notch and the home indicator
+	var lo := sr.position
+	var hi := sr.end
 	var keep := _keepout_rects() if visible_flag else []
 	var dt := clampf(t - _wb_t, 0.0, 0.1) if _wb_t >= 0.0 else 0.0
 	_wb_t = t
@@ -836,12 +848,12 @@ func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, lab
 	var spots: Array = []
 	for w in wave_btns:
 		var sp := cam.unproject_position(w["pos"])
-		var at_edge := sp.x < 70.0 or sp.x > vs.x - 70.0
-		sp.x = clampf(sp.x, 70, vs.x - 70)
-		sp.y = clampf(sp.y, 130, vs.y - 140)
+		var at_edge := sp.x < lo.x + 70.0 or sp.x > hi.x - 70.0
+		sp.x = clampf(sp.x, lo.x + 70, hi.x - 70)
+		sp.y = clampf(sp.y, lo.y + 130, hi.y - 140)
 		# keep clear of the hero/spell dock in the bottom-left corner
-		if sp.x < 420.0 and sp.y > vs.y - 250.0:
-			sp.y = vs.y - 250.0
+		if sp.x < lo.x + 420.0 and sp.y > hi.y - 250.0:
+			sp.y = hi.y - 250.0
 		for _k in 3:
 			var moved := false
 			for o in spots:
@@ -854,8 +866,8 @@ func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, lab
 						tries = [tries[2], tries[3], tries[0], tries[1]]
 					for c in tries:
 						var cv: Vector2 = c
-						var bottom := vs.y - (250.0 if cv.x < 420.0 else 140.0)
-						if cv.x >= 70.0 and cv.x <= vs.x - 70.0 and cv.y >= 130.0 and cv.y <= bottom:
+						var bottom := hi.y - (250.0 if cv.x < lo.x + 420.0 else 140.0)
+						if cv.x >= lo.x + 70.0 and cv.x <= hi.x - 70.0 and cv.y >= lo.y + 130.0 and cv.y <= bottom:
 							sp = cv
 							break
 					moved = true

@@ -207,7 +207,15 @@ static func wrap_words(l: Label, width: float) -> void:
 			line = w
 		else:
 			line = cand
-	l.text = out + line
+	out += line
+	# a "word" wider than the line (Japanese has no spaces between words): let the text server
+	# break it instead, at the same width
+	for ln in out.split("\n"):
+		if f.get_string_size(ln, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > width:
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.custom_minimum_size.x = width
+			return
+	l.text = out
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 
 ## Gold-gradient title text with a dark outline and drop shadow (Kingdom-Rush style headings).
@@ -691,13 +699,16 @@ const LANGUAGES := [["", "자동"], ["ko", "한국어"], ["en", "English"], ["ja
 const BODY_INSET := 6
 
 static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
-	var vs := parent.get_viewport_rect().size
+	# sized and placed inside the safe area (notch, home indicator); the dim covers the whole screen
+	var vs := Game.safe_size()
 	var upright := Game.tall
 	var shade := ColorRect.new()
 	shade.color = Color(0.01, 0.02, 0.04, float(opts.get("dim", 0.55)))
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	parent.add_child(shade)
+	if parent.get_meta("safe_inset", false):
+		Game.apply_safe(shade, true)
 	var layer := Control.new()
 	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -710,8 +721,8 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 	st.content_margin_bottom -= 2
 	var ribbon_kind: String = opts.get("ribbon", "")
 	if upright:
-		# a bottom sheet: its trim runs off the bottom edge of the screen
-		st = hd("fs_sheet_up", Vector4(38, 38, 38, 8), Vector4(16, 16, 16, 0), Vector4(st.content_margin_left, st.content_margin_top, st.content_margin_right, st.content_margin_bottom + 8))
+		# a bottom sheet: its trim runs off the bottom edge of the screen, under the home indicator
+		st = hd("fs_sheet_up", Vector4(38, 38, 38, 8), Vector4(16, 16, 16, 0), Vector4(st.content_margin_left, st.content_margin_top, st.content_margin_right, st.content_margin_bottom + 8 + Game.safe.w))
 	if ribbon_kind != "":
 		st.content_margin_top += 30
 	p.add_theme_stylebox_override("panel", st)
@@ -815,16 +826,19 @@ static func sheet(parent: Control, title_text: String, opts := {}) -> Control:
 	var place := func():
 		if not is_instance_valid(p) or not p.is_inside_tree():
 			return
-		var v := parent.get_viewport_rect().size
+		var sr := Game.safe_rect()
+		var v := sr.size
 		var head_h := col.get_combined_minimum_size().y - sc.get_combined_minimum_size().y
 		var room := v.y * (0.92 if upright else 1.0) - 2.0 * margin - st.content_margin_top - st.content_margin_bottom - head_h - (24.0 if rib else 0.0)
+		if upright:
+			room += Game.safe.w  # the bottom padding under the home indicator is part of the sheet
 		sc.custom_minimum_size.y = minf(inner.get_combined_minimum_size().y, maxf(room, 120.0))
 		p.size = Vector2(p.custom_minimum_size.x, 0)
 		p.size = p.get_combined_minimum_size()
 		if upright:
-			p.position = Vector2(0, v.y - p.size.y)
+			p.position = Vector2(sr.position.x, sr.end.y + Game.safe.w - p.size.y)
 		else:
-			p.position = ((v - p.size) * 0.5).round() + Vector2(0, 14 if rib else 0)
+			p.position = (sr.position + (v - p.size) * 0.5).round() + Vector2(0, 14 if rib else 0)
 		if rib:
 			rib.position = Vector2(p.position.x + (p.size.x - rib.size.x) * 0.5, p.position.y - rib.size.y * 0.55)
 	inner.minimum_size_changed.connect(place)

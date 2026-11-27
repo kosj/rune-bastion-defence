@@ -154,6 +154,7 @@ func _ready() -> void:
 	hud.process_mode = Node.PROCESS_MODE_ALWAYS
 	hud.build(cam_rig.cam)
 	Game.layout_changed.connect(_on_layout_changed)
+	Game.backgrounded.connect(_auto_pause)
 	overlay = hud.overlay
 	hud.speed_toggled.connect(_toggle_speed)
 	hud.pause_pressed.connect(_pause)
@@ -1902,8 +1903,11 @@ func hotkey(k: int) -> bool:
 ## Mobile app switch / browser tab hidden: pause so nobody loses lives in the background.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
-		if Game.autopause and state == "playing" and _modal == null and is_inside_tree():
-			_pause()
+		_auto_pause()
+
+func _auto_pause() -> void:
+	if Game.autopause and state == "playing" and _modal == null and is_inside_tree():
+		_pause()
 
 func _toggle_speed() -> void:
 	fast = not fast
@@ -2180,7 +2184,7 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 			# long lines (English especially) wrap inside the card instead of running past its edge
 			nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			nl.custom_minimum_size.x = minf(500.0, hud.root.get_viewport_rect().size.x - 60.0)
+			nl.custom_minimum_size.x = minf(500.0, Game.safe_size().x - 60.0)
 			nl.name = "Note"
 			vb.add_child(nl)
 		# map and retry on the left, the way forward on the right and widest

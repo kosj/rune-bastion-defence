@@ -3,11 +3,13 @@
 # PC(D, 1600x900), 폰 세로(P, 430x932), 폰 가로(L, 932x430)로 찍습니다.
 # 사용: DISPLAY=:77 [UILANG=en|ja|ko] tools/ui_shots.sh <출력 폴더> [동시 실행 수] [형태 필터 D|P|L] [화면 필터]
 #   예: UILANG=en tools/ui_shots.sh /tmp/ui_en 2 "P" "pause|win"
-#   UILANG을 주면 그 언어로 찍습니다(번역이 길어 넘치는 곳 찾기).
+#   UILANG을 주면 그 언어로 찍습니다(번역이 길어 넘치는 곳 찾기). UISAFE는 노치 여백을 흉내 냅니다.
 # 이미 있는 파일은 건너뜁니다. 화면이 느리면(소프트웨어 렌더링) 동시 실행 수를 2 이하로 둡니다.
 out=$1; J=${2:-2}; RF=${3:-.}; NF=${4:-.}; mkdir -p "$out"
 cd "$(dirname "$0")/.."
 LA=""; [ -n "$UILANG" ] && LA="lang=$UILANG"
+# UISAFE=l,t,r,b: 노치·홈 표시줄 여백(캔버스 단위)을 흉내 냅니다. 예: 폰 가로 UISAFE=64,0,64,28
+[ -n "$UISAFE" ] && LA="$LA safe=$UISAFE"
 M="mode=menu progress=1 progress_all=1 max_t=7.5 $LA"
 Lv="level=2 mode=shots intro=0 nowave=1 $LA"
 {

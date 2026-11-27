@@ -45,6 +45,16 @@ var _fade_layer: CanvasLayer
 var _fade_rect: ColorRect
 var _fade_note: Label  # "preparing the battlefield" while the shader warm-up holds the frames
 var _busy := false
+var _vis_cb: JavaScriptObject  # kept alive: the page calls it on visibilitychange / pagehide
+
+## visibilitychange / pagehide: when the page is hidden, keep the progress (a phone may close a
+## background tab without asking) and let a battle pause itself.
+func _on_page_hidden(args: Array) -> void:
+	var ev: JavaScriptObject = args[0] if args.size() > 0 else null
+	var kind := str(ev.type) if ev != null else ""
+	if kind == "pagehide" or str(JavaScriptBridge.eval("document.visibilityState", true)) == "hidden":
+		save()
+		backgrounded.emit()
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -58,8 +68,14 @@ func _ready() -> void:
 		# "?perf=1" in the address: the performance readout for testing on devices (docs/DEVICE_TEST.md)
 		var q := str(JavaScriptBridge.eval("location.search", true))
 		dev = dev or q.contains("dev")
+		var sq := str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('safe') || ''", true))
+		if sq != "" and sq != "null":
+			safe_override = sq
 		if q.contains("perf"):
 			(func(): PerfOverlay.toggle(get_tree())).call_deferred()
+		_vis_cb = JavaScriptBridge.create_callback(_on_page_hidden)
+		(JavaScriptBridge.get_interface("document") as JavaScriptObject).addEventListener("visibilitychange", _vis_cb)
+		(JavaScriptBridge.get_interface("window") as JavaScriptObject).addEventListener("pagehide", _vis_cb)
 	_fade_layer = CanvasLayer.new()
 	_fade_layer.layer = 100
 	add_child(_fade_layer)
@@ -101,14 +117,85 @@ func _fit_ui() -> void:
 		win.content_scale_size = Vector2i(960, 540) if small else Vector2i(1280, 720)
 	# phones have little headroom below the 540-line layouts, so their range is narrower
 	win.content_scale_factor = clampf(ui_scale, 0.9, 1.1) if small else ui_scale
+	_read_safe_area()
+	# a turned phone reports its new insets a moment after the resize
+	if OS.has_feature("web") and is_inside_tree():
+		get_tree().create_timer(0.5).timeout.connect(_read_safe_area)
 	if was_tall != tall:
 		layout_changed.emit()
 
 var compact := false
+
+## Safe area: the edges of the screen a notch, rounded corners or the home indicator cover
+## (left, top, right, bottom, in canvas units). The page fills the whole screen (viewport-fit=cover)
+## so the battlefield runs under them; screens keep their buttons and text inside (apply_safe).
+var safe := Vector4.ZERO
+signal safe_changed
+## Test override (canvas units "l,t,r,b"): test_runner's safe=, or "?safe=" in the page address.
+var safe_override := ""
+
+## Reads the browser's safe-area insets (CSS env(), through a hidden probe element) and converts
+## them from CSS pixels to canvas units.
+func _read_safe_area() -> void:
+	var v := Vector4.ZERO
+	if safe_override != "":
+		var f := safe_override.split_floats(",")
+		if f.size() == 4:
+			v = Vector4(f[0], f[1], f[2], f[3])
+	elif OS.has_feature("web"):
+		var r = JavaScriptBridge.eval("""(() => {
+			let d = document.getElementById('rb_safe');
+			if (!d) {
+				d = document.createElement('div');
+				d.id = 'rb_safe';
+				d.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+					'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+				document.body.appendChild(d);
+			}
+			const s = getComputedStyle(d);
+			return [s.paddingLeft, s.paddingTop, s.paddingRight, s.paddingBottom].map(x => parseFloat(x) || 0).join(',') + ',' + window.innerWidth;
+		})()""", true)
+		var f := str(r).split_floats(",")
+		if f.size() == 5 and f[4] > 0.0:
+			var k := get_tree().root.get_visible_rect().size.x / f[4]
+			v = Vector4(f[0], f[1], f[2], f[3]) * k
+	v = v.round()
+	if v != safe:
+		safe = v
+		safe_changed.emit()
+
+## The part of the screen inside the safe area (canvas units).
+func safe_rect() -> Rect2:
+	var vs := get_tree().root.get_visible_rect().size
+	return Rect2(Vector2(safe.x, safe.y), vs - Vector2(safe.x + safe.z, safe.y + safe.w))
+
+func safe_size() -> Vector2:
+	return safe_rect().size
+
+## Keeps a full-rect Control inside the safe area (its children anchor to the safe edges), now and
+## whenever the insets change. bleed=true does the opposite for a child of such a control: it
+## reaches back out to the screen edges (backdrops, dimmers).
+func apply_safe(c: Control, bleed := false) -> void:
+	var k := -1.0 if bleed else 1.0
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.offset_left = safe.x * k
+	c.offset_top = safe.y * k
+	c.offset_right = -safe.z * k
+	c.offset_bottom = -safe.w * k
+	c.set_meta("safe_inset", not bleed)
+	if not c.has_meta("safe_hooked"):
+		c.set_meta("safe_hooked", true)
+		safe_changed.connect(func():
+			if is_instance_valid(c):
+				apply_safe(c, bleed))
 ## The window is upright (portrait): screens stack their parts vertically and dialogs come up
 ## from the bottom edge as sheets.
 var tall := false
 signal layout_changed
+## The page went to the background (another tab, another app on a phone, the screen locked). The
+## window's blur event, which the engine turns into a focus-out, does not come in every browser
+## (mobile Safari switching apps), so the page's own visibility is watched as well.
+signal backgrounded
 var autopause := true  # off in automated test runs
 var testing := false  # automated runs: skip the first-visit level intros
 ## Recent runs (newest last) for playtest feedback: shared as a code from the settings screen.
