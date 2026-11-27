@@ -50,6 +50,28 @@ var _revive_t := 0.0
 var _summon_cd := 6.0
 var _flinch := 0.0     # procedural recoil on hits (tilts the model back, decays fast)
 var _react_cd := 0.0
+# stealth (shadow rogue): towers other than mages cannot see it until something hurts it or a
+# soldier holds it
+var reveal_t := 0.0
+var _ghost := 0.0
+var _ghost_meshes: Array = []
+var _ghost_mat: StandardMaterial3D
+var _solid_mat: Material
+# shield aura (orc shieldbearer): nearby enemies take less physical damage
+var aura_t := 0.0
+var aura_armor := 0.0
+var _aura_cd := 0.0
+var _aura_fx := 0.0
+var _aura_ring: MeshInstance3D
+# ranged (goblin spear-thrower): stops to throw javelins at soldiers in reach, three at a time
+var _shot_cd := 0.0
+var _throw_t := 0.0
+var _shots := 0
+var _move_on := 0.0
+var _shot_tgt: Soldier
+var _aim_yaw := 0.0
+var _throwing := false
+const GHOST := 0.68     # how see-through a hidden rogue is (0 solid, 1 invisible)
 
 func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 	type = p_type
@@ -59,6 +81,9 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 	hp = max_hp
 	speed = d["speed"] * randf_range(0.95, 1.05)
 	armor = d["armor"]
+	if LevelMain.I:
+		speed *= LevelMain.I.enemy_speed_mult
+		armor = minf(armor + LevelMain.I.enemy_armor_add, 0.9)
 	mr = d["mr"]
 	flying = d.get("flying", false)
 	boss = d.get("boss", false)
@@ -70,7 +95,7 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		lane = randf_range(-1.6, 1.6)
 	var weapon := ""
 	match d["model"]:
-		"goblin": weapon = "w_dagger" if type == "goblin" else ""
+		"goblin": weapon = "w_dagger" if type in ["goblin", "rogue"] else ("p_arrow" if type == "spear" else "")
 		"skeleton_knight": weapon = "w_sword" if type == "skeleton_knight" else "w_dagger"
 		"lich": weapon = ""
 		"orc": weapon = "w_axe"
@@ -84,6 +109,18 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		staff.scale = Vector3.ONE * 0.42
 		staff.position = Vector3(0, height + 0.25, 0)
 		add_child(staff)
+	if d.has("aura"):
+		_aura_ring = LevelMain.I.fx.ground_ring(self, float(d.get("aura_r", 3.0)), Color(0.25, 0.5, 1.0, 0.65))
+	if d.get("stealth", false) and model.body:
+		# its own copy of the (tinted) material with alpha, so each rogue fades on its own
+		_solid_mat = model.body.material_override if model.body.material_override else model.body.mesh.surface_get_material(0)
+		if _solid_mat is StandardMaterial3D:
+			_ghost_mat = (_solid_mat as StandardMaterial3D).duplicate() as StandardMaterial3D
+			_ghost_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		for g in model.find_children("*", "GeometryInstance3D", true, false):
+			if g != model.body:
+				_ghost_meshes.append(g)
+		set_ghost(GHOST)
 	if d["model"] == "wolf" and model.anim == null:
 		model.position.y = 0.42 * sc
 		model.blob_y = 0.14 - model.position.y
@@ -149,6 +186,23 @@ func _process(delta: float) -> void:
 			LevelMain.I.fx.hit_spark(aim_point(), Color(0.55, 1.0, 0.3), 0.5)
 		if not alive:
 			return
+	_aura_fx -= delta
+	if aura_t > 0.0:
+		aura_t -= delta
+		if aura_t <= 0.0:
+			aura_armor = 0.0
+	if d.has("aura"):
+		_shield_aura(delta)
+	if d.get("stealth", false):
+		reveal_t = maxf(reveal_t - delta, 0.0)
+		if engaged:
+			reveal_t = maxf(reveal_t, 0.4)
+		var want := 0.0 if reveal_t > 0.0 else GHOST
+		if absf(_ghost - want) > 0.001:
+			if _ghost == GHOST or _ghost == 0.0:
+				# a wisp of smoke as it slips in or out of the shadows
+				LevelMain.I.fx.smoke(aim_point(), 0.7)
+			set_ghost(move_toward(_ghost, want, delta * 2.5))
 	if stun_t > 0.0:
 		stun_t -= delta
 		return
@@ -178,8 +232,13 @@ func _process(delta: float) -> void:
 	if blocker != null and (not is_instance_valid(blocker) or not blocker.alive or blocker.target != self):
 		blocker = null
 		engaged = false
+	_throwing = false
 	if engaged and blocker != null and not flying:
 		_fight(delta)
+	elif _ranged_update(delta):
+		engaged = false
+		_attacking = 0.0
+		_throwing = true
 	else:
 		engaged = false
 		_attacking = 0.0
@@ -190,6 +249,9 @@ func _process(delta: float) -> void:
 			_reach_exit()
 			return
 	_update_transform(delta)
+	if _throwing:
+		_yaw = lerp_angle(_yaw, _aim_yaw, clampf(delta * 10.0, 0.0, 1.0))
+		model.rotation.y = _yaw
 	_procedural_anim(delta)
 	vel = (global_position - _prev) / delta
 	_prev = global_position
@@ -364,10 +426,15 @@ func damage(amount: float, dtype: String, flash := true, pierce := 0.0) -> void:
 		return
 	var a := amount
 	if dtype == "physical":
-		a *= (1.0 - armor * (1.0 - pierce))
+		a *= (1.0 - minf(armor + aura_armor, 0.9) * (1.0 - pierce))
+		if aura_armor > 0.0 and _aura_fx <= 0.0:
+			_aura_fx = 0.4
+			LevelMain.I.fx.hit_spark(aim_point(), Color(0.5, 0.7, 1.0), 0.7)
 	elif dtype == "magic":
 		a *= (1.0 - mr)
 	hp -= a
+	if a > 0.0 and d.get("stealth", false):
+		reveal_t = maxf(reveal_t, 2.5)
 	if flash and _hit_t <= 0.0:
 		_hit_t = 0.08
 		model.hit_flash()
@@ -381,6 +448,125 @@ func damage(amount: float, dtype: String, flash := true, pierce := 0.0) -> void:
 	if engaged and not boss and _attacking <= 0.0 and _react_cd <= 0.0 and frac >= 0.07 and model.has("hit"):
 		_react_cd = 1.4
 		model.play("hit", 2.0, 0.05, true)
+
+# ------------------------------------------------------------------ new kinds (v7)
+
+## Stealth: can this enemy be seen by towers that cannot see through it (all but mages)?
+func hidden() -> bool:
+	return alive and reveal_t <= 0.0 and d.get("stealth", false)
+
+## Fades the model toward see-through (0 = solid, GHOST = hidden). Solid uses the normal
+## material again (no alpha sorting); the weapon and shadow go while it is faded.
+func set_ghost(a: float) -> void:
+	_ghost = a
+	if model.body == null or _ghost_mat == null:
+		return
+	if a <= 0.001:
+		model.body.material_override = _solid_mat
+		model.body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	else:
+		var c := _ghost_mat.albedo_color
+		c.a = 1.0 - a
+		_ghost_mat.albedo_color = c
+		model.body.material_override = _ghost_mat
+		model.body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for g in _ghost_meshes:
+		if is_instance_valid(g):
+			(g as Node3D).visible = a < 0.3
+
+## Shieldbearer: every quarter second, shields the enemies around it (not itself) for a moment.
+func _shield_aura(delta: float) -> void:
+	if _aura_ring:
+		var k := 1.0 + sin(Time.get_ticks_msec() * 0.004) * 0.04
+		_aura_ring.scale = Vector3(k, 1.0, k) * float(d.get("aura_r", 3.0)) * 2.0
+	_aura_cd -= delta
+	if _aura_cd > 0.0:
+		return
+	_aura_cd = 0.25
+	var r: float = d.get("aura_r", 3.0)
+	for o: Enemy in LevelMain.I.enemies:
+		if o != self and o.alive and o.global_position.distance_to(global_position) < r:
+			o.aura_t = 0.4
+			o.aura_armor = maxf(o.aura_armor, float(d["aura"]))
+
+## Spear-thrower: true while it stands and throws (the caller then does not walk it on).
+func _ranged_update(delta: float) -> bool:
+	if not d.has("ranged") or flying:
+		return false
+	var rd: Dictionary = d["ranged"]
+	_shot_cd -= delta
+	if _throw_t > 0.0:
+		_throw_t -= delta
+		if _throw_t <= 0.0:
+			_throw_javelin(rd)
+		return true
+	if _move_on > 0.0:
+		_move_on -= delta
+		return false
+	var tgt := _ranged_target(float(rd["range"]))
+	if tgt == null:
+		return false
+	var to := tgt.global_position - global_position
+	_aim_yaw = atan2(to.x, to.z)
+	if _shot_cd <= 0.0:
+		_shot_cd = float(rd["rate"])
+		_shot_tgt = tgt
+		model.play("attack", 1.3, 0.06, true)
+		_throw_t = CharacterModel.ATTACK_IMPACT / 1.3
+	elif model.current == "run":
+		model.play("attack", 0.0001)
+	return true
+
+func _ranged_target(r: float) -> Soldier:
+	var best: Soldier = null
+	var bd := r
+	for s: Soldier in LevelMain.I.soldiers:
+		if not is_instance_valid(s) or not s.alive:
+			continue
+		var dd := Vector2(s.global_position.x - global_position.x, s.global_position.z - global_position.z).length()
+		if dd < bd:
+			bd = dd
+			best = s
+	return best
+
+## One javelin on an arc at the soldier picked at wind-up; after the third it walks on a while.
+func _throw_javelin(rd: Dictionary) -> void:
+	_shots += 1
+	if _shots >= 3:
+		_shots = 0
+		_move_on = 2.5
+	var s := _shot_tgt
+	if s == null or not is_instance_valid(s) or not s.alive:
+		return
+	var lv := LevelMain.I
+	var from := aim_point() + Vector3(0, 0.3, 0)
+	var to := s.aim_point()
+	var jv := Assets.instance("p_arrow")
+	jv.scale = Vector3(1.4, 1.9, 1.4)
+	lv.world.add_child(jv)
+	jv.global_position = from
+	var dist := from.distance_to(to)
+	var dur := clampf(dist / 12.0, 0.25, 0.6)
+	var h := dist * 0.18
+	var dmg_v := randf_range(rd["dmg"][0], rd["dmg"][1]) * lv.enemy_dmg_mult
+	var fly := func(t: float) -> void:
+		var p := from.lerp(to, t) + Vector3(0, sin(t * PI) * h, 0)
+		var t2 := minf(t + 0.05, 1.0)
+		var nxt := from.lerp(to, t2) + Vector3(0, sin(t2 * PI) * h, 0)
+		jv.global_position = p
+		var dv := nxt - p
+		if dv.length() > 0.001 and absf(dv.normalized().y) < 0.98:
+			jv.look_at(nxt, Vector3.UP)
+			jv.rotate_object_local(Vector3.RIGHT, -PI * 0.5)
+	var land := func() -> void:
+		if is_instance_valid(s) and s.alive:
+			s.take_damage(dmg_v)
+			lv.fx.hit_spark(s.aim_point(), Color(1.0, 0.8, 0.5), 0.6)
+		jv.queue_free()
+	var tw := jv.create_tween()
+	tw.tween_method(fly, 0.0, 1.0, dur)
+	tw.tween_callback(land)
+	Audio.play("bow", -12.0, 0.15, 2)
 
 func slow(mult: float, t: float) -> void:
 	if boss:

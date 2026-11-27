@@ -164,7 +164,10 @@ func attach_weapon(weapon: String, bone := "RightHand") -> void:
 		"w_axe": s = 0.46
 		"w_club": s = 0.36
 		"w_dagger": s = 0.55
+		"p_arrow": s = 0.95  # the spear-thrower's javelin (the arrow model, stretched)
 	w.scale = Vector3.ONE * s
+	if weapon == "p_arrow":
+		w.scale = Vector3(s, s * 1.3, s)
 	w.rotation_degrees = WEAPON_ROT
 	w.position = WEAPON_POS
 

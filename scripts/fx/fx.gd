@@ -146,6 +146,25 @@ func _flat_decal(pos: Vector3, t: String, size: float, col: Color, additive: boo
 	tw.chain().tween_callback(mi.queue_free)
 	return mi
 
+## A glowing ring on the ground that stays with its parent (the shieldbearer's aura); the same
+## material as the flat decals, so nothing new to compile. Scale it to resize (1 = 1 m across).
+func ground_ring(parent: Node3D, r: float, col: Color) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = _flat
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.albedo_texture = tex("fx_ring")
+	m.albedo_color = col
+	m.disable_receive_shadows = true
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	mi.position = Vector3(0, 0.1, 0)
+	mi.scale = Vector3.ONE * r * 2.0
+	return mi
+
 func light_flash(pos: Vector3, c: Color, energy := 3.0, rng := 6.0, life := 0.25) -> void:
 	if not hq or _lights >= 4:
 		return
@@ -483,6 +502,38 @@ func lightning(a: Vector3, b: Vector3, c: Color) -> void:
 	var tw := holder.create_tween()
 	tw.tween_property(m, "albedo_color:a", 0.0, 0.25).set_delay(0.05)
 	tw.tween_callback(holder.queue_free)
+
+## A straight streak of light from a to b that fades out (the wake of Ren's piercing arrow).
+## Same material as lightning(), so nothing new to compile.
+func streak(a: Vector3, b: Vector3, c: Color, w := 0.5, life := 0.45) -> void:
+	if _cam == null and LevelMain.I:
+		_cam = LevelMain.I.cam_rig.cam
+	var dir := b - a
+	var l := dir.length()
+	if l < 0.01:
+		return
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.albedo_texture = tex("fx_beam")
+	m.albedo_color = c.lightened(0.2)
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(1, w)
+	mi.mesh = q
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	var xa := dir / l
+	var mid := (a + b) * 0.5
+	var to_cam := (_cam.global_position - mid).normalized() if _cam else Vector3.UP
+	var ya := to_cam.cross(xa).normalized()
+	mi.global_transform = Transform3D(Basis(xa * l, ya, xa.cross(ya)), mid)
+	var tw := mi.create_tween()
+	tw.tween_property(m, "albedo_color:a", 0.0, life).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.tween_callback(mi.queue_free)
 
 func trail(parent: Node3D, c: Color, size: float, smoky := false, head := Color(1, 1, 1, 1)) -> CPUParticles3D:
 	var p := CPUParticles3D.new()

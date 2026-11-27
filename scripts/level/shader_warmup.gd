@@ -66,6 +66,15 @@ static func run(L: LevelMain) -> void:
 		si += 1
 		if dummy == null:
 			dummy = e
+		# a shadow rogue is drawn see-through until revealed: both looks
+		if DB.ENEMIES[type].get("stealth", false):
+			var e2 := Enemy.new()
+			root.add_child(e2)
+			e2.setup(type, L.paths[0], 1.0)
+			e2.process_mode = Node.PROCESS_MODE_DISABLED
+			e2.global_position = spots[si % spots.size()]
+			si += 1
+			e2.set_ghost(0.0)
 		# the overlays enemies get when hit or frozen are materials of their own
 		if k == 1:
 			e.model.hit_flash()

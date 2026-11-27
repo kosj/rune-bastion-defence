@@ -101,6 +101,18 @@ const ENEMIES := {
 	"ogre": {"name": "바위 오우거", "model": "ogre", "hp": 950, "speed": 0.95, "armor": 0.25, "mr": 0.25,
 		"gold": 62, "lives": 3, "dmg": [24, 34], "atk_rate": 2.0, "scale": 3.0,
 		"slam": true, "desc": "거대한 체력, 내려찍기로 병사 기절"},
+	"spear": {"name": "고블린 투창병", "model": "goblin", "hp": 55, "speed": 2.1, "armor": 0.0, "mr": 0.0,
+		"gold": 8, "lives": 1, "dmg": [2, 4], "atk_rate": 1.0, "scale": 1.4, "tint": Color(1.0, 0.7, 0.42),
+		"ranged": {"range": 4.5, "dmg": [5, 8], "rate": 1.8},
+		"desc": "멈춰 서서 병사에게 투창을 던짐 → 병사를 붙여 막거나 궁수로 먼저 처치"},
+	"rogue": {"name": "그림자 도적", "model": "goblin", "hp": 75, "speed": 2.6, "armor": 0.1, "mr": 0.2,
+		"gold": 9, "lives": 1, "dmg": [3, 6], "atk_rate": 0.9, "scale": 1.45, "tint": Color(0.4, 0.33, 0.68),
+		"stealth": true,
+		"desc": "은신 - 궁수·포병이 보지 못함. 피해를 입거나 병사에게 막히면 드러남 → 마법사·병영"},
+	"shield": {"name": "오크 방패병", "model": "orc", "hp": 280, "speed": 1.25, "armor": 0.45, "mr": 0.1,
+		"gold": 22, "lives": 2, "dmg": [5, 9], "atk_rate": 1.3, "scale": 2.25, "tint": Color(0.48, 0.62, 1.0),
+		"aura": 0.3, "aura_r": 3.0,
+		"desc": "방패 진형 - 주변 적의 방어력 +30% → 마법으로 먼저 처치"},
 	"troll": {"name": "트롤 군주 그롬", "model": "troll", "hp": 4200, "speed": 0.8, "armor": 0.3, "mr": 0.3,
 		"gold": 400, "lives": 10, "dmg": [35, 55], "atk_rate": 2.2, "scale": 4.2, "boss": true, "slam": true, "enrage_summon": "goblin", "title": "협곡을 짓밟는 자",
 		"desc": "보스 - 체력 50%에서 격노하여 고블린 소환"},
@@ -157,6 +169,8 @@ const HEROES := {
 		"desc": "근접 탱커. 적을 몸으로 막아 세우고, 주변을 불태우는 검무로 무리를 쓸어버립니다.",
 		"hp": 320, "dmg": [12, 18], "armor": 0.4, "atk_rate": 0.9, "speed": 4.2, "ranged": false,
 		"respawn": 14.0, "regen": 8.0, "skill_cd": 14.0, "skill_dmg": 70, "skill_radius": 3.2, "unlock": -1,
+		"skill2": {"id": "charge", "icon": "skill_charge", "name": "화염 돌진", "cd": 18.0, "dmg": 55, "stun": 1.5,
+			"reach": 7.0, "voice": "kael_move", "desc": "적이 몰린 곳으로 돌진해 지나는 길의 적에게 피해를 주고 기절시킵니다."},
 	},
 	"sera": {
 		"name": "별빛 마법사 세라", "title": "별의 대마법사", "model": "sera", "scale": 1.8, "weapon": "",
@@ -165,6 +179,8 @@ const HEROES := {
 		"hp": 210, "dmg": [15, 23], "armor": 0.1, "atk_rate": 1.15, "speed": 4.0, "ranged": true, "range": 6.2,
 		"respawn": 14.0, "regen": 6.0, "skill_cd": 16.0, "skill_dmg": 75, "skill_radius": 3.6, "skill_slow": 0.6,
 		"unlock": 1,
+		"skill2": {"id": "ward", "icon": "skill_ward", "name": "별빛 결계", "cd": 22.0, "dmg": 16, "time": 5.0, "slow": 0.5,
+			"radius": 3.0, "voice": "sera_select", "desc": "5초 동안 결계를 펼쳐 안에 든 적을 느리게 하고 계속 마법 피해를 줍니다."},
 	},
 	"ren": {
 		"name": "숲의 사수 렌", "title": "바람의 명궁", "model": "ranger", "scale": 1.85, "weapon": "",
@@ -174,9 +190,13 @@ const HEROES := {
 		"projectile": "arrow", "pierce": 0.3,
 		"respawn": 13.0, "regen": 6.0, "skill_cd": 15.0, "skill_dmg": 70, "skill_radius": 3.4, "skill_slow": 0.65,
 		"unlock": 3,
+		"skill2": {"id": "pierce", "icon": "skill_pierce", "name": "꿰뚫는 화살", "cd": 16.0, "dmg": 120, "length": 14.0,
+			"voice": "ren_select", "desc": "일직선으로 날아가며 맞는 적 모두에게 방어를 무시하는 큰 피해를 줍니다."},
 	},
 }
 const HERO_XP := [0, 120, 320, 650, 1100]
+## The hero's second skill opens at this battle level (the level resets every battle).
+const SKILL2_LEVEL := 3
 
 ## Persistent hero progression: experience earned in battle accumulates across regions into a rank;
 ## every rank gives one talent point (talents: 3 levels each).
@@ -255,6 +275,9 @@ const ACHIEVEMENTS := [
 	{"id": "endless30", "name": "불멸의 성채", "desc": "무한 모드 30웨이브 도달", "stat": "endless_wave", "goal": 30, "icon": "crown"},
 	{"id": "lich", "name": "망자의 안식", "desc": "리치 군주 모르가스 처치", "stat": "lich_kills", "goal": 1, "icon": "portrait_lich"},
 	{"id": "abilities", "name": "룬 장인", "desc": "타워 특수 능력 10회 습득", "stat": "abilities", "goal": 10, "icon": "a_teleport"},
+	{"id": "daily1", "name": "오늘의 용사", "desc": "오늘의 도전 첫 성공", "stat": "daily_wins", "goal": 1, "icon": "ic_daily"},
+	{"id": "daily7", "name": "한 주의 수호자", "desc": "오늘의 도전 7회 성공", "stat": "daily_wins", "goal": 7, "icon": "ic_daily"},
+	{"id": "streak3", "name": "꾸준한 방패", "desc": "오늘의 도전 3일 연속 성공", "stat": "daily_streak_best", "goal": 3, "icon": "ic_daily"},
 ]
 
 ## Procedural escalating waves for endless mode: a growing "threat budget" spent on
@@ -263,8 +286,9 @@ static func endless_waves(count: int, paths: int, seed_v: int) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var out := []
-	var pool := [["goblin", 1, 1.0], ["wolf", 2, 1.3], ["orc", 4, 6.0], ["shaman", 5, 2.2], ["gargoyle", 6, 2.8],
-		["sapper", 7, 2.4], ["skeleton", 4, 1.4], ["skeleton_knight", 9, 8.0], ["warchief", 9, 18.0], ["ogre", 11, 26.0]]
+	var pool := [["goblin", 1, 1.0], ["wolf", 2, 1.3], ["spear", 3, 2.0], ["orc", 4, 6.0], ["shaman", 5, 2.2], ["gargoyle", 6, 2.8],
+		["rogue", 6, 2.6], ["sapper", 7, 2.4], ["skeleton", 4, 1.4], ["skeleton_knight", 9, 8.0], ["warchief", 9, 18.0],
+		["shield", 10, 9.0], ["ogre", 11, 26.0]]
 	for n in range(1, count + 1):
 		var budget := 6.0 + n * 3.0 + pow(n, 1.3) * 0.9
 		var wave := []
@@ -296,6 +320,50 @@ static func endless_waves(count: int, paths: int, seed_v: int) -> Array:
 static func endless_hp_scale(wave_idx: int) -> float:
 	return 1.0 + wave_idx * 0.03 + pow(maxf(wave_idx - 15, 0), 1.3) * 0.015
 
+
+## Daily challenge: one region the player has cleared and two twists, the same for everyone on a
+## given day (seeded by the date). The first win of the day gives hero experience and counts toward
+## the streak and the daily achievements.
+const DAILY_MODS := {
+	"swift": {"name": "질주", "desc": "적 이동 속도 +25%", "icon": "speed2"},
+	"armored": {"name": "강철 군단", "desc": "적 방어력 +20%", "icon": "st_armor"},
+	"thrifty": {"name": "빈 금고", "desc": "시작 골드 -30%", "icon": "coin"},
+	"glass": {"name": "무너진 성벽", "desc": "생명 10", "icon": "heart"},
+	"no_hero": {"name": "영웅 부재", "desc": "영웅 없이 싸웁니다", "icon": "ic_hero"},
+	"no_spells": {"name": "고요한 하늘", "desc": "주문을 쓸 수 없습니다", "icon": "spell_meteor"},
+	"horde": {"name": "대군세", "desc": "적 수 +25%", "icon": "skull"},
+	"no_barracks": {"name": "병영 금지", "desc": "병영을 지을 수 없습니다", "icon": "tower_barracks_1"},
+	"no_mage": {"name": "마법 봉인", "desc": "마법사 탑을 지을 수 없습니다", "icon": "tower_mage_1"},
+}
+## Pairs too harsh together (the region could become unwinnable).
+const DAILY_CLASH := [["no_barracks", "no_mage"], ["glass", "horde"], ["no_hero", "no_spells"]]
+const DAILY_XP := 300
+
+## Today's challenge for a day number (days since 1970 in local time): {"level", "mods"}.
+static func daily_for(day: int, cleared: Array) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = day * 7919 + 17
+	var pool: Array = cleared.duplicate()
+	if pool.size() > 1:
+		pool.erase(0)  # the tutorial only while it is all there is
+	if pool.is_empty():
+		pool = [0]
+	var lv: int = pool[rng.randi() % pool.size()]
+	var keys: Array = DAILY_MODS.keys()
+	var mods: Array = []
+	var guard := 0
+	while mods.size() < 2 and guard < 50:
+		guard += 1
+		var m: String = keys[rng.randi() % keys.size()]
+		if m in mods:
+			continue
+		var ok := true
+		for c in DAILY_CLASH:
+			if m in c and mods.size() > 0 and (mods[0] in c):
+				ok = false
+		if ok:
+			mods.append(m)
+	return {"level": lv, "mods": mods}
 
 const SPELLS := {
 	"meteor": {"name": "유성 낙하", "cd": 40.0, "dmg": 90, "radius": 2.6, "count": 5},
@@ -336,7 +404,7 @@ const LEVELS := [
 			[["orc", 2, 3.0, 0.0, 0], ["goblin", 3, 1.28, 2.0, 0]],
 			[["wolf", 8, 0.6, 0.0, 0], ["goblin", 6, 0.9, 4.0, 0]],
 			[["orc", 2, 4.0, 0.0, 0], ["shaman", 3, 1.5, 3.0, 0], ["goblin", 4, 1.12, 5.0, 0]],
-			[["goblin", 23, 0.3, 0.0, 0], ["wolf", 8, 0.4, 6.0, 0]],
+			[["goblin", 22, 0.31, 0.0, 0], ["wolf", 8, 0.4, 6.0, 0]],
 			[["orc", 4, 2.93, 0.0, 0], ["shaman", 2, 2.5, 2.0, 0], ["wolf", 3, 1.12, 8.0, 0]],
 			[["goblin", 12, 0.57, 0.0, 0], ["orc", 4, 2.0, 3.0, 0], ["shaman", 3, 2.0, 6.0, 0]],
 			[["warchief", 1, 1.0, 0.0, 0], ["orc", 4, 2.4, 2.0, 0], ["goblin", 8, 0.77, 4.0, 0], ["wolf", 5, 0.75, 10.0, 0]],
@@ -345,7 +413,7 @@ const LEVELS := [
 	{
 		"id": "twinfords", "name": "쌍둥이 여울", "subtitle": "두 갈래의 침공로",
 		"desc": "강을 건너 두 방향에서 적이 몰려옵니다. 하늘과 폭탄병을 조심하세요.",
-		"gold": 450, "lives": 20, "hp_mult": 1.01, "theme": "river",
+		"gold": 450, "lives": 20, "hp_mult": 0.97, "theme": "river",
 		"paths": [
 			[[-38, -15], [-28, -15], [-20, -12], [-12, -10], [-6, -8], [0, -3], [5, 0], [12, 1], [17, -5], [24, -7], [30, -3], [37, -3]],
 			[[-38, 14], [-28, 14], [-20, 11], [-12, 9], [-6, 7], [0, 3], [5, 0], [12, 1], [17, -5], [24, -7], [30, -3], [37, -3]],
@@ -354,16 +422,16 @@ const LEVELS := [
 		"waves": [
 			[["goblin", 7, 0.83, 0.0, 0], ["goblin", 8, 0.71, 2.0, 1]],
 			[["wolf", 6, 0.56, 0.0, 0], ["goblin", 9, 0.7, 1.0, 1]],
-			[["gargoyle", 4, 1.5, 0.0, 0], ["goblin", 8, 0.8, 2.0, 1]],
+			[["gargoyle", 4, 1.5, 0.0, 0], ["spear", 4, 1.6, 2.0, 1]],
 			[["orc", 2, 4.0, 0.0, 0], ["orc", 2, 4.0, 1.0, 1], ["shaman", 2, 3.0, 4.0, 0]],
 			[["gargoyle", 5, 1.5, 0.0, 1], ["wolf", 5, 0.8, 3.0, 0]],
 			[["sapper", 5, 1.0, 0.0, 0], ["goblin", 17, 0.34, 0.0, 1], ["goblin", 10, 0.33, 4.0, 0]],
-			[["orc", 4, 2.67, 0.0, 0], ["gargoyle", 5, 1.25, 3.0, 1], ["wolf", 6, 0.6, 6.0, 0]],
-			[["warchief", 1, 1.0, 0.0, 1], ["orc", 2, 3.2, 2.0, 1], ["goblin", 8, 0.8, 0.0, 0], ["sapper", 2, 2.0, 6.0, 0]],
+			[["orc", 4, 2.67, 0.0, 0], ["gargoyle", 5, 1.25, 3.0, 1], ["wolf", 7, 0.5, 6.0, 0]],
+			[["warchief", 1, 1.0, 0.0, 1], ["orc", 2, 3.2, 2.0, 1], ["spear", 5, 1.2, 0.0, 0], ["sapper", 2, 2.0, 6.0, 0]],
 			[["gargoyle", 10, 0.8, 0.0, 0], ["wolf", 9, 0.56, 2.0, 1], ["shaman", 3, 2.0, 4.0, 0]],
 			[["orc", 5, 2.25, 0.0, 0], ["orc", 5, 2.25, 0.0, 1], ["sapper", 3, 2.25, 5.0, 1], ["gargoyle", 5, 1.0, 6.0, 1]],
-			[["warchief", 2, 4.0, 0.0, 0], ["goblin", 17, 0.42, 0.0, 1], ["wolf", 10, 0.43, 6.0, 1], ["gargoyle", 9, 0.7, 8.0, 0]],
-			[["warchief", 2, 3.0, 0.0, 1], ["orc", 8, 1.3, 2.0, 0], ["shaman", 3, 3.0, 4.0, 1], ["gargoyle", 8, 0.75, 6.0, 0], ["sapper", 3, 1.3, 9.0, 1]],
+			[["warchief", 2, 4.0, 0.0, 0], ["goblin", 19, 0.38, 0.0, 1], ["wolf", 10, 0.43, 6.0, 1], ["gargoyle", 9, 0.7, 8.0, 0]],
+			[["warchief", 2, 3.0, 0.0, 1], ["orc", 8, 1.3, 2.0, 0], ["shaman", 3, 3.0, 4.0, 1], ["gargoyle", 8, 0.75, 6.0, 0], ["sapper", 4, 0.87, 9.0, 1]],
 		],
 	},
 	{
@@ -379,66 +447,66 @@ const LEVELS := [
 			[["wolf", 9, 0.64, 0.0, 0], ["gargoyle", 3, 1.8, 4.0, 0]],
 			[["ogre", 1, 1.0, 0.0, 0], ["goblin", 3, 0.8, 2.0, 0]],
 			[["sapper", 3, 2.4, 0.0, 0], ["orc", 4, 2.0, 3.0, 0], ["wolf", 8, 0.5, 6.0, 0]],
-			[["gargoyle", 10, 0.8, 0.0, 0], ["shaman", 3, 2.0, 2.0, 0], ["goblin", 10, 0.61, 4.0, 0]],
+			[["gargoyle", 10, 0.8, 0.0, 0], ["shaman", 3, 2.0, 2.0, 0], ["spear", 6, 1.0, 4.0, 0]],
 			[["ogre", 1, 6.0, 0.0, 0], ["wolf", 9, 0.55, 3.0, 0], ["orc", 2, 2.88, 6.0, 0]],
 			[["warchief", 1, 1.0, 0.0, 0], ["orc", 4, 2.24, 1.0, 0], ["sapper", 3, 2.1, 5.0, 0], ["gargoyle", 4, 1.44, 6.0, 0]],
-			[["wolf", 34, 0.28, 0.0, 0], ["goblin", 27, 0.28, 3.0, 0], ["shaman", 7, 0.9, 5.0, 0]],
+			[["wolf", 34, 0.28, 0.0, 0], ["goblin", 28, 0.28, 3.0, 0], ["shaman", 7, 0.9, 5.0, 0]],
 			[["ogre", 2, 6.0, 0.0, 0], ["orc", 8, 1.3, 2.0, 0], ["gargoyle", 9, 0.79, 6.0, 0]],
-			[["warchief", 2, 4.0, 0.0, 0], ["ogre", 2, 6.0, 3.0, 0], ["wolf", 14, 0.4, 5.0, 0], ["sapper", 5, 1.2, 9.0, 0], ["gargoyle", 7, 0.93, 12.0, 0]],
+			[["warchief", 2, 4.0, 0.0, 0], ["ogre", 2, 6.0, 3.0, 0], ["wolf", 15, 0.37, 5.0, 0], ["sapper", 5, 1.2, 9.0, 0], ["gargoyle", 7, 0.93, 12.0, 0]],
 		],
 	},
 	{
 		"id": "moonwood", "name": "달빛 숲", "subtitle": "밤의 습격",
 		"desc": "달빛 아래 두 갈래 숲길로 가고일과 폭탄병이 숨어듭니다.",
-		"gold": 560, "lives": 20, "hp_mult": 0.88, "theme": "night",
+		"gold": 560, "lives": 20, "hp_mult": 0.85, "theme": "night",
 		"paths": [
 			[[-38, -15], [-26, -15], [-18, -8], [-10, -8], [-4, -2], [4, -2], [10, 4], [18, 4], [24, -2], [30, -2], [37, -2]],
 			[[-16, 28], [-16, 18], [-12, 10], [-8, 4], [-4, -2], [4, -2], [10, 4], [18, 4], [24, -2], [30, -2], [37, -2]],
 		],
 		"plots_auto": 15, "hero_start": [2, 2], "bounds": [-30, 30, -18, 17],
 		"waves": [
-			[["goblin", 10, 0.62, 0.0, 0], ["goblin", 11, 0.56, 1.0, 1]],
-			[["gargoyle", 4, 1.2, 0.0, 0], ["wolf", 5, 0.75, 2.0, 1]],
+			[["goblin", 10, 0.62, 0.0, 0], ["spear", 6, 1.0, 1.0, 1]],
+			[["gargoyle", 4, 1.2, 0.0, 0], ["wolf", 6, 0.6, 2.0, 1]],
 			[["orc", 3, 3.0, 0.0, 1], ["sapper", 4, 1.07, 2.0, 0], ["shaman", 2, 2.5, 4.0, 1]],
 			[["wolf", 10, 0.39, 0.0, 0], ["wolf", 10, 0.39, 0.0, 1]],
-			[["ogre", 1, 1.0, 0.0, 0], ["gargoyle", 3, 1.28, 2.0, 1], ["goblin", 3, 0.8, 4.0, 0]],
-			[["sapper", 5, 1.2, 0.0, 1], ["orc", 5, 2.0, 2.0, 0], ["shaman", 3, 2.0, 4.0, 0]],
-			[["gargoyle", 13, 0.58, 0.0, 0], ["goblin", 17, 0.37, 2.0, 1]],
+			[["ogre", 1, 1.0, 0.0, 0], ["gargoyle", 3, 1.28, 2.0, 1], ["rogue", 3, 1.5, 4.0, 0]],
+			[["sapper", 4, 1.6, 0.0, 1], ["orc", 6, 1.6, 2.0, 0], ["shaman", 3, 2.0, 4.0, 0]],
+			[["gargoyle", 11, 0.7, 0.0, 0], ["rogue", 8, 0.8, 2.0, 1]],
 			[["warchief", 1, 1.0, 0.0, 0], ["orc", 2, 2.56, 1.0, 0], ["ogre", 1, 1.0, 8.0, 1], ["wolf", 3, 0.72, 10.0, 1]],
-			[["sapper", 7, 0.83, 0.0, 0], ["sapper", 8, 0.71, 0.0, 1], ["gargoyle", 11, 0.56, 5.0, 0]],
-			[["ogre", 2, 5.0, 0.0, 0], ["ogre", 1, 5.0, 2.0, 1], ["shaman", 3, 2.56, 4.0, 0], ["goblin", 13, 0.5, 6.0, 1]],
-			[["warchief", 2, 3.0, 0.0, 1], ["orc", 10, 1.1, 2.0, 0], ["gargoyle", 11, 0.66, 6.0, 1]],
-			[["wolf", 15, 0.33, 0.0, 0], ["sapper", 6, 0.88, 3.0, 1], ["ogre", 2, 7.0, 7.0, 0], ["gargoyle", 11, 0.49, 9.0, 1]],
-			[["warchief", 2, 4.0, 0.0, 0], ["ogre", 2, 6.0, 3.0, 1], ["orc", 10, 0.8, 4.0, 1], ["shaman", 4, 1.6, 6.0, 0], ["gargoyle", 11, 0.59, 10.0, 0]],
+			[["sapper", 6, 1.0, 0.0, 0], ["sapper", 8, 0.71, 0.0, 1], ["gargoyle", 12, 0.51, 5.0, 0]],
+			[["ogre", 2, 5.0, 0.0, 0], ["ogre", 1, 5.0, 2.0, 1], ["shaman", 3, 2.56, 4.0, 0], ["rogue", 4, 1.71, 6.0, 1]],
+			[["warchief", 2, 3.0, 0.0, 1], ["orc", 11, 0.99, 2.0, 0], ["gargoyle", 10, 0.73, 6.0, 1]],
+			[["wolf", 17, 0.29, 0.0, 0], ["sapper", 6, 0.88, 3.0, 1], ["ogre", 2, 7.0, 7.0, 0], ["gargoyle", 11, 0.49, 9.0, 1]],
+			[["warchief", 2, 4.0, 0.0, 0], ["ogre", 2, 6.0, 3.0, 1], ["orc", 10, 0.8, 4.0, 1], ["shaman", 4, 1.6, 6.0, 0], ["gargoyle", 13, 0.49, 10.0, 0]],
 		],
 	},
 	{
 		"id": "trollgorge", "name": "트롤왕의 협곡", "subtitle": "트롤 군주의 진군",
 		"desc": "황혼의 협곡. 트롤 군주 그롬이 직접 진군합니다.",
-		"gold": 620, "lives": 20, "hp_mult": 1.14, "theme": "autumn",
+		"gold": 620, "lives": 20, "hp_mult": 1.11, "theme": "autumn",
 		"paths": [[[-38, -7], [-28, -7], [-24, -15], [-14, -16], [-10, -7], [-14, 3], [-9, 12], [1, 12], [6, 3], [4, -7], [11, -14], [19, -12], [22, -3], [18, 7], [25, 13], [37, 13]]],
 		"plots_auto": 16, "hero_start": [0, 4], "bounds": [-30, 30, -19, 17],
 		"waves": [
-			[["goblin", 12, 0.57, 0.0, 0], ["wolf", 6, 0.48, 5.0, 0]],
-			[["orc", 3, 3.0, 0.0, 0], ["goblin", 9, 0.67, 2.0, 0]],
-			[["gargoyle", 5, 1.25, 0.0, 0], ["wolf", 6, 0.7, 4.0, 0], ["sapper", 2, 2.0, 6.0, 0]],
-			[["shaman", 3, 2.25, 0.0, 0], ["orc", 3, 2.88, 2.0, 0], ["goblin", 6, 0.8, 6.0, 0]],
+			[["goblin", 13, 0.52, 0.0, 0], ["wolf", 6, 0.48, 5.0, 0]],
+			[["orc", 3, 3.0, 0.0, 0], ["goblin", 11, 0.54, 2.0, 0]],
+			[["gargoyle", 5, 1.25, 0.0, 0], ["wolf", 7, 0.58, 4.0, 0], ["sapper", 2, 2.0, 6.0, 0]],
+			[["shaman", 3, 2.25, 0.0, 0], ["orc", 3, 2.88, 2.0, 0], ["spear", 4, 1.33, 6.0, 0]],
 			[["ogre", 1, 1.0, 0.0, 0], ["gargoyle", 3, 1.28, 2.0, 0], ["wolf", 3, 0.64, 5.0, 0]],
-			[["warchief", 1, 1.0, 0.0, 0], ["orc", 3, 2.08, 1.0, 0], ["sapper", 3, 2.1, 5.0, 0]],
-			[["goblin", 24, 0.32, 0.0, 0], ["gargoyle", 11, 0.63, 4.0, 0]],
-			[["ogre", 1, 5.0, 0.0, 0], ["orc", 4, 1.92, 2.0, 0], ["wolf", 7, 0.64, 6.0, 0]],
+			[["warchief", 1, 1.0, 0.0, 0], ["orc", 3, 2.08, 1.0, 0], ["sapper", 4, 1.4, 5.0, 0]],
+			[["rogue", 10, 0.67, 0.0, 0], ["gargoyle", 9, 0.79, 4.0, 0]],
+			[["ogre", 1, 5.0, 0.0, 0], ["shield", 2, 4.16, 2.0, 0], ["wolf", 8, 0.55, 6.0, 0]],
 			[["gargoyle", 13, 0.55, 0.0, 0], ["shaman", 5, 1.5, 2.0, 0], ["sapper", 5, 1.2, 6.0, 0]],
-			[["warchief", 2, 3.5, 0.0, 0], ["goblin", 25, 0.32, 1.0, 0], ["wolf", 22, 0.28, 8.0, 0]],
-			[["ogre", 3, 4.0, 0.0, 0], ["orc", 8, 1.41, 2.0, 0], ["shaman", 4, 2.13, 6.0, 0]],
-			[["gargoyle", 21, 0.38, 0.0, 0], ["sapper", 8, 0.71, 3.0, 0], ["wolf", 20, 0.28, 6.0, 0]],
+			[["warchief", 2, 3.5, 0.0, 0], ["goblin", 26, 0.31, 1.0, 0], ["wolf", 22, 0.28, 8.0, 0]],
+			[["ogre", 3, 4.0, 0.0, 0], ["orc", 5, 1.41, 2.0, 0], ["shield", 2, 3.0, 4.0, 0], ["shaman", 3, 3.19, 6.0, 0]],
+			[["gargoyle", 21, 0.38, 0.0, 0], ["sapper", 8, 0.71, 3.0, 0], ["wolf", 21, 0.28, 6.0, 0]],
 			[["warchief", 3, 3.0, 0.0, 0], ["ogre", 1, 6.0, 4.0, 0], ["orc", 9, 1.38, 6.0, 0], ["gargoyle", 6, 1.12, 10.0, 0]],
-			[["troll", 1, 1.0, 6.0, 0], ["orc", 14, 0.83, 0.0, 0], ["warchief", 2, 4.0, 10.0, 0], ["goblin", 23, 0.35, 14.0, 0], ["gargoyle", 12, 0.65, 18.0, 0], ["ogre", 2, 6.0, 24.0, 0]],
+			[["troll", 1, 1.0, 6.0, 0], ["orc", 14, 0.83, 0.0, 0], ["warchief", 2, 4.0, 10.0, 0], ["goblin", 23, 0.35, 14.0, 0], ["gargoyle", 13, 0.6, 18.0, 0], ["ogre", 2, 6.0, 24.0, 0]],
 		],
 	},
 	{
 		"id": "citadel", "name": "검은 성채", "subtitle": "점령당한 트롤 요새",
 		"desc": "트롤왕이 쓰러지자 망자의 군단이 그의 성채를 차지했습니다. 두 성문에서 해골 무리가 쏟아져 나옵니다.",
-		"gold": 700, "lives": 20, "hp_mult": 1.09, "theme": "necro",
+		"gold": 700, "lives": 20, "hp_mult": 0.99, "theme": "necro",
 		"paths": [
 			[[-38, 11], [-29, 11], [-23, 5], [-14, 5], [-9, 12], [-1, 12], [5, 6], [5, -2], [11, -6], [19, -6], [24, 0], [29, 6], [37, 6]],
 			[[-38, -14], [-29, -14], [-21, -10], [-13, -12], [-5, -8], [0, -3], [5, -2], [11, -6], [19, -6], [24, 0], [29, 6], [37, 6]],
@@ -446,20 +514,20 @@ const LEVELS := [
 		"plots_auto": 18, "hero_start": [4, 2], "bounds": [-30, 30, -18, 16],
 		"waves": [
 			[["skeleton", 10, 0.8, 0.0, 0], ["skeleton", 7, 0.93, 3.0, 1]],
-			[["goblin", 15, 0.47, 0.0, 1], ["wolf", 8, 0.43, 3.0, 0]],
-			[["skeleton", 12, 0.59, 0.0, 0], ["gargoyle", 5, 1.1, 2.0, 1]],
+			[["rogue", 5, 1.12, 0.0, 1], ["wolf", 6, 0.6, 3.0, 0]],
+			[["skeleton", 11, 0.65, 0.0, 0], ["gargoyle", 5, 1.1, 2.0, 1]],
 			[["skeleton_knight", 2, 3.0, 0.0, 0], ["skeleton", 5, 0.8, 2.0, 1]],
 			[["orc", 3, 2.7, 0.0, 1], ["shaman", 3, 2.0, 2.0, 1], ["skeleton", 10, 0.65, 0.0, 0]],
 			[["skeleton_knight", 3, 3.6, 0.0, 0], ["sapper", 5, 1.05, 3.0, 1]],
-			[["gargoyle", 11, 0.72, 0.0, 0], ["wolf", 13, 0.37, 2.0, 1]],
+			[["gargoyle", 11, 0.72, 0.0, 0], ["wolf", 12, 0.4, 2.0, 1]],
 			[["ogre", 1, 1.0, 0.0, 0], ["skeleton_knight", 2, 3.52, 2.0, 1], ["skeleton", 3, 0.64, 5.0, 0]],
 			[["warchief", 1, 1.0, 0.0, 1], ["orc", 5, 1.75, 1.0, 1], ["skeleton", 14, 0.46, 0.0, 0]],
 			[["skeleton_knight", 5, 2.25, 0.0, 0], ["shaman", 3, 2.7, 3.0, 0], ["gargoyle", 6, 0.98, 5.0, 1]],
-			[["sapper", 14, 0.38, 0.0, 0], ["sapper", 15, 0.36, 0.0, 1], ["wolf", 34, 0.28, 6.0, 0]],
-			[["ogre", 2, 5.0, 0.0, 0], ["skeleton_knight", 3, 2.88, 2.0, 1], ["skeleton", 17, 0.42, 6.0, 1]],
+			[["sapper", 14, 0.38, 0.0, 0], ["sapper", 15, 0.36, 0.0, 1], ["wolf", 35, 0.28, 6.0, 0]],
+			[["ogre", 2, 5.0, 0.0, 0], ["skeleton_knight", 3, 2.88, 2.0, 1], ["skeleton", 18, 0.4, 6.0, 1]],
 			[["warchief", 2, 4.0, 0.0, 0], ["orc", 9, 1.2, 2.0, 1], ["gargoyle", 12, 0.53, 6.0, 0]],
-			[["skeleton_knight", 8, 1.37, 0.0, 0], ["skeleton_knight", 5, 1.6, 3.0, 1], ["shaman", 4, 1.6, 6.0, 0], ["skeleton", 21, 0.3, 8.0, 1]],
-			[["ogre", 2, 5.0, 0.0, 1], ["warchief", 2, 4.0, 4.0, 0], ["skeleton_knight", 7, 1.5, 6.0, 0], ["gargoyle", 9, 0.73, 10.0, 1], ["skeleton", 18, 0.36, 12.0, 0]],
+			[["skeleton_knight", 8, 1.37, 0.0, 0], ["skeleton_knight", 5, 1.6, 3.0, 1], ["shaman", 5, 1.2, 6.0, 0], ["skeleton", 21, 0.3, 8.0, 1]],
+			[["ogre", 2, 5.0, 0.0, 1], ["warchief", 2, 4.0, 4.0, 0], ["skeleton_knight", 7, 1.5, 6.0, 0], ["gargoyle", 10, 0.65, 10.0, 1], ["skeleton", 20, 0.32, 12.0, 0]],
 		],
 	},
 	{
@@ -472,14 +540,14 @@ const LEVELS := [
 		],
 		"plots_auto": 16, "hero_start": [8, 0], "bounds": [-30, 30, -18, 16],
 		"waves": [
-			[["skeleton", 11, 0.77, 0.0, 0], ["goblin", 12, 0.6, 2.0, 1]],
+			[["skeleton", 10, 0.86, 0.0, 0], ["spear", 7, 1.0, 2.0, 1]],
 			[["wolf", 8, 0.55, 0.0, 1], ["shaman", 2, 2.0, 2.0, 0], ["skeleton", 10, 0.6, 4.0, 0]],
 			[["skeleton_knight", 2, 2.5, 0.0, 0], ["gargoyle", 4, 1.47, 2.0, 1]],
 			[["orc", 3, 2.85, 0.0, 1], ["sapper", 3, 1.5, 3.0, 0], ["skeleton", 9, 0.69, 4.0, 1]],
-			[["gargoyle", 8, 0.96, 0.0, 0], ["wolf", 7, 0.67, 3.0, 1]],
+			[["gargoyle", 8, 0.96, 0.0, 0], ["wolf", 8, 0.57, 3.0, 1]],
 			[["ogre", 1, 1.0, 0.0, 0], ["skeleton_knight", 2, 3.2, 2.0, 1], ["shaman", 3, 2.7, 4.0, 0]],
-			[["skeleton", 29, 0.28, 0.0, 0], ["skeleton", 29, 0.28, 2.0, 1]],
-			[["warchief", 1, 1.0, 0.0, 1], ["orc", 6, 1.82, 1.0, 1], ["sapper", 4, 1.6, 4.0, 0]],
+			[["skeleton", 30, 0.28, 0.0, 0], ["skeleton", 29, 0.28, 2.0, 1]],
+			[["warchief", 1, 1.0, 0.0, 1], ["shield", 3, 3.6, 1.0, 1], ["sapper", 5, 1.2, 4.0, 0]],
 			[["skeleton_knight", 4, 2.56, 0.0, 0], ["gargoyle", 7, 1.05, 3.0, 1], ["shaman", 3, 2.4, 6.0, 0]],
 			[["ogre", 2, 5.0, 0.0, 1], ["wolf", 19, 0.28, 2.0, 0], ["skeleton", 17, 0.36, 6.0, 1]],
 			[["sapper", 8, 0.71, 0.0, 0], ["skeleton_knight", 6, 1.36, 3.0, 1], ["gargoyle", 14, 0.45, 6.0, 0]],
@@ -492,59 +560,59 @@ const LEVELS := [
 	{
 		"id": "temple", "name": "망자의 신전", "subtitle": "리치 군주의 왕좌",
 		"desc": "해안의 고대 신전에서 모든 망자의 근원, 리치 군주 모르가스가 깨어났습니다. 망자의 군대를 끝내야 합니다!",
-		"gold": 880, "lives": 20, "hp_mult": 1.23, "theme": "swamp",
+		"gold": 880, "lives": 20, "hp_mult": 1.21, "theme": "swamp",
 		"paths": [
 			[[-38, -12], [-29, -12], [-23, -5], [-24, 5], [-17, 12], [-8, 11], [-4, 3], [-9, -5], [-4, -13], [6, -13], [11, -6], [8, 3], [13, 11], [21, 11], [26, 3], [31, -2], [37, -2]],
 			[[-8, 30], [-8, 21], [-9, 16], [-8, 11], [-4, 3], [-9, -5], [-4, -13], [6, -13], [11, -6], [8, 3], [13, 11], [21, 11], [26, 3], [31, -2], [37, -2]],
 		],
 		"plots_auto": 17, "hero_start": [-2, 0], "bounds": [-30, 30, -19, 17],
 		"waves": [
-			[["skeleton", 14, 0.6, 0.0, 0], ["skeleton", 10, 0.6, 3.0, 1]],
-			[["skeleton_knight", 2, 3.84, 0.0, 0], ["wolf", 8, 0.64, 2.0, 1]],
-			[["gargoyle", 7, 1.2, 0.0, 1], ["shaman", 3, 2.7, 2.0, 0], ["goblin", 12, 0.55, 4.0, 0]],
+			[["skeleton", 15, 0.56, 0.0, 0], ["skeleton", 10, 0.6, 3.0, 1]],
+			[["skeleton_knight", 2, 3.84, 0.0, 0], ["wolf", 9, 0.56, 2.0, 1]],
+			[["gargoyle", 5, 1.8, 0.0, 1], ["shaman", 3, 2.7, 2.0, 0], ["rogue", 6, 1.12, 4.0, 0]],
 			[["orc", 4, 2.56, 0.0, 0], ["sapper", 3, 1.92, 3.0, 1], ["skeleton", 11, 0.6, 5.0, 1]],
 			[["ogre", 1, 1.0, 0.0, 1], ["skeleton_knight", 2, 2.88, 2.0, 0], ["gargoyle", 3, 1.28, 5.0, 0]],
-			[["skeleton", 24, 0.3, 0.0, 0], ["wolf", 17, 0.33, 3.0, 1], ["shaman", 5, 1.2, 6.0, 0]],
-			[["warchief", 1, 1.0, 0.0, 0], ["orc", 6, 1.68, 1.0, 0], ["skeleton_knight", 3, 2.88, 3.0, 1]],
-			[["gargoyle", 12, 0.68, 0.0, 0], ["sapper", 7, 1.05, 3.0, 1], ["skeleton", 16, 0.44, 6.0, 1]],
+			[["skeleton", 25, 0.29, 0.0, 0], ["wolf", 17, 0.33, 3.0, 1], ["shaman", 5, 1.2, 6.0, 0]],
+			[["warchief", 1, 1.0, 0.0, 0], ["shield", 3, 3.3, 1.0, 0], ["skeleton_knight", 3, 2.88, 3.0, 1]],
+			[["gargoyle", 12, 0.68, 0.0, 0], ["sapper", 7, 1.05, 3.0, 1], ["skeleton", 15, 0.47, 6.0, 1]],
 			[["ogre", 1, 5.0, 0.0, 0], ["skeleton_knight", 6, 2.1, 2.0, 1], ["shaman", 3, 2.4, 5.0, 0]],
-			[["warchief", 2, 4.0, 0.0, 1], ["orc", 7, 1.65, 2.0, 1], ["wolf", 15, 0.39, 5.0, 0], ["gargoyle", 7, 0.9, 8.0, 0]],
-			[["skeleton_knight", 11, 1.12, 0.0, 0], ["skeleton", 28, 0.28, 2.0, 1], ["sapper", 9, 0.62, 6.0, 0]],
+			[["warchief", 2, 4.0, 0.0, 1], ["orc", 7, 1.65, 2.0, 1], ["wolf", 14, 0.42, 5.0, 0], ["gargoyle", 7, 0.9, 8.0, 0]],
+			[["skeleton_knight", 11, 1.12, 0.0, 0], ["skeleton", 27, 0.29, 2.0, 1], ["sapper", 9, 0.62, 6.0, 0]],
 			[["ogre", 3, 4.5, 0.0, 1], ["gargoyle", 16, 0.5, 2.0, 0], ["shaman", 7, 1.17, 5.0, 1]],
 			[["warchief", 3, 3.0, 0.0, 0], ["skeleton_knight", 8, 1.67, 2.0, 1], ["orc", 9, 1.38, 6.0, 0]],
-			[["ogre", 3, 4.5, 0.0, 0], ["skeleton_knight", 9, 1.3, 2.0, 1], ["gargoyle", 14, 0.55, 6.0, 1], ["skeleton", 25, 0.31, 8.0, 0]],
-			[["warchief", 3, 3.0, 0.0, 1], ["ogre", 3, 4.5, 2.0, 0], ["skeleton_knight", 14, 1.02, 4.0, 0], ["sapper", 10, 0.7, 8.0, 1], ["wolf", 22, 0.28, 10.0, 0]],
-			[["lich", 1, 1.0, 8.0, 0], ["skeleton_knight", 14, 0.81, 0.0, 0], ["skeleton", 39, 0.28, 0.0, 1], ["warchief", 3, 2.0, 14.0, 1], ["gargoyle", 21, 0.33, 18.0, 0], ["ogre", 3, 3.0, 24.0, 1]],
+			[["ogre", 3, 4.5, 0.0, 0], ["skeleton_knight", 9, 1.3, 2.0, 1], ["gargoyle", 14, 0.55, 6.0, 1], ["skeleton", 26, 0.3, 8.0, 0]],
+			[["warchief", 3, 3.0, 0.0, 1], ["ogre", 3, 4.5, 2.0, 0], ["skeleton_knight", 14, 1.02, 4.0, 0], ["sapper", 11, 0.63, 8.0, 1], ["wolf", 23, 0.28, 10.0, 0]],
+			[["lich", 1, 1.0, 8.0, 0], ["skeleton_knight", 14, 0.81, 0.0, 0], ["skeleton", 40, 0.28, 0.0, 1], ["warchief", 3, 2.0, 14.0, 1], ["gargoyle", 22, 0.31, 18.0, 0], ["ogre", 3, 3.0, 24.0, 1]],
 		],
 	},
 	{
 		"id": "harbor", "name": "폭풍 항구", "subtitle": "바다에서 온 침공",
 		"desc": "리치가 쓰러진 틈을 타 오우거 군대가 배를 타고 남쪽 항구로 상륙합니다. 항구의 다리를 지키세요.",
-		"gold": 920, "lives": 20, "hp_mult": 1.11, "theme": "river",
+		"gold": 920, "lives": 20, "hp_mult": 1.04, "theme": "river",
 		"paths": [
 			[[-38, -14], [-28, -14], [-22, -8], [-14, -8], [-8, -12], [0, -12], [6, -6], [4, 2], [10, 7], [18, 7], [24, 2], [30, 2], [37, 2]],
 			[[-38, 13], [-29, 13], [-23, 9], [-17, 11], [-10, 7], [-4, 2], [4, 2], [10, 7], [18, 7], [24, 2], [30, 2], [37, 2]],
 		],
 		"river_x": 14.0, "plots_auto": 16, "hero_start": [2, -3], "bounds": [-30, 30, -18, 16],
 		"waves": [
-			[["orc", 3, 2.7, 0.0, 0], ["goblin", 13, 0.55, 2.0, 1]],
-			[["sapper", 6, 0.84, 0.0, 1], ["wolf", 13, 0.38, 2.0, 0]],
-			[["gargoyle", 6, 1.26, 0.0, 0], ["orc", 4, 2.27, 3.0, 1]],
-			[["ogre", 1, 1.0, 0.0, 0], ["goblin", 4, 0.72, 2.0, 1], ["shaman", 3, 2.0, 4.0, 0]],
+			[["orc", 3, 2.7, 0.0, 0], ["spear", 7, 1.05, 2.0, 1]],
+			[["sapper", 6, 0.84, 0.0, 1], ["wolf", 15, 0.33, 2.0, 0]],
+			[["gargoyle", 4, 2.02, 0.0, 0], ["shield", 3, 2.8, 3.0, 1]],
+			[["ogre", 1, 1.0, 0.0, 0], ["goblin", 6, 0.43, 2.0, 1], ["shaman", 3, 2.0, 4.0, 0]],
 			[["warchief", 1, 1.0, 0.0, 1], ["orc", 4, 2.24, 1.0, 1], ["sapper", 3, 1.95, 5.0, 0]],
-			[["wolf", 15, 0.37, 0.0, 0], ["gargoyle", 11, 0.63, 3.0, 1]],
+			[["wolf", 15, 0.37, 0.0, 0], ["gargoyle", 12, 0.57, 3.0, 1]],
 			[["ogre", 1, 5.0, 0.0, 1], ["orc", 4, 2.08, 2.0, 0], ["shaman", 3, 2.7, 5.0, 1]],
-			[["sapper", 12, 0.57, 0.0, 0], ["goblin", 31, 0.28, 2.0, 1], ["wolf", 16, 0.28, 6.0, 0]],
-			[["warchief", 2, 4.0, 0.0, 0], ["ogre", 1, 5.0, 3.0, 1], ["gargoyle", 7, 0.96, 6.0, 0]],
-			[["orc", 13, 0.92, 0.0, 0], ["orc", 10, 1.0, 1.0, 1], ["shaman", 5, 1.6, 4.0, 0]],
-			[["ogre", 4, 3.0, 0.0, 0], ["sapper", 12, 0.57, 3.0, 1], ["wolf", 22, 0.28, 6.0, 1]],
-			[["warchief", 2, 3.5, 0.0, 1], ["ogre", 2, 6.0, 2.0, 0], ["orc", 8, 1.57, 4.0, 1], ["gargoyle", 10, 0.79, 8.0, 0]],
+			[["sapper", 9, 0.78, 0.0, 0], ["rogue", 13, 0.56, 2.0, 1], ["wolf", 12, 0.38, 6.0, 0]],
+			[["warchief", 2, 4.0, 0.0, 0], ["ogre", 1, 5.0, 3.0, 1], ["gargoyle", 8, 0.82, 6.0, 0]],
+			[["orc", 13, 0.92, 0.0, 0], ["shield", 6, 1.6, 1.0, 1], ["shaman", 4, 2.13, 4.0, 0]],
+			[["ogre", 4, 3.0, 0.0, 0], ["sapper", 13, 0.52, 3.0, 1], ["wolf", 22, 0.28, 6.0, 1]],
+			[["warchief", 2, 3.5, 0.0, 1], ["ogre", 2, 6.0, 2.0, 0], ["orc", 8, 1.57, 4.0, 1], ["gargoyle", 11, 0.71, 8.0, 0]],
 		],
 	},
 	{
 		"id": "capital", "name": "왕도 최후의 방어선", "subtitle": "오우거 왕의 진격",
 		"desc": "오우거 왕 고르막이 세 갈래 길로 왕도에 진격합니다. 왕국의 운명을 건 마지막 결전!",
-		"gold": 980, "lives": 20, "hp_mult": 1.35, "theme": "autumn",
+		"gold": 980, "lives": 20, "hp_mult": 1.28, "theme": "autumn",
 		"paths": [
 			[[-38, -2], [-28, -2], [-22, -9], [-14, -9], [-9, -2], [-2, -2], [3, -8], [10, -8], [14, -1], [20, 4], [27, 4], [31, 0], [37, 0]],
 			[[-6, 30], [-6, 21], [-3, 14], [3, 10], [8, 10], [12, 5], [14, -1], [20, 4], [27, 4], [31, 0], [37, 0]],
@@ -552,19 +620,19 @@ const LEVELS := [
 		],
 		"plots_auto": 18, "hero_start": [11, 0], "bounds": [-30, 30, -19, 17],
 		"waves": [
-			[["goblin", 14, 0.51, 0.0, 0], ["goblin", 11, 0.54, 2.0, 1], ["wolf", 7, 0.5, 4.0, 2]],
-			[["orc", 3, 2.72, 0.0, 0], ["sapper", 3, 2.1, 2.0, 2], ["gargoyle", 4, 1.6, 3.0, 1]],
-			[["ogre", 1, 1.0, 0.0, 1], ["shaman", 4, 1.8, 2.0, 0], ["goblin", 16, 0.45, 3.0, 2]],
-			[["warchief", 1, 1.0, 0.0, 0], ["orc", 3, 2.08, 1.0, 0], ["wolf", 6, 0.64, 4.0, 2]],
-			[["gargoyle", 8, 1.1, 0.0, 2], ["sapper", 3, 1.76, 2.0, 1], ["orc", 4, 2.4, 4.0, 0]],
-			[["ogre", 1, 5.0, 0.0, 0], ["ogre", 1, 1.0, 3.0, 2], ["shaman", 8, 0.91, 4.0, 1]],
-			[["goblin", 28, 0.28, 0.0, 1], ["wolf", 19, 0.28, 2.0, 2], ["orc", 10, 0.93, 5.0, 0]],
+			[["goblin", 13, 0.55, 0.0, 0], ["spear", 7, 0.9, 2.0, 1], ["wolf", 7, 0.5, 4.0, 2]],
+			[["orc", 3, 2.72, 0.0, 0], ["sapper", 3, 2.1, 2.0, 2], ["gargoyle", 5, 1.2, 3.0, 1]],
+			[["ogre", 1, 1.0, 0.0, 1], ["shaman", 3, 2.7, 2.0, 0], ["rogue", 6, 1.12, 3.0, 2]],
+			[["warchief", 1, 1.0, 0.0, 0], ["orc", 3, 2.08, 1.0, 0], ["wolf", 7, 0.53, 4.0, 2]],
+			[["gargoyle", 8, 1.1, 0.0, 2], ["sapper", 4, 1.17, 2.0, 1], ["orc", 4, 2.4, 4.0, 0]],
+			[["ogre", 1, 5.0, 0.0, 0], ["ogre", 1, 1.0, 3.0, 2], ["shaman", 9, 0.8, 4.0, 1]],
+			[["rogue", 12, 0.59, 0.0, 1], ["wolf", 15, 0.36, 2.0, 2], ["orc", 9, 1.05, 5.0, 0]],
 			[["warchief", 1, 4.0, 0.0, 2], ["orc", 8, 1.41, 2.0, 1], ["gargoyle", 9, 0.82, 5.0, 0]],
-			[["ogre", 3, 4.5, 0.0, 1], ["sapper", 9, 0.79, 3.0, 0], ["shaman", 8, 0.86, 5.0, 2]],
-			[["orc", 11, 1.1, 0.0, 0], ["orc", 9, 1.12, 1.0, 2], ["wolf", 14, 0.4, 4.0, 1], ["gargoyle", 11, 0.66, 7.0, 0]],
-			[["warchief", 2, 3.5, 0.0, 0], ["ogre", 5, 2.25, 2.0, 2], ["sapper", 10, 0.7, 5.0, 1], ["goblin", 27, 0.28, 7.0, 0]],
-			[["ogre", 4, 4.0, 0.0, 1], ["orc", 11, 1.1, 2.0, 2], ["gargoyle", 13, 0.6, 6.0, 0]],
-			[["ogre_king", 1, 1.0, 6.0, 0], ["orc", 17, 0.76, 0.0, 0], ["warchief", 2, 4.0, 8.0, 1], ["ogre", 2, 6.0, 12.0, 2], ["gargoyle", 15, 0.51, 16.0, 1], ["wolf", 16, 0.35, 20.0, 2]],
+			[["ogre", 3, 4.5, 0.0, 1], ["sapper", 9, 0.79, 3.0, 0], ["shaman", 9, 0.75, 5.0, 2]],
+			[["orc", 11, 1.1, 0.0, 0], ["shield", 5, 2.0, 1.0, 2], ["wolf", 16, 0.35, 4.0, 1], ["gargoyle", 11, 0.66, 7.0, 0]],
+			[["warchief", 2, 3.5, 0.0, 0], ["ogre", 5, 2.25, 2.0, 2], ["sapper", 11, 0.63, 5.0, 1], ["spear", 16, 0.47, 7.0, 0]],
+			[["ogre", 4, 4.0, 0.0, 1], ["shield", 6, 1.8, 2.0, 2], ["gargoyle", 14, 0.55, 6.0, 0]],
+			[["ogre_king", 1, 1.0, 6.0, 0], ["orc", 18, 0.72, 0.0, 0], ["warchief", 2, 4.0, 8.0, 1], ["ogre", 2, 6.0, 12.0, 2], ["gargoyle", 15, 0.51, 16.0, 1], ["wolf", 17, 0.33, 20.0, 2]],
 		],
 	},
 ]

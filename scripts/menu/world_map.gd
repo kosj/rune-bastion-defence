@@ -241,7 +241,7 @@ func _build_chrome() -> void:
 	else:
 		dock.offset_left = 16
 	dock.offset_bottom = -12
-	for it in [["ic_upgrade", "강화", "_open_upgrades"], ["ic_hero", "영웅", "_open_heroes"], ["ic_book", "도감", "_open_bestiary"], ["ic_trophy", "업적", "_open_achievements"]]:
+	for it in [["ic_upgrade", "강화", "_open_upgrades"], ["ic_hero", "영웅", "_open_heroes"], ["ic_book", "도감", "_open_bestiary"], ["ic_trophy", "업적", "_open_achievements"], ["ic_daily", "오늘의 도전", "_open_daily"]]:
 		var col := VBoxContainer.new()
 		col.add_theme_constant_override("separation", 2)
 		col.alignment = BoxContainer.ALIGNMENT_END
@@ -250,8 +250,12 @@ func _build_chrome() -> void:
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		var fn: String = it[2]
 		b.pressed.connect(func():
-			if menu and menu.has_method(fn):
+			if fn == "_open_daily":
+				_open_daily_card(b)
+			elif menu and menu.has_method(fn):
 				menu.call(fn))
+		if fn == "_open_daily" and not Game.daily_unlocked():
+			b.self_modulate = Color(0.6, 0.6, 0.66)
 		col.add_child(b)
 		var l := UI.label(it[1], 16, UI.TEXT, 5, "ui_black")
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -261,8 +265,10 @@ func _build_chrome() -> void:
 			n = Game.available_stars()
 		elif it[0] == "ic_hero":
 			n = DB.unspent_talents()
+		elif it[0] == "ic_daily" and Game.daily_unlocked() and not Game.daily_done_today():
+			n = 1
 		if n > 0:
-			var bd := UI.badge(str(n), 26, 14)
+			var bd := UI.badge(str(n) if it[0] != "ic_daily" else "!", 26, 14)
 			bd.position = Vector2(42, -4)
 			b.add_child(bd)
 		dock.add_child(col)
@@ -555,6 +561,67 @@ func _open_endless_card() -> void:
 	go.pressed.connect(func(): Game.start_endless(mi))
 	go.grab_focus.call_deferred(true)
 	vb.add_child(UI.action_row([go]))
+
+# ---------------------------------------------------------------- daily challenge
+
+## Today's challenge: the region, its two twists, the reward and the streak.
+func _open_daily_card(from: Control) -> void:
+	if not Game.daily_unlocked():
+		Audio.play("click", -8.0)
+		_shake(from)
+		_toast_locked(tr("오늘의 도전은 2지역을 클리어하면 열립니다"))
+		return
+	var dd := Game.daily_today()
+	var mi: int = dd["level"]
+	var vb := _card_shell("오늘의 도전")
+	var w := _card_w
+	var row: BoxContainer = VBoxContainer.new() if Game.tall else HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12 if Game.tall else 16)
+	vb.add_child(row)
+	row.add_child(_thumb(Assets.tex("level_%d" % mi)))
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 8)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(info)
+	info.add_child(UI.ink(DB.LEVELS[mi]["name"], 22, UI.INK, "title_kr"))
+	var iw := w if Game.tall else w - 256.0
+	for m in dd["mods"]:
+		var md: Dictionary = DB.DAILY_MODS[m]
+		var mr := HBoxContainer.new()
+		mr.add_theme_constant_override("separation", 8)
+		mr.add_child(UI.icon(Assets.tex(md["icon"]), 30))
+		var ml := UI.ink(tr(md["name"]) + "  ·  " + tr(md["desc"]), 17, UI.INK)
+		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		ml.custom_minimum_size = Vector2(iw - 40.0, 0)
+		mr.add_child(ml)
+		info.add_child(mr)
+	var done := Game.daily_done_today()
+	var rew := UI.ink(tr("오늘 완료! 내일 새 도전이 열립니다") if done else (tr("첫 승리 보상: 영웅 경험치 +%d") % DB.DAILY_XP), UI.T_SMALL, UI.GOLD if not done else UI.INK_SOFT, "ui_black")
+	rew.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rew.custom_minimum_size = Vector2(iw, 0)
+	info.add_child(rew)
+	info.add_child(UI.stat("star", tr("연속 %d일 · 최고 %d일") % [Game.daily_streak(), int(Game.stats.get("daily_streak_best", 0))], 17))
+	var go := UI.button("다시 도전" if done else "도전", 26, true, Vector2(0, 58), "primary")
+	go.icon = Assets.tex("ic_play")
+	go.pressed.connect(func(): Game.start_daily())
+	go.grab_focus.call_deferred(true)
+	vb.add_child(UI.action_row([go]))
+
+func _toast_locked(text: String) -> void:
+	var l := UI.label(text, 20, UI.TEXT, 6, "ui_black")
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.anchor_left = 0.0
+	l.anchor_right = 1.0
+	l.anchor_top = 1.0
+	l.anchor_bottom = 1.0
+	l.offset_top = -150
+	l.offset_bottom = -120
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(l)
+	var tw := l.create_tween()
+	tw.tween_interval(1.6)
+	tw.tween_property(l, "modulate:a", 0.0, 0.4)
+	tw.tween_callback(l.queue_free)
 
 # ---------------------------------------------------------------- dotted roads
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# UI 화면 점검: 주요 화면(선택 카드 + 알림이 겹치지 않는지 보는 notes 포함)을 PC(D, 1600x900), 폰 세로(P, 430x932), 폰 가로(L, 932x430)로 찍습니다.
+# UI 화면 점검: 주요 화면(오늘의 도전 카드 포함)(선택 카드 + 알림이 겹치지 않는지 보는 notes 포함)을 PC(D, 1600x900), 폰 세로(P, 430x932), 폰 가로(L, 932x430)로 찍습니다.
 # 사용: DISPLAY=:77 tools/ui_shots.sh <출력 폴더> [동시 실행 수] [형태 필터 D|P|L] [화면 필터]
 #   예: tools/ui_shots.sh /tmp/ui 2 "P" "pause|win"
 # 이미 있는 파일은 건너뜁니다. 화면이 느리면(소프트웨어 렌더링) 동시 실행 수를 2 이하로 둡니다.
@@ -14,6 +14,7 @@ for R in "1600x900 D" "430x932 P" "932x430 L"; do
     "title|$M shot_times=6" \
     "map|$M open=_open_select shot_times=6.8" \
     "card|$M open=_open_select map_card=2 shot_times=7" \
+    "daily|$M open=_open_select map_card=d shot_times=7" \
     "upg|$M open=_open_upgrades shot_times=6.8" \
     "set|$M open=_open_settings shot_times=6.8" \
     "hero|$M open=_open_heroes shot_times=6.8" \

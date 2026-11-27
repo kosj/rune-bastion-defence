@@ -1,6 +1,8 @@
 class_name Hero
 extends Soldier
-## Player-controlled hero: tap to move, auto-fights, Ember Whirlwind skill, levels up, respawns.
+## Player-controlled hero: tap to move, auto-fights, levels up, respawns. Two skills: the first from
+## the start, the second from battle level DB.SKILL2_LEVEL (Kael: flame charge, Sera: star ward,
+## Ren: piercing arrow). Both cast themselves when worth it and from the HUD buttons.
 
 signal leveled(lv: int)
 
@@ -18,6 +20,16 @@ var hid := "kael"
 var ranged := false
 var shoot_range := 0.0
 var _skill_at := Vector3.ZERO
+var skill2_cd := 0.0
+var _cast := 1               # which skill the wind-up in _skill_t belongs to
+var _dash_from := Vector3.ZERO
+var _dash_to := Vector3.ZERO
+var _pierce_dir := Vector3.FORWARD
+var _ward_t := 0.0
+var _ward_at := Vector3.ZERO
+var _ward_tick := 0.0
+const WARD_COL := Color(0.75, 0.6, 1.0)
+const PIERCE_COL := Color(1.0, 0.85, 0.4)
 
 func setup_hero(p: Vector3) -> void:
 	is_hero = true
@@ -66,6 +78,18 @@ func skill_radius() -> float:
 func skill_damage() -> float:
 	return float(DB.hero_def()["skill_dmg"]) * (1.0 + (level - 1) * 0.2) * DB.talent_mult(hid, "skill")
 
+func skill2_def() -> Dictionary:
+	return DB.hero_def()["skill2"]
+
+func skill2_open() -> bool:
+	return level >= DB.SKILL2_LEVEL
+
+func skill2_cd_max() -> float:
+	return float(skill2_def()["cd"]) * (2.0 - DB.talent_mult(hid, "cd"))
+
+func skill2_damage() -> float:
+	return float(skill2_def()["dmg"]) * (1.0 + (level - 1) * 0.2) * DB.talent_mult(hid, "skill")
+
 func set_selected(v: bool) -> void:
 	_sel_ring.visible = v
 
@@ -87,6 +111,9 @@ func _process(delta: float) -> void:
 	if delta <= 0.0 or celebrating:
 		return
 	skill_cd = maxf(skill_cd - delta, 0.0)
+	skill2_cd = maxf(skill2_cd - delta, 0.0)
+	if _ward_t > 0.0:
+		_ward_update(delta)
 	if not alive:
 		respawn_t -= delta
 		if respawn_t <= 0.0:
@@ -100,7 +127,10 @@ func _process(delta: float) -> void:
 	if _skill_t > 0.0:
 		_skill_t -= delta
 		if _skill_t <= 0.0:
-			_skill_impact()
+			if _cast == 2:
+				_skill2_impact()
+			else:
+				_skill_impact()
 		return
 	if commanded:
 		var to := rally - global_position
@@ -125,6 +155,9 @@ func _process(delta: float) -> void:
 			if n >= 3 or (n >= 1 and target != null and target.boss):
 				cast_skill()
 				return
+	if skill2_open() and skill2_cd <= 0.0 and stun_t <= 0.0 and _want_skill2():
+		cast_skill2()
+		return
 	super._process(delta)
 
 ## Ranged hero: densest enemy group within reach -> [center, count].
@@ -197,9 +230,10 @@ func _engage(delta: float) -> void:
 		model.play("idle")
 
 func cast_skill() -> bool:
-	if not alive or skill_cd > 0.0:
+	if not alive or skill_cd > 0.0 or _skill_t > 0.0:
 		return false
 	skill_cd = skill_cd_max()
+	_cast = 1
 	Audio.voice(hid + "_skill")
 	if ranged:
 		var c := _best_cluster()
@@ -306,6 +340,245 @@ func _arrow_rain() -> void:
 		tw.tween_callback(arr.queue_free)
 	lv.cam_rig.shake(0.25)
 	model.play("idle")
+
+# ------------------------------------------------------------------ second skill
+
+## Worth casting on its own? (The button casts it whenever there is something to hit.)
+func _want_skill2() -> bool:
+	match skill2_def()["id"]:
+		"charge":
+			var c := _charge_target()
+			# a group to rush into, not the one already at his sword
+			return (int(c[1]) >= 3 or (int(c[1]) >= 1 and bool(c[2]))) and float(c[3]) > 2.5
+		"ward":
+			var c := _best_cluster()
+			return int(c[1]) >= 5
+		"pierce":
+			var ln := _pierce_line()
+			return int(ln[1]) >= 3 or (int(ln[1]) >= 1 and bool(ln[2]))
+	return false
+
+## Kael: the best group to rush -> [centre, count, has boss, distance].
+func _charge_target() -> Array:
+	var reach: float = float(skill2_def()["reach"])
+	var best := Vector3.ZERO
+	var bn := 0
+	var boss_in := false
+	for e: Enemy in LevelMain.I.enemies:
+		if not e.alive or e.flying or e.global_position.distance_to(global_position) > reach:
+			continue
+		var n := 0
+		for o: Enemy in LevelMain.I.enemies:
+			if o.alive and not o.flying and o.global_position.distance_to(e.global_position) < 1.8:
+				n += 1
+		var score := n + (4 if e.boss else 0)
+		if score > bn + (4 if boss_in else 0):
+			bn = n
+			boss_in = e.boss
+			best = e.global_position
+	return [best, bn, boss_in, best.distance_to(global_position) if bn > 0 else 0.0]
+
+## Ren: the line through the most enemies -> [direction, count, has boss].
+func _pierce_line() -> Array:
+	var length: float = float(skill2_def()["length"])
+	var best_dir := Vector3.ZERO
+	var bn := 0
+	var boss_in := false
+	var from := global_position
+	for e: Enemy in LevelMain.I.enemies:
+		if not e.alive or e.global_position.distance_to(from) > shoot_range + 2.0:
+			continue
+		var dir := e.global_position - from
+		dir.y = 0.0
+		if dir.length() < 0.3:
+			continue
+		dir = dir.normalized()
+		var n := 0
+		var has_boss := false
+		for o: Enemy in LevelMain.I.enemies:
+			if not o.alive:
+				continue
+			var rel := o.global_position - from
+			rel.y = 0.0
+			var t := rel.dot(dir)
+			if t > 0.0 and t < length and (rel - dir * t).length() < 0.9:
+				n += 1
+				has_boss = has_boss or o.boss
+		if n + (3 if has_boss else 0) > bn + (3 if boss_in else 0):
+			bn = n
+			boss_in = has_boss
+			best_dir = dir
+	return [best_dir, bn, boss_in]
+
+func _face_to(p: Vector3) -> void:
+	var to := p - global_position
+	to.y = 0.0
+	if to.length() > 0.1:
+		_yaw = atan2(to.x, to.z)
+		rotation.y = _yaw
+
+func cast_skill2() -> bool:
+	if not alive or not skill2_open() or skill2_cd > 0.0 or _skill_t > 0.0 or stun_t > 0.0:
+		return false
+	var d := skill2_def()
+	var fx := LevelMain.I.fx
+	match d["id"]:
+		"charge":
+			var c := _charge_target()
+			if int(c[1]) == 0:
+				return false
+			var to: Vector3 = c[0] - global_position
+			to.y = 0.0
+			var dir := to.normalized() if to.length() > 0.1 else Vector3(sin(_yaw), 0, cos(_yaw))
+			# straight through the front of the group
+			var end := global_position + dir * clampf(to.length() + 0.6, 1.5, float(d["reach"]))
+			_dash_from = global_position
+			_dash_to = Vector3(end.x, LevelMain.I.terrain.walk_height(end.x, end.z), end.z)
+			_face_to(_dash_to)
+			_release()
+			model.play("run", 2.6, 0.05, true)
+			fx.charge(aim_point(), Color(1.0, 0.6, 0.2), 0.15)
+			var tw := create_tween()
+			tw.tween_interval(0.12)
+			tw.tween_method(_dash_step, 0.0, 1.0, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+			_skill_t = 0.45
+			Audio.play("whirl", -4.0, 0.1)
+		"ward":
+			var c := _best_cluster()
+			if int(c[1]) == 0:
+				return false
+			_skill_at = c[0]
+			_face_to(_skill_at)
+			model.play("skill", 1.4, 0.08, true)
+			fx.charge(aim_point() + Vector3(0, 0.6, 0), WARD_COL, 0.55)
+			_skill_t = 0.6
+			Audio.play("star", -4.0, 0.1)
+		"pierce":
+			var ln := _pierce_line()
+			if int(ln[1]) == 0:
+				return false
+			_pierce_dir = ln[0]
+			_face_to(global_position + _pierce_dir)
+			model.play("attack", 1.1, 0.05, true)
+			fx.charge(aim_point() + _pierce_dir * 0.5 + Vector3(0, 0.3, 0), PIERCE_COL, 0.35)
+			_skill_t = 0.4
+			Audio.play("bow", -4.0, 0.05, 2)
+	skill2_cd = skill2_cd_max()
+	_cast = 2
+	Audio.voice(d.get("voice", hid + "_skill"))
+	return true
+
+func _dash_step(t: float) -> void:
+	if not alive:
+		return
+	var p := _dash_from.lerp(_dash_to, t)
+	p.y = LevelMain.I.terrain.walk_height(p.x, p.z)
+	global_position = p
+	if randf() < 0.45:
+		LevelMain.I.fx.burn_puff(p + Vector3(0, 0.5, 0))
+
+func _skill2_impact() -> void:
+	var d := skill2_def()
+	var lv := LevelMain.I
+	match d["id"]:
+		"charge":
+			var a := _dash_from
+			var b := _dash_to
+			var ab := b - a
+			ab.y = 0.0
+			var len2 := maxf(ab.length_squared(), 0.0001)
+			for e: Enemy in lv.enemies.duplicate():
+				if not e.alive or e.flying:
+					continue
+				var rel := e.global_position - a
+				rel.y = 0.0
+				var t := clampf(rel.dot(ab) / len2, 0.0, 1.0)
+				if (rel - ab * t).length() < 1.5:
+					e.damage(skill2_damage(), "physical")
+					if e.alive and not e.boss:
+						e.stun(float(d["stun"]))
+						lv.fx.stun_stars(e)
+			lv.fx.fire_ring(b, 2.0)
+			lv.fx.dust(b, 1.2)
+			lv.fx.slash_arc(b, Color(1.0, 0.6, 0.2), 2.2)
+			lv.cam_rig.shake(0.3)
+			Audio.play("slam", -4.0, 0.1)
+			rally = global_position
+			commanded = false
+			model.play("attack", 1.6, 0.05, true)
+		"ward":
+			_ward_t = float(d["time"])
+			_ward_at = _skill_at
+			_ward_tick = 0.0
+			lv.fx.shockwave(_ward_at, _ward_radius(), WARD_COL)
+			lv.fx.magic_burst(_ward_at + Vector3(0, 0.6, 0), WARD_COL, 1.3)
+			lv.fx.light_flash(_ward_at + Vector3(0, 1.5, 0), WARD_COL, 3.0, 7.0, 0.3)
+			Audio.play("magic", -2.0)
+			model.play("idle")
+		"pierce":
+			_pierce_shot()
+			model.play("idle")
+
+func _ward_radius() -> float:
+	return float(skill2_def()["radius"]) * (1.0 + 0.05 * DB.talent(hid, "skill"))
+
+## Sera's ward: every half second the rune glows again, slows what stands in it and burns it with
+## starlight (it keeps going if she falls).
+func _ward_update(delta: float) -> void:
+	_ward_t -= delta
+	_ward_tick -= delta
+	if _ward_tick > 0.0:
+		return
+	_ward_tick = 0.5
+	var lv := LevelMain.I
+	var r := _ward_radius()
+	lv.fx.rune_circle(_ward_at + Vector3(0, 0.08, 0), WARD_COL, r, 1.1)
+	var per := skill2_damage() * 0.5
+	var slow_k := float(skill2_def()["slow"])
+	for e: Enemy in lv.enemies.duplicate():
+		if e.alive and e.global_position.distance_to(_ward_at) < r:
+			e.damage(per, "magic", false)
+			if e.alive:
+				e.slow(slow_k, 0.7)
+			lv.fx.hit_spark(e.aim_point(), WARD_COL, 0.5)
+
+## Ren's piercing arrow: one big arrow along the chosen line, hitting each enemy once as it passes.
+func _pierce_shot() -> void:
+	var lv := LevelMain.I
+	var length: float = float(skill2_def()["length"])
+	var start := aim_point() + Vector3(0, 0.2, 0) + _pierce_dir * 0.5
+	var end := start + _pierce_dir * length
+	var arr := Assets.instance("p_arrow")
+	arr.scale = Vector3.ONE * 2.2
+	lv.world.add_child(arr)
+	arr.global_position = start
+	arr.look_at(end, Vector3.UP)
+	arr.rotate_object_local(Vector3.RIGHT, -PI * 0.5)
+	var trail_p := lv.fx.trail(arr, PIERCE_COL, 0.45)
+	var dmg_v := skill2_damage()
+	var hit := {}
+	lv.fx.hit_spark(start, PIERCE_COL, 1.2)
+	var wake_a := Vector3(start.x, lv.terrain.walk_height(start.x, start.z) + 1.0, start.z)
+	var wake_b := Vector3(end.x, lv.terrain.walk_height(end.x, end.z) + 1.0, end.z)
+	lv.fx.streak(wake_a, wake_b, PIERCE_COL, 0.55, 0.5)
+	lv.cam_rig.shake(0.15)
+	Audio.play("bow", -1.0, 0.05, 2)
+	var step := func(t: float) -> void:
+		var p := start.lerp(end, t)
+		p.y = lv.terrain.walk_height(p.x, p.z) + 1.0
+		arr.global_position = p
+		for e: Enemy in lv.enemies.duplicate():
+			if e.alive and not hit.has(e) and Vector2(e.global_position.x - p.x, e.global_position.z - p.z).length() < 1.0:
+				hit[e] = true
+				e.damage(dmg_v, "physical", true, 1.0)
+				lv.fx.hit_spark(e.aim_point(), PIERCE_COL, 1.0)
+				Audio.play("clash", -10.0, 0.2, 3)
+	var done := func() -> void:
+		lv.fx.detach_trail(trail_p)
+		arr.queue_free()
+	var tw := arr.create_tween()
+	tw.tween_method(step, 0.0, 1.0, length / 38.0)
+	tw.tween_callback(done)
 
 func _on_hit(e: Enemy) -> void:
 	super._on_hit(e)

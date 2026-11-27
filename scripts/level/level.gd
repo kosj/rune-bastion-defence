@@ -31,6 +31,10 @@ var targeting := ""
 var spell_cd := {"meteor": 0.0, "reinforce": 0.0}
 var fast := false
 var enemy_dmg_mult := 1.0
+var enemy_speed_mult := 1.0   # daily challenge "swift"
+var enemy_armor_add := 0.0    # daily challenge "armored"
+var banned_towers: Array = []  # daily challenge "no_barracks" / "no_mage"
+var _daily_reward := 0
 var hp_mult := 1.0
 var ambient_life: AmbientLife
 var _vignette_houses: Array[Transform3D] = []
@@ -74,6 +78,22 @@ func _ready() -> void:
 		# iron challenge: three lives, no spells, a little more gold to plan with
 		lives = 3
 		gold = int(gold * 1.4)
+	elif Game.daily:
+		# today's challenge: normal difficulty with the day's two twists
+		if Game.daily_has("thrifty"):
+			gold = int(gold * 0.7)
+		if Game.daily_has("glass"):
+			lives = 10
+		if Game.daily_has("swift"):
+			enemy_speed_mult = 1.25
+		if Game.daily_has("armored"):
+			enemy_armor_add = 0.2
+		if Game.daily_has("horde"):
+			waves = _scaled_waves(waves, 1.25)
+		if Game.daily_has("no_barracks"):
+			banned_towers.append("barracks")
+		if Game.daily_has("no_mage"):
+			banned_towers.append("mage")
 	elif Game.difficulty == 1:
 		hp_mult *= 1.15
 		lives = 10
@@ -85,7 +105,7 @@ func _ready() -> void:
 		gold = int(gold * 1.3)
 	if DB.up("gold"):
 		gold += 60
-	if DB.up("lives") and not Game.challenge:
+	if DB.up("lives") and not Game.challenge and not Game.daily_has("glass"):
 		lives += 2 if (Game.difficulty == 1 and not Game.endless) else 5
 	max_lives = lives
 	for p in def["paths"]:
@@ -140,6 +160,7 @@ func _ready() -> void:
 	hud.hero_pressed.connect(_select_hero)
 	Game.achievement_unlocked.connect(_on_achievement)
 	hud.skill_pressed.connect(func(): if hero: hero.cast_skill())
+	hud.skill2_pressed.connect(func(): if hero: hero.cast_skill2())
 	hud.spell_pressed.connect(_spell_pressed)
 	hud.wave_called.connect(_call_wave)
 	hud.radial.chosen.connect(_on_radial_chosen)
@@ -149,7 +170,8 @@ func _ready() -> void:
 		var s2: Vector2 = (lp as LanePath).sample(6.0)
 		wp.append(Vector3(s2.x, 1.5, s2.y))
 	hud.set_wave_buttons(wp)
-	_spawn_hero()
+	if not Game.daily_has("no_hero"):
+		_spawn_hero()
 	hud.set_gold(gold)
 	hud.set_lives(lives)
 	hud.set_wave(0, waves.size())
@@ -178,13 +200,25 @@ func _ready() -> void:
 		hud.show_banner(def["name"], "철인 도전 · 생명 3 · 주문 없음", Color(1.0, 0.55, 0.4))
 		for sid in hud.spell_btns:
 			((hud.spell_btns[sid] as Dictionary)["button"] as Control).visible = false
+	if Game.daily:
+		var names: Array = []
+		for m in Game.daily_mods:
+			names.append(tr(DB.DAILY_MODS[m]["name"]))
+		hud.show_banner(def["name"], tr("오늘의 도전") + " · " + " · ".join(names), Color(0.55, 0.85, 1.0))
+		if Game.daily_has("no_spells"):
+			for sid in hud.spell_btns:
+				((hud.spell_btns[sid] as Dictionary)["button"] as Control).visible = false
+		if Game.daily_has("no_hero"):
+			hud.hide_hero()
 	Audio.play_music(battle_music())
 	Audio.has_music("final")  # loaded now rather than when the last wave is called
 	# first time a kind of map event shows up: say what the gold "!" does
 	if not events.is_empty() and not Game.testing:
-		var kind0: String = events[0]["kind"]
-		if int(Game.stats.get("evt_hint_" + kind0, 0)) == 0:
-			_evt_hint = kind0  # shown a few seconds into the first wave, never over a cut-scene
+		for ev in events:
+			var kind0: String = ev["kind"]
+			if int(Game.stats.get("evt_hint_" + kind0, 0)) == 0:
+				_evt_hint = kind0  # shown a few seconds into the first wave, never over a cut-scene
+				break
 	if level_idx == 0 and not Game.seen_tutorial:
 		tutorial_step = 0
 		get_tree().create_timer(2.5).timeout.connect(func(): if tutorial_step == 0: hud.show_hint("빈 건설 부지(돌 울타리)를 탭해서 타워를 지으세요.\n한 번 탭하면 미리보기, 한 번 더 탭하면 건설!"))
@@ -400,11 +434,21 @@ const PORTAL_HOLE := Vector3(0.0, 2.25, 0.55)
 
 # ------------------------------------------------------------------ map events
 ## Tappable set pieces beside the road: a boulder to roll onto the enemies, an altar whose
-## pulse freezes the crowd around it, a hidden supply cache. A gold "!" shows when one is ready.
-const EVENTS := {"greenvale": ["cache"], "twinfords": ["cache"], "frostwind": ["rockfall"], "moonwood": ["altar"],
-	"trollgorge": ["rockfall", "rockfall"], "citadel": ["altar"], "falls": ["rockfall", "altar"], "temple": ["altar"],
-	"harbor": ["cache", "rockfall"], "capital": ["altar", "rockfall"]}
-const EVENT_CD := {"rockfall": 50.0, "altar": 40.0}
+## pulse freezes the crowd around it, a hidden supply cache, a moon beacon that exposes shadow
+## rogues, a mortar battery that shells the road, a holy crystal that burns the undead. Each
+## region has its own mix. A gold "!" shows when one is ready.
+const EVENTS := {"greenvale": ["cache"], "twinfords": ["cache", "mortar"], "frostwind": ["rockfall"],
+	"moonwood": ["beacon", "altar"], "trollgorge": ["rockfall", "rockfall"], "citadel": ["altar", "mortar"],
+	"falls": ["rockfall", "holy"], "temple": ["holy", "altar"], "harbor": ["cache", "mortar"],
+	"capital": ["beacon", "mortar"]}
+const EVENT_CD := {"rockfall": 50.0, "altar": 40.0, "beacon": 45.0, "mortar": 45.0, "holy": 45.0}
+const EVENT_HINT := {"cache": "길가의 금빛 ‘!’를 탭하면 숨은 보급품(골드)을 얻습니다",
+	"rockfall": "금빛 ‘!’가 뜬 바위를 탭하면 길 위로 굴러 떨어져 적을 덮칩니다",
+	"altar": "금빛 ‘!’가 뜬 제단을 탭하면 주변 적을 얼려 느리게 만듭니다",
+	"beacon": "금빛 ‘!’가 뜬 달빛 등대를 탭하면 숨은 그림자 도적이 모두 드러나고 주변 적이 느려집니다",
+	"mortar": "금빛 ‘!’가 뜬 포대를 탭하면 가까운 길에 포탄 세 발을 떨어뜨립니다",
+	"holy": "금빛 ‘!’가 뜬 성스러운 수정을 탭하면 주변 적을 태웁니다. 망자에게는 세 배, 해골 기사는 다시 일어나지 못합니다"}
+const UNDEAD := ["skeleton", "skeleton_knight", "lich"]
 var events: Array = []
 
 func _event_spot(lp: LanePath, along: float, bounds: Rect2, plot_r := 3.8) -> Vector2:
@@ -447,7 +491,8 @@ func _place_events(bounds: Rect2) -> void:
 		var road := lp.sample(lp.closest(spot).y)
 		var kind: String = kinds[k]
 		var pos := Vector3(spot.x, terrain.height_at(spot.x, spot.y), spot.y)
-		var ev := {"kind": kind, "pos": pos, "road": Vector3(road.x, terrain.walk_height(road.x, road.y), road.y), "cd": 0.0, "used": false}
+		var ev := {"kind": kind, "pos": pos, "road": Vector3(road.x, terrain.walk_height(road.x, road.y), road.y), "cd": 0.0, "used": false,
+			"lane": k % paths.size(), "along": lp.closest(spot).y}
 		_event_visual(ev)
 		var mk := Label3D.new()
 		mk.text = "!"
@@ -479,6 +524,19 @@ func _event_visual(ev: Dictionary) -> void:
 			n.scale = Vector3.ONE * 1.3
 			if not ev.has("disc"):
 				ev["disc"] = _event_disc(pos + Vector3(0, 0.07, 0))
+		"beacon":
+			n = Assets.instance("lamp")
+			n.scale = Vector3.ONE * 1.8
+			if not ev.has("disc"):
+				ev["disc"] = _event_disc(pos + Vector3(0, 0.07, 0), Color(0.75, 0.85, 1.0, 0.8))
+		"mortar":
+			n = Assets.instance("mortar")
+			n.scale = Vector3.ONE * 1.15
+		"holy":
+			n = Assets.instance_glow("shaman_crystal", 1.4, Color(1.0, 0.85, 0.45))
+			n.scale = Vector3.ONE * 0.85
+			if not ev.has("disc"):
+				ev["disc"] = _event_disc(pos + Vector3(0, 0.07, 0), Color(1.0, 0.85, 0.45, 0.8))
 		_:
 			n = Assets.instance("barrels")
 			n.scale = Vector3.ONE * 1.05
@@ -488,8 +546,8 @@ func _event_visual(ev: Dictionary) -> void:
 	_theme_overlay(n)
 	ev["node"] = n
 
-func _event_disc(p: Vector3) -> MeshInstance3D:
-	_rune_disc(p, 3.2, Color(0.4, 0.95, 1.0, 0.8))
+func _event_disc(p: Vector3, c := Color(0.4, 0.95, 1.0, 0.8)) -> MeshInstance3D:
+	_rune_disc(p, 3.2, c)
 	return world.get_child(world.get_child_count() - 1) as MeshInstance3D
 
 func _tap_event(sp: Vector2) -> bool:
@@ -543,6 +601,85 @@ func _trigger_event(ev: Dictionary) -> void:
 					e.slow(0.45, 4.0)
 			if ev.has("disc"):
 				(ev["disc"] as MeshInstance3D).visible = false
+		"beacon":
+			# moonlight floods the map: every shadow rogue shows itself for a while
+			ev["cd"] = EVENT_CD["beacon"]
+			var mc := Color(0.75, 0.85, 1.0)
+			fx.upgrade_beam(pos, mc)
+			fx.shockwave(pos, 7.0, mc)
+			fx.magic_burst(pos + Vector3(0, 2.2, 0), mc, 1.6)
+			fx.light_flash(pos + Vector3(0, 2.5, 0), mc, 4.0, 10.0, 0.5)
+			Audio.play("star", 0.0, 0.05)
+			var shown := 0
+			for e: Enemy in enemies:
+				if not e.alive:
+					continue
+				if e.d.get("stealth", false):
+					e.reveal_t = maxf(e.reveal_t, 15.0)
+					shown += 1
+				if e.global_position.distance_to(pos) < 7.0:
+					e.slow(0.7, 4.0)
+			if shown > 0:
+				overlay.float_text(pos + Vector3(0, 3.0, 0), tr("그림자 도적 %d 발견!") % shown, Color(0.8, 0.9, 1.0), 1.2)
+			if ev.has("disc"):
+				(ev["disc"] as MeshInstance3D).visible = false
+		"mortar":
+			ev["cd"] = EVENT_CD["mortar"]
+			var lp: LanePath = paths[int(ev["lane"])]
+			var along: float = ev["along"]
+			Audio.play("cannon", 0.0, 0.05)
+			fx.muzzle_flash(pos + Vector3(0, 1.3, 0), Vector3.UP, Color(1.0, 0.7, 0.3))
+			cam_rig.shake(0.25)
+			for i in 3:
+				var q := lp.sample(clampf(along + (i - 1) * 3.2, 0.5, lp.length - 0.5))
+				var land := Vector3(q.x, terrain.walk_height(q.x, q.y), q.y)
+				_mortar_shell(pos + Vector3(0, 1.4, 0), land, i * 0.3)
+		"holy":
+			ev["cd"] = EVENT_CD["holy"]
+			var hc := Color(1.0, 0.85, 0.45)
+			fx.upgrade_beam(pos, hc)
+			fx.shockwave(pos, 7.0, hc)
+			fx.magic_burst(pos + Vector3(0, 1.6, 0), hc, 1.8)
+			fx.light_flash(pos + Vector3(0, 2.0, 0), hc, 4.0, 10.0, 0.5)
+			Audio.play("upgrade", 0.0, 0.05)
+			var base := 80.0 * hp_mult
+			for e: Enemy in enemies.duplicate():
+				if not e.alive or e.global_position.distance_to(pos) > 7.0:
+					continue
+				var undead: bool = e.type in UNDEAD
+				if undead:
+					e._revived = true  # holy light: a skeleton knight felled now stays down
+					fx.soul(e.aim_point(), Color(1.0, 0.9, 0.6))
+				e.damage(base * (3.0 if undead and not e.boss else (1.5 if undead else 1.0)), "magic")
+			if ev.has("disc"):
+				(ev["disc"] as MeshInstance3D).visible = false
+
+## One mortar shell on an arc from the battery to a spot on the road.
+func _mortar_shell(from: Vector3, land: Vector3, delay: float) -> void:
+	var sh := Assets.instance("p_bomb")
+	sh.scale = Vector3.ONE * 1.3
+	world.add_child(sh)
+	sh.global_position = from
+	sh.visible = false
+	var tr_p := fx.trail(sh, Color(0.5, 0.5, 0.5), 0.5, true)
+	var h := 6.0 + from.distance_to(land) * 0.3
+	var fly := func(t: float) -> void:
+		sh.global_position = from.lerp(land, t) + Vector3(0, sin(t * PI) * h, 0)
+	var hit := func() -> void:
+		fx.detach_trail(tr_p)
+		sh.queue_free()
+		fx.explosion(land, 0.9)
+		cam_rig.shake(0.35)
+		Audio.play("boom", -2.0, 0.1, 2)
+		var dmg := 110.0 * hp_mult
+		for e: Enemy in enemies.duplicate():
+			if e.alive and not e.flying and e.global_position.distance_to(land) < 2.4:
+				e.damage(dmg, "physical", true, 0.3)
+	var tw := sh.create_tween()
+	tw.tween_interval(delay)
+	tw.tween_callback(func(): sh.visible = true)
+	tw.tween_method(fly, 0.0, 1.0, 0.9).set_trans(Tween.TRANS_LINEAR)
+	tw.tween_callback(hit)
 
 func _rock_impact(at: Vector3, rock: Node3D) -> void:
 	fx.explosion(at, 1.1)
@@ -569,9 +706,7 @@ func _update_events(delta: float) -> void:
 		_evt_hint_t += delta
 		if _evt_hint_t > 4.0:
 			Game.stat("evt_hint_" + _evt_hint)
-			var tip: String = {"cache": "길가의 금빛 ‘!’를 탭하면 숨은 보급품(골드)을 얻습니다",
-				"rockfall": "금빛 ‘!’가 뜬 바위를 탭하면 길 위로 굴러 떨어져 적을 덮칩니다",
-				"altar": "금빛 ‘!’가 뜬 제단을 탭하면 주변 적을 얼려 느리게 만듭니다"}[_evt_hint]
+			var tip: String = EVENT_HINT[_evt_hint]
 			hud.toast(tr("맵 장치"), tr(tip), "ic_map")
 			_evt_hint = ""
 	for ev in events:
@@ -1002,6 +1137,16 @@ func _spawn_hero() -> void:
 	world.add_child(hero)
 	hero.setup_hero(p)
 	soldiers.append(hero)
+	hero.leveled.connect(_on_hero_level)
+
+## The hero's second skill opens partway through the battle: its button pops and a card says what
+## it does.
+func _on_hero_level(lv: int) -> void:
+	if lv != DB.SKILL2_LEVEL or not is_inside_tree():
+		return
+	var s2: Dictionary = DB.hero_def()["skill2"]
+	hud.set_skill2_open(true, true)
+	hud.toast(tr("새 스킬: %s") % tr(s2["name"]), tr(s2["desc"]), s2["icon"])
 
 # ------------------------------------------------------------------ main loop
 
@@ -1159,6 +1304,8 @@ func _update_hud() -> void:
 		hud.hero_dead.text = "" if hero.alive else str(int(ceil(hero.respawn_t)))
 		hud.hero_b.modulate = Color(1, 1, 1) if hero.alive else Color(0.45, 0.45, 0.5)
 		hud.skill_cd.value = hero.skill_cd / hero.skill_cd_max()
+		if hero.skill2_open():
+			hud.skill2_cd.value = hero.skill2_cd / hero.skill2_cd_max()
 	for id in spell_cd:
 		var d: Dictionary = hud.spell_btns[id]
 		var cdm: float = spell_defs[id]["cd"]
@@ -1188,7 +1335,7 @@ func add_gold(n: int, at := Vector3.ZERO, popup := true) -> void:
 func on_enemy_killed(e: Enemy) -> void:
 	enemies.erase(e)
 	run_kills += 1
-	run_gold += int(e.d["gold"])
+	run_gold += int(e.d["gold"])  # (daily "horde" keeps the bounties as they are)
 	add_gold(int(e.d["gold"]), e.global_position)
 	Game.stat("kills")
 	Game.stat("gold", int(e.d["gold"]))
@@ -1312,7 +1459,10 @@ func _select_hero() -> void:
 	selection = {"kind": "hero"}
 	hero.set_selected(true)
 	Audio.voice(hero.hid + "_select", 0.0, 6.0)
-	hud.show_info(tr(DB.hero_def()["name"]) + "  Lv.%d" % hero.level, tr("땅을 탭하면 이동 · 스킬: %s (자동/수동)") % tr(DB.hero_def()["skill_name"]),
+	var s2n := tr(DB.hero_def()["skill2"]["name"])
+	if not hero.skill2_open():
+		s2n += " (Lv%d)" % DB.SKILL2_LEVEL
+	hud.show_info(tr(DB.hero_def()["name"]) + "  Lv.%d" % hero.level, tr("땅을 탭하면 이동 · 스킬: %s, %s (자동/수동)") % [tr(DB.hero_def()["skill_name"]), s2n],
 		[["heart", "%d/%d" % [hero.hp, hero.max_hp]], ["st_dmg", "%d-%d" % [hero.dmg[0], hero.dmg[1]]], ["st_armor", "%d%%" % int(hero.armor * 100)]])
 	Audio.play("hero_select", -4.0, 0.05)
 
@@ -1322,6 +1472,8 @@ func _select_plot(i: int) -> void:
 	var p: Vector2 = plots[i]
 	var opts := []
 	for t in DB.TOWER_ORDER:
+		if t in banned_towers:
+			continue
 		var c: int = DB.TOWERS[t]["levels"][0]["cost"]
 		opts.append({"id": "build_" + t, "icon": Assets.tex("tower_%s_1" % t), "label": str(c), "coin": true, "cost": c, "enabled": gold >= c})
 	hud.radial.open(Vector3(p.x, terrain.height_at(p.x, p.y) + 0.5, p.y), opts)
@@ -1558,7 +1710,7 @@ func _on_radial_chosen(id: String) -> void:
 		hud.target_hint.text = "집결 지점을 탭하세요 (길 위, 범위 내)"
 
 func _spell_pressed(id: String) -> void:
-	if Game.challenge:
+	if Game.challenge or Game.daily_has("no_spells"):
 		return
 	if spell_cd[id] > 0.0 or state == "won" or state == "lost":
 		Audio.play("error", -6.0)
@@ -1575,7 +1727,7 @@ func _handle_targeting(gp: Vector3) -> void:
 	var t := targeting
 	targeting = ""
 	hud.target_hint.text = ""
-	if Game.challenge and t in ["meteor", "reinforce"]:
+	if (Game.challenge or Game.daily_has("no_spells")) and t in ["meteor", "reinforce"]:
 		return
 	match t:
 		"meteor":
@@ -1672,13 +1824,39 @@ func _show_enemy_card(type: String) -> void:
 	tw.tween_property(p, "modulate:a", 0.0, 0.5)
 	tw.tween_callback(p.queue_free)
 
+## Play this run again in the same mode (campaign, iron challenge, daily, endless).
+func _restart() -> void:
+	if Game.endless:
+		Game.start_endless(level_idx)
+	elif Game.daily:
+		Game.start_daily()
+	elif Game.challenge:
+		Game.start_challenge(level_idx)
+	else:
+		Game.start_level(level_idx)
+
+## Daily "horde": every group a quarter bigger (bosses stay single), the same wave length.
+func _scaled_waves(src: Array, k: float) -> Array:
+	var out: Array = []
+	for w in src:
+		var nw: Array = []
+		for g in w:
+			var ng: Array = (g as Array).duplicate()
+			if not DB.ENEMIES.get(ng[0], {}).get("boss", false):
+				var n0 := int(ng[1])
+				ng[1] = maxi(n0, int(round(n0 * k)))
+				ng[2] = float(ng[2]) * float(n0) / float(ng[1])
+			nw.append(ng)
+		out.append(nw)
+	return out
+
 func _clear_cards() -> void:
 	if _info_card and is_instance_valid(_info_card):
 		_info_card.queue_free()
 	_info_card = null
 	_deselect()
 
-## Keyboard shortcuts: Esc/P pause, Space next wave, F speed, 1/2 spells, H hero, Q hero skill.
+## Keyboard shortcuts: Esc/P pause, Space next wave, F speed, 1/2 spells, H hero, Q/E hero skills.
 func hotkey(k: int) -> bool:
 	if k == KEY_ESCAPE or k == KEY_P:
 		if get_tree().paused and _modal != null:
@@ -1712,6 +1890,9 @@ func hotkey(k: int) -> bool:
 		KEY_Q:
 			if hero:
 				hero.cast_skill()
+		KEY_E:
+			if hero:
+				hero.cast_skill2()
 		_:
 			return false
 	return true
@@ -1757,7 +1938,7 @@ func _pause() -> void:
 				_modal = null
 			_pause(), 92.0))
 		if not Game.is_mobile and not Game.tall:
-			var keys := UI.ink("Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅   Q 영웅 스킬", UI.T_SMALL, UI.MUTED)
+			var keys := UI.ink("Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅   Q, E 영웅 스킬", UI.T_SMALL, UI.MUTED)
 			keys.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			vb.add_child(keys)
 		var sp := Control.new()
@@ -1765,7 +1946,7 @@ func _pause() -> void:
 		vb.add_child(sp)
 		var b2 := UI.button("다시 시작", 20, false, Vector2(0, 52), "secondary")
 		b2.icon = Assets.tex("ic_retry")
-		b2.pressed.connect(func(): Game.start_level(level_idx) if not Game.endless else Game.start_endless(level_idx))
+		b2.pressed.connect(_restart)
 		var b3 := UI.button("지도로", 20, false, Vector2(0, 52), "secondary")
 		b3.icon = Assets.tex("ic_map")
 		b3.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
@@ -1813,7 +1994,11 @@ func _victory() -> void:
 	var max_l: int = max_lives
 	var stars := 3 if lives >= max_l - 2 else (2 if lives >= max_l / 2 else 1)
 	var prev_stars := int(Game.stars[level_idx])
-	if Game.challenge:
+	if Game.daily:
+		# the day's twists do not change the region's stars
+		stars = prev_stars
+		_daily_reward = Game.daily_won(hero.hid if hero else Game.hero_id)
+	elif Game.challenge:
 		stars = prev_stars
 		Game.stat("iron_%d" % level_idx, 1, "max")
 		var iron_n := 0
@@ -1951,7 +2136,10 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 			grid.add_child(stl)
 		var gained := maxi(stars - prev_stars, 0)
 		var notes: Array[Label] = []
-		if Game.challenge:
+		if Game.daily:
+			var dtxt := (tr("오늘의 도전 성공! 영웅 경험치 +%d · 연속 %d일") % [_daily_reward, Game.daily_streak()]) if _daily_reward > 0 else tr("오늘의 도전 성공! 오늘 보상은 이미 받았습니다")
+			notes.append(UI.label(dtxt, 19, Color(0.6, 0.88, 1.0), 5, "ui_black"))
+		elif Game.challenge:
 			notes.append(UI.label("철인 도전 성공! 지역 카드에 철인 배지가 붙었습니다", 19, Color(1.0, 0.62, 0.45), 5, "ui_black"))
 		elif gained > 0 or (Game.difficulty == 1):
 			notes.append(UI.label((tr("새로 얻은 ★ %d  — 왕국 강화에 사용하세요") % gained) if gained > 0 else "영웅 난이도 클리어!", 19, UI.GOLD, 5, "ui_black"))
@@ -1972,9 +2160,9 @@ func _victory_modal(stars: int, prev_stars: int) -> void:
 		btns.append(mb)
 		var rb := UI.button("다시", 20, false, Vector2(0, 56), "secondary")
 		rb.icon = Assets.tex("ic_retry")
-		rb.pressed.connect(func(): Game.start_level(level_idx))
+		rb.pressed.connect(_restart)
 		btns.append(rb)
-		if level_idx < DB.LEVELS.size() - 1:
+		if level_idx < DB.LEVELS.size() - 1 and not Game.daily and not Game.challenge:
 			var nb := UI.button("다음 지역", 22, true, Vector2(0, 56), "primary")
 			nb.icon = Assets.tex("ic_play")
 			nb.name = "Next"
@@ -2051,6 +2239,9 @@ const LEAK_TIPS := {
 	"troll": "트롤 군주는 체력이 절반이 되면 고블린을 불러요. 유성 낙하를 그때를 위해 아껴 두세요.",
 	"lich": "리치 군주는 해골을 계속 불러내요. 광역 공격으로 잔챙이를 정리하세요.",
 	"ogre_king": "오우거 왕은 병사를 기절시키고 주변 적을 빠르게 해요. 길 끝 쪽에 마지막 방어선을 두세요.",
+	"rogue": "그림자 도적은 궁수와 포병이 보지 못해요. 길목에 마법 탑이나 병영을 두세요.",
+	"shield": "오크 방패병 곁의 적은 물리 피해를 덜 받아요. 마법 탑으로 방패병부터 쓰러뜨리세요.",
+	"spear": "고블린 투창병은 멈춰 서서 병사를 노려요. 궁수로 먼저 잡거나 병사를 가까이 붙이세요.",
 }
 const GENERAL_TIPS := [
 	"병영 병사로 길목을 막으면 궁수와 포병이 안전하게 공격해요.",
@@ -2122,7 +2313,7 @@ func _after_defeat() -> void:
 		mb.pressed.connect(func(): Game.goto_scene("res://scenes/main_menu.tscn"))
 		var rb := UI.button("다시 도전", 22, true, Vector2(0, 56), "primary")
 		rb.icon = Assets.tex("ic_retry")
-		rb.pressed.connect(func(): Game.start_level(level_idx))
+		rb.pressed.connect(_restart)
 		var row := UI.action_row([mb, rb])
 		rb.size_flags_stretch_ratio = 1.6
 		vb.add_child(row), 520, "dark")

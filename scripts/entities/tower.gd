@@ -335,6 +335,9 @@ func _find_target(r: float, exclude := []) -> Enemy:
 	for e: Enemy in LevelMain.I.enemies:
 		if not e.alive or (e.flying and not air) or e in exclude:
 			continue
+		# shadow rogues: only mages see through their stealth
+		if type != "mage" and e.hidden():
+			continue
 		var ep := Vector2(e.global_position.x, e.global_position.z)
 		var dd := ep.distance_to(me)
 		if dd > r:
@@ -400,8 +403,12 @@ func _fire(tgt: Enemy) -> void:
 				if not is_instance_valid(self):
 					return
 				var k := 0
-				for t: Enemy in targets:
-					if not is_instance_valid(t) or not t.alive:
+				for t0 in targets:
+					# untyped first: a typed loop variable errors on an enemy freed meanwhile
+					if not is_instance_valid(t0):
+						continue
+					var t := t0 as Enemy
+					if not t.alive:
 						continue
 					var dmgv := _roll()
 					var crit: bool = randf() < float(stats.get("crit", 0.0))

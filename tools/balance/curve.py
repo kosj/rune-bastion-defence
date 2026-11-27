@@ -46,7 +46,8 @@ SPEED_REF = 2.0   # 고블린 근처의 보통 속도
 SPEED_EXP = 0.5   # 빠를수록 사거리 안에 짧게 머묾(느린 대형 적도 병사를 묶어 두므로 지수는 1보다 작게)
 AIR_MULT = 1.5    # 공중 적은 궁수·마법사만 칠 수 있어 필요한 화력이 그만큼 큼
 # 특수 능력: 병사 기절(내려찍기), 주변 가속(함성), 치유, 자폭, 소환은 체력 이상으로 위험함
-MECH_MULT = {"slam": 1.3, "warcry": 1.2, "heal": 1.2, "explode": 1.2, "summon": 1.0}
+MECH_MULT = {"slam": 1.3, "warcry": 1.2, "heal": 1.2, "explode": 1.2, "summon": 1.0,
+             "stealth": 1.3, "aura": 1.3, "ranged": 1.15}
 
 
 def threat(types, enemies, hp_mult):

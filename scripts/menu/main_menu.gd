@@ -581,6 +581,16 @@ func _open_heroes() -> void:
 		sk.add_child(skn)
 		sk.add_child(UI.ink(tr("재사용 %d초") % int(h["skill_cd"]), UI.T_SMALL, UI.INK_SOFT))
 		cv.add_child(sk)
+		# the second skill opens partway through each battle
+		var s2: Dictionary = h["skill2"]
+		var sk2 := HBoxContainer.new()
+		sk2.add_theme_constant_override("separation", 8)
+		sk2.add_child(UI.icon(Assets.tex(s2["icon"]), 30))
+		var skn2 := UI.ink(s2["name"], 17, UI.INK, "ui_black")
+		skn2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sk2.add_child(skn2)
+		sk2.add_child(UI.ink(tr("전투 Lv%d부터 · 재사용 %d초") % [DB.SKILL2_LEVEL, int(s2["cd"])], UI.T_SMALL, UI.INK_SOFT))
+		cv.add_child(sk2)
 		# persistent rank (lifetime XP) -> talent points
 		var rk := HBoxContainer.new()
 		rk.add_theme_constant_override("separation", 8)

@@ -100,6 +100,8 @@ func _ready() -> void:
 				if wm:
 					if args["map_card"] == "e":
 						wm._open_endless_card()
+					elif args["map_card"] == "d":
+						wm._open_daily_card(wm)
 					else:
 						wm._open_card(int(args["map_card"])))
 		if args.has("shot_times"):
@@ -120,6 +122,9 @@ func _ready() -> void:
 		Game.stars[need] = 1
 	Game.endless = args.get("endless", "0") == "1"
 	Game.challenge = args.get("challenge", "0") == "1"
+	# daily=1 mods=a,b: a daily challenge run with those twists (DB.DAILY_MODS)
+	Game.daily = args.get("daily", "0") == "1"
+	Game.daily_mods = Array((args.get("mods", "swift,no_hero") as String).split(",")) if Game.daily else []
 	if args.get("alt_mastery", "0") == "1":
 		BEST_MASTERY = {"archer": "ranger", "barracks": "lancer", "mage": "frost", "artillery": "cluster"}
 	# star upgrades a player would plausibly own by this level (default: 3 stars per earlier level)
@@ -307,7 +312,11 @@ func _process(delta: float) -> void:
 				break
 	if args.has("evt_fire") and t >= float(args["evt_fire"]) and not has_meta("evt_fired") and LevelMain.I and not LevelMain.I.events.is_empty():
 		set_meta("evt_fired", true)
-		LevelMain.I._trigger_event(LevelMain.I.events[int(args.get("evt", "0")) % LevelMain.I.events.size()])
+		var evd: Dictionary = LevelMain.I.events[int(args.get("evt", "0")) % LevelMain.I.events.size()]
+		if args.has("evt_cam"):
+			LevelMain.I.cam_rig.focus((evd["pos"] + evd["road"]) * 0.5, float(args.get("zoom", "16")))
+			LevelMain.I.cam_rig._pos = LevelMain.I.cam_rig.target
+		LevelMain.I._trigger_event(evd)
 	if args.has("skip_at") and t >= float(args["skip_at"]) and not has_meta("skip_done") and LevelMain.I:
 		set_meta("skip_done", true)
 		var sk = LevelMain.I.cine.root.get_node_or_null("StorySkip")
@@ -373,6 +382,20 @@ func _process(delta: float) -> void:
 				L2.cam_rig.focus(Vector3(cp.x, 0, cp.y), float(args.get("zoom", "14")))
 				L2.cam_rig._pos = L2.cam_rig.target
 				L2.get_tree().create_timer(0.3).timeout.connect(func(): L2.hero.cast_skill())
+			"skill2show":
+				# the hero at battle level 3 casts the second skill into enemies a little up the road
+				L2.hero.add_xp(float(DB.HERO_XP[DB.SKILL2_LEVEL - 1]))
+				L2.hero.skill_cd = 999.0  # only the second skill in the picture
+				var lps: LanePath = L2.paths[0]
+				var hps := L2.hero.global_position
+				var offs: float = lps.closest(Vector2(hps.x, hps.z)).y
+				var ahead := float(args.get("ahead", "4"))
+				for k in int(args.get("n", "8")):
+					L2.spawn_enemy_at(args.get("enemy", "goblin"), lps, clampf(offs - ahead - 1.5 + k * 0.6, 1.0, lps.length - 1.0))
+				var cps := lps.sample(offs - ahead * 0.5)
+				L2.cam_rig.focus(Vector3(cps.x, 0, cps.y), float(args.get("zoom", "14")))
+				L2.cam_rig._pos = L2.cam_rig.target
+				L2.get_tree().create_timer(float(args.get("cast_after", "0.3"))).timeout.connect(func(): L2.hero.cast_skill2())
 			"meteor":
 				var lpm: LanePath = L2.paths[0]
 				var mp := lpm.sample(float(args.get("at", "12")))
@@ -402,6 +425,18 @@ func _process(delta: float) -> void:
 					L2.add_child(nd)
 					nd.global_position = Vector3(pp.x + (k - (names.size() - 1) * 0.5) * float(args.get("gap", "1.8")), float(args.get("py", "0.6")), pp.y)
 				L2.cam_rig.focus(Vector3(pp.x, 0, pp.y), float(args.get("zoom", "8")))
+				L2.cam_rig._pos = L2.cam_rig.target
+			"enemyshow":
+				# a mixed group a little up the road from the hero: enemies=a,b,c (comma list, in order)
+				var lpe: LanePath = L2.paths[0]
+				var hpe := L2.hero.global_position
+				var offe: float = lpe.closest(Vector2(hpe.x, hpe.z)).y
+				var names_e: Array = (args.get("enemies", "rogue,shield,spear") as String).split(",")
+				var ahead_e := float(args.get("ahead", "6"))
+				for k in names_e.size():
+					L2.spawn_enemy_at(names_e[k], lpe, clampf(offe - ahead_e - k * float(args.get("gap", "1.2")), 1.0, lpe.length - 1.0))
+				var cpe := lpe.sample(offe - ahead_e * 0.6)
+				L2.cam_rig.focus(Vector3(cpe.x, 0, cpe.y), float(args.get("zoom", "12")))
 				L2.cam_rig._pos = L2.cam_rig.target
 			"spawn":
 				var lp: LanePath = L2.paths[0]
@@ -651,6 +686,7 @@ func _desired_type(L: LevelMain) -> String:
 	var flying := 0.0
 	var swarm := 0.0
 	var fast := 0.0
+	var hidden := 0.0
 	for t in w:
 		var d: Dictionary = DB.ENEMIES[t]
 		var hpw := float(w[t]) * float(d["hp"]) / 60.0
@@ -662,10 +698,12 @@ func _desired_type(L: LevelMain) -> String:
 			swarm += float(w[t])
 		if float(d["speed"]) >= 3.0:
 			fast += float(w[t])
+		if d.get("stealth", false):
+			hidden += hpw
 	var sc := {
 		"archer": 1.2 + flying * 1.5,
-		"barracks": 0.9 + fast * 0.08 + swarm * 0.02,
-		"mage": 0.8 + armored * 0.6,
+		"barracks": 0.9 + fast * 0.08 + swarm * 0.02 + hidden * 0.3,
+		"mage": 0.8 + armored * 0.6 + hidden * 0.6,
 		"artillery": 0.7 + swarm * 0.06,
 	}
 	if have["barracks"] >= 3:
@@ -889,7 +927,7 @@ func _curve_report() -> void:
 	for k in DB.ENEMIES:
 		var d: Dictionary = DB.ENEMIES[k]
 		en[k] = {"hp": d["hp"], "gold": d["gold"], "armor": d["armor"], "mr": d["mr"], "speed": d["speed"], "lives": d["lives"], "boss": d.get("boss", false), "revive": d.has("revive"), "flying": d.get("flying", false),
-			"mech": ["slam", "warcry", "heal", "explode", "summon"].filter(func(m): return d.has(m))}
+			"mech": ["slam", "warcry", "heal", "explode", "summon", "stealth", "aura", "ranged"].filter(func(m): return d.has(m))}
 	print("ENEMIES ", JSON.stringify(en))
 	var tw := {}
 	for k in DB.TOWERS:
@@ -1385,9 +1423,11 @@ func _close_test_menu() -> void:
 	await _ct_wait(1.0)
 	var wm: Node = _menu.get("_select")
 	for how in ["button", "backdrop", "esc"]:
-		for which in ["card", "endless"]:
+		for which in ["card", "endless", "daily"]:
 			if which == "card":
 				wm.call("_open_card", 0)
+			elif which == "daily":
+				wm.call("_open_daily_card", wm)
 			else:
 				wm.call("_open_endless_card")
 			await _ct_wait(0.6)

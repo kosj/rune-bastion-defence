@@ -272,7 +272,7 @@ Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치하면 전체 �
 업그레이드 준비 중	Upgrade not ready yet
 추가 데이터를 받는 중...	Downloading more data...
 새로운 적	New enemy
-Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅   Q 영웅 스킬	Esc pause   Space next wave   F speed   1, 2 spells   H hero   Q hero skill
+Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅   Q, E 영웅 스킬	Esc pause   Space next wave   F speed   1, 2 spells   H hero   Q, E hero skills
 팁	Tip
 재사용 %d초	%ds cooldown
 등급 %d	Rank %d
@@ -290,3 +290,57 @@ Esc 일시 정지   Space 다음 웨이브   F 배속   1, 2 주문   H 영웅  
 바위 오우거는 내려찍기로 병사를 기절시켜요. 병영 뒤에 마법 탑을 두어 체력을 깎으세요.	Rock ogres stun soldiers with their slam. Put mage towers behind your barracks to wear them down.
 트롤 군주는 체력이 절반이 되면 고블린을 불러요. 유성 낙하를 그때를 위해 아껴 두세요.	The Troll Lord calls goblins at half health. Save a meteor strike for that moment.
 오우거 왕은 병사를 기절시키고 주변 적을 빠르게 해요. 길 끝 쪽에 마지막 방어선을 두세요.	The Ogre King stuns soldiers and speeds up nearby enemies. Keep a last line of defense near the end of the road.
+땅을 탭하면 이동 · 스킬: %s, %s (자동/수동)	Tap the ground to move · Skills: %s, %s (auto/manual)
+새 스킬: %s	New skill: %s
+화염 돌진	Flame Charge
+별빛 결계	Star Ward
+꿰뚫는 화살	Piercing Arrow
+적이 몰린 곳으로 돌진해 지나는 길의 적에게 피해를 주고 기절시킵니다.	Charges into the thickest group, damaging and stunning every enemy in his path.
+5초 동안 결계를 펼쳐 안에 든 적을 느리게 하고 계속 마법 피해를 줍니다.	Raises a ward for 5 seconds that slows the enemies inside and keeps burning them with magic.
+일직선으로 날아가며 맞는 적 모두에게 방어를 무시하는 큰 피해를 줍니다.	Flies in a straight line, dealing heavy armor-ignoring damage to every enemy it passes.
+전투 Lv%d부터 · 재사용 %d초	From battle Lv%d · %ds cooldown
+고블린 투창병	Goblin Spear-Thrower
+멈춰 서서 병사에게 투창을 던짐 → 병사를 붙여 막거나 궁수로 먼저 처치	Stops to throw javelins at soldiers → close in with soldiers or shoot it first with archers
+그림자 도적	Shadow Rogue
+은신 - 궁수·포병이 보지 못함. 피해를 입거나 병사에게 막히면 드러남 → 마법사·병영	Stealth: archers and artillery cannot see it. Revealed when hurt or held by soldiers → mages, barracks
+오크 방패병	Orc Shieldbearer
+방패 진형 - 주변 적의 방어력 +30% → 마법으로 먼저 처치	Shield wall: enemies around it get +30% armor → kill it first with magic
+그림자 도적은 궁수와 포병이 보지 못해요. 길목에 마법 탑이나 병영을 두세요.	Shadow rogues are invisible to archers and artillery. Put a mage tower or barracks on their road.
+오크 방패병 곁의 적은 물리 피해를 덜 받아요. 마법 탑으로 방패병부터 쓰러뜨리세요.	Enemies next to an orc shieldbearer take less physical damage. Bring the shieldbearer down first with mage towers.
+고블린 투창병은 멈춰 서서 병사를 노려요. 궁수로 먼저 잡거나 병사를 가까이 붙이세요.	Goblin spear-throwers stop to pick off soldiers. Shoot them first with archers, or send soldiers right up to them.
+금빛 ‘!’가 뜬 달빛 등대를 탭하면 숨은 그림자 도적이 모두 드러나고 주변 적이 느려집니다	Tap the moon beacon with the gold "!" to expose every hidden shadow rogue and slow the enemies around it
+금빛 ‘!’가 뜬 포대를 탭하면 가까운 길에 포탄 세 발을 떨어뜨립니다	Tap the mortar battery with the gold "!" to drop three shells on the nearby road
+금빛 ‘!’가 뜬 성스러운 수정을 탭하면 주변 적을 태웁니다. 망자에게는 세 배, 해골 기사는 다시 일어나지 못합니다	Tap the holy crystal with the gold "!" to burn the enemies around it: triple damage to the undead, and skeleton knights stay down
+그림자 도적 %d 발견!	%d shadow rogues exposed!
+질주	Swift Feet
+적 이동 속도 +25%	Enemies move 25% faster
+강철 군단	Iron Legion
+적 방어력 +20%	Enemy armor +20%
+빈 금고	Empty Coffers
+시작 골드 -30%	Starting gold -30%
+무너진 성벽	Crumbling Walls
+생명 10	10 lives
+영웅 부재	No Hero
+영웅 없이 싸웁니다	Fight without your hero
+고요한 하늘	Silent Sky
+주문을 쓸 수 없습니다	No spells
+대군세	Great Horde
+적 수 +25%	25% more enemies
+병영 금지	No Barracks
+병영을 지을 수 없습니다	Barracks cannot be built
+마법 봉인	Sealed Magic
+마법사 탑을 지을 수 없습니다	Mage towers cannot be built
+오늘의 용사	Hero of the Day
+오늘의 도전 첫 성공	Win your first daily challenge
+한 주의 수호자	Guardian of the Week
+오늘의 도전 7회 성공	Win 7 daily challenges
+꾸준한 방패	Steadfast Shield
+오늘의 도전 3일 연속 성공	Win the daily challenge 3 days in a row
+오늘의 도전	Daily Challenge
+오늘의 도전 성공! 영웅 경험치 +%d · 연속 %d일	Daily challenge won! Hero XP +%d · %d-day streak
+오늘의 도전 성공! 오늘 보상은 이미 받았습니다	Daily challenge won! Today's reward was already claimed
+오늘의 도전은 2지역을 클리어하면 열립니다	The daily challenge opens once you clear region 2
+오늘 완료! 내일 새 도전이 열립니다	Done for today! A new challenge opens tomorrow
+첫 승리 보상: 영웅 경험치 +%d	First win reward: hero XP +%d
+연속 %d일 · 최고 %d일	Streak %d days · best %d
+도전	Start

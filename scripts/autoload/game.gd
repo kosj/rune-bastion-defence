@@ -2,12 +2,20 @@ extends Node
 ## Global game state: progress, settings, scene transitions.
 
 const SAVE_PATH := "user://rune_bastion_save.cfg"
+## A copy of the last save that loaded cleanly (taken once per session). A save that cannot be
+## read (a tab closed mid-write, a damaged browser store) falls back to it.
+const BACKUP_PATH := "user://rune_bastion_save.bak.cfg"
+const SAVE_VERSION := 2
+var _persist_asked := false
+var restored_from_backup := false
 
 var stars: Array = []
 var heroic: Array = []
 var upgrades := {}
 var difficulty := 0  # 0 = normal, 1 = heroic (veteran), 2 = casual (easy)
 var challenge := false  # iron challenge run (3 lives, no spells), unlocked by 3 stars in a region
+var daily := false      # today's challenge run (DB.daily_for)
+var daily_mods: Array = []
 var hero_id := "kael"
 var seen_enemies := {}
 var stats := {}
@@ -45,6 +53,9 @@ func _ready() -> void:
 	Lang.apply(language)
 	if OS.has_feature("web"):
 		print("[RB] gpu texture formats: etc2=%s astc=%s s3tc=%s" % [OS.has_feature("etc2"), OS.has_feature("astc"), OS.has_feature("s3tc")])
+		# "?perf=1" in the address: the performance readout for testing on devices (docs/DEVICE_TEST.md)
+		if str(JavaScriptBridge.eval("location.search", true)).contains("perf"):
+			(func(): PerfOverlay.toggle(get_tree())).call_deferred()
 	_fade_layer = CanvasLayer.new()
 	_fade_layer.layer = 100
 	add_child(_fade_layer)
@@ -211,16 +222,23 @@ func goto_scene(path: String) -> void:
 	_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_busy = false
 
+## F3: performance readout on/off (any screen).
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_F3:
+		PerfOverlay.toggle(get_tree())
+
 func start_level(idx: int) -> void:
 	current_level = idx
 	endless = false
 	challenge = false
+	daily = false
 	goto_scene("res://scenes/level.tscn")
 
 func start_challenge(idx: int) -> void:
 	current_level = idx
 	endless = false
 	challenge = true
+	daily = false
 	goto_scene("res://scenes/level.tscn")
 
 func iron_done(idx: int) -> bool:
@@ -231,6 +249,7 @@ func start_endless(map_idx: int) -> void:
 	endless_map = map_idx
 	endless = true
 	challenge = false
+	daily = false
 	goto_scene("res://scenes/level.tscn")
 
 func hero_unlocked(id: String) -> bool:
@@ -239,6 +258,59 @@ func hero_unlocked(id: String) -> bool:
 
 func endless_unlocked() -> bool:
 	return stars[2] > 0
+
+# ---------------------------------------------------------------- daily challenge
+
+## Days since 1970 in the player's local time (the challenge changes at local midnight).
+func today() -> int:
+	var bias := int(Time.get_time_zone_from_system().get("bias", 0))
+	return int(floor((Time.get_unix_time_from_system() + bias * 60.0) / 86400.0))
+
+func daily_unlocked() -> bool:
+	return stars[1] > 0
+
+func daily_today() -> Dictionary:
+	var cleared: Array = []
+	for i in stars.size():
+		if int(stars[i]) > 0:
+			cleared.append(i)
+	return DB.daily_for(today(), cleared)
+
+func daily_done_today() -> bool:
+	return int(stats.get("daily_last", -1)) == today()
+
+func daily_streak() -> int:
+	var last := int(stats.get("daily_last", -1))
+	if last == today() or last == today() - 1:
+		return int(stats.get("daily_streak", 0))
+	return 0
+
+func start_daily() -> void:
+	var dd := daily_today()
+	current_level = int(dd["level"])
+	endless = false
+	challenge = false
+	daily = true
+	daily_mods = dd["mods"]
+	goto_scene("res://scenes/level.tscn")
+
+func daily_has(mod: String) -> bool:
+	return daily and mod in daily_mods
+
+## A daily win: the first one each day pays out and extends the streak. Returns the reward
+## (hero xp) or 0 when today's was already done.
+func daily_won(hid: String) -> int:
+	if daily_done_today():
+		return 0
+	var last := int(stats.get("daily_last", -1))
+	var streak := int(stats.get("daily_streak", 0)) + 1 if last == today() - 1 else 1
+	stats["daily_last"] = today()
+	stats["daily_streak"] = streak
+	stat("daily_streak_best", streak, "max")
+	stat("daily_wins")
+	if hid != "":
+		add_hero_xp(hid, DB.DAILY_XP)
+	return DB.DAILY_XP
 
 ## Track a lifetime statistic; mode "add" accumulates, "max" keeps the best value.
 func stat(key: String, v := 1, mode := "add") -> void:
@@ -288,13 +360,30 @@ func save() -> void:
 	cf.set_value("settings", "vibration", vibration)
 	cf.set_value("settings", "language", language)
 	cf.set_value("settings", "battery_saver", battery_saver)
+	cf.set_value("meta", "version", SAVE_VERSION)
 	cf.save(SAVE_PATH)
+	_ask_persist()
+
+## Web: ask the browser to keep this site's storage (it may otherwise clear a rarely visited
+## site's data under storage pressure). Granted silently for installed / often used sites.
+func _ask_persist() -> void:
+	if _persist_asked or not OS.has_feature("web"):
+		return
+	_persist_asked = true
+	JavaScriptBridge.eval("try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}", true)
 
 func _load() -> void:
 	var cf := ConfigFile.new()
-	if cf.load(SAVE_PATH) != OK:
+	if cf.load(SAVE_PATH) == OK and cf.has_section("progress"):
+		_apply_config(cf)
+		# a good save: keep a copy to fall back on
+		cf.save(BACKUP_PATH)
 		return
-	_apply_config(cf)
+	var bk := ConfigFile.new()
+	if FileAccess.file_exists(SAVE_PATH) and bk.load(BACKUP_PATH) == OK and bk.has_section("progress"):
+		_apply_config(bk)
+		restored_from_backup = true
+		print("[RB] save unreadable, restored the backup")
 
 func _apply_config(cf: ConfigFile) -> void:
 	var s = cf.get_value("progress", "stars", stars)

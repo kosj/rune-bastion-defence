@@ -6,6 +6,7 @@ signal speed_toggled
 signal pause_pressed
 signal hero_pressed
 signal skill_pressed
+signal skill2_pressed
 signal spell_pressed(id: String)
 signal wave_called
 
@@ -22,6 +23,9 @@ var hero_lv: Label
 var hero_dead: Label
 var skill_b: Button
 var skill_cd: TextureProgressBar
+var skill2_b: Button
+var skill2_cd: TextureProgressBar
+var _skill2_lock: Control
 var spell_btns := {}
 var wave_btns: Array = []
 var info: PanelContainer
@@ -214,6 +218,26 @@ func _build_bottom() -> void:
 	skill_b.pressed.connect(func(): skill_pressed.emit())
 	bl.add_child(skill_b)
 	skill_cd = _cooldown_overlay(skill_b, 68)
+	# second hero skill, stacked above the first (the dock stays as wide as before); locked until
+	# the hero reaches battle level DB.SKILL2_LEVEL
+	skill2_b = UI.icon_button(Assets.tex(DB.hero_def()["skill2"]["icon"]), 58, UI.NAVY, 29, "red")
+	skill2_b.position = Vector2(115, -28)
+	skill2_b.pressed.connect(func(): skill2_pressed.emit())
+	bl.add_child(skill2_b)
+	skill2_cd = _cooldown_overlay(skill2_b, 58)
+	_skill2_lock = Control.new()
+	_skill2_lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_skill2_lock.set_anchors_preset(Control.PRESET_FULL_RECT)
+	skill2_b.add_child(_skill2_lock)
+	var lk := UI.icon(Assets.tex("lock"), 26)
+	lk.position = Vector2(16, 8)
+	_skill2_lock.add_child(lk)
+	var ll := UI.label("Lv%d" % DB.SKILL2_LEVEL, 17, UI.TEXT, 5, "ui_black")
+	ll.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ll.position = Vector2(0, 31)
+	ll.size = Vector2(58, 20)
+	_skill2_lock.add_child(ll)
+	set_skill2_open(false)
 	# spells
 	var x := 192
 	for id in ["meteor", "reinforce"]:
@@ -241,6 +265,31 @@ func _build_bottom() -> void:
 	target_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	target_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(target_hint)
+
+## Daily "no hero": the portrait, bars and skill buttons go.
+func hide_hero() -> void:
+	for c in [hero_b, hero_hp, hero_xp, hero_lv.get_parent(), hero_dead, skill_b, skill2_b]:
+		(c as Control).visible = false
+	# the spells slide into the corner the hero left
+	for sid in spell_btns:
+		var b: Control = (spell_btns[sid] as Dictionary)["button"]
+		b.position.x -= 186.0
+
+## The second hero skill opens (pulse: just now, in battle) or shows its lock.
+func set_skill2_open(open: bool, pulse := false) -> void:
+	skill2_b.disabled = not open
+	_skill2_lock.visible = not open
+	skill2_b.self_modulate = Color.WHITE if open else Color(0.55, 0.55, 0.62)
+	if open:
+		skill2_cd.value = 0.0
+	if pulse:
+		skill2_b.pivot_offset = skill2_b.size * 0.5
+		var tw := skill2_b.create_tween()
+		tw.tween_property(skill2_b, "scale", Vector2.ONE * 1.35, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(skill2_b, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+		var gl := skill2_b.create_tween().set_loops(3)
+		gl.tween_property(skill2_b, "modulate", Color(1.6, 1.4, 0.9), 0.25)
+		gl.tween_property(skill2_b, "modulate", Color.WHITE, 0.25)
 
 func _mini_bar(c: Color) -> ProgressBar:
 	var pb := ProgressBar.new()
