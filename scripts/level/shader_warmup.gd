@@ -278,6 +278,9 @@ static func _effects(L: LevelMain, spots: Array, dummy: Enemy) -> void:
 		func(): fx.soul(p),
 		func(): fx.coin_burst(p),
 		func(): fx.fire_patch(p, 1.5, 0.0),
+		# a bird of the level's flock (AmbientLife): its wing-beat shader is compiled here, not when
+		# the first flock flies over in battle
+		func(): fx.add_child(AmbientLife.probe(L.ambient_kind(), p + Vector3(0, 2, 0))),
 	]
 	if dummy:
 		calls.append(func(): fx.level_up(dummy))

@@ -382,6 +382,14 @@ func _process(delta: float) -> void:
 				L2.cam_rig._pos = L2.cam_rig.target
 				if args.has("slowmo"):
 					Engine.time_scale = float(args["slowmo"])
+			"chimney":
+				# close look at a cottage's chimney smoke (AmbientLife)
+				var hs: Array = L2._vignette_houses.duplicate()
+				hs.append_array(L2.terrain.decor_xf.get("house", []))
+				if not hs.is_empty():
+					var hxf: Transform3D = hs[0]
+					L2.cam_rig.focus(hxf.origin, float(args.get("zoom", "9")))
+					L2.cam_rig._pos = L2.cam_rig.target
 			"props":
 				# a row of models on the road for look-dev: name or name!glow, comma-separated
 				var lpp: LanePath = L2.paths[0]

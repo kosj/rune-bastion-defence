@@ -32,6 +32,8 @@ var spell_cd := {"meteor": 0.0, "reinforce": 0.0}
 var fast := false
 var enemy_dmg_mult := 1.0
 var hp_mult := 1.0
+var ambient_life: AmbientLife
+var _vignette_houses: Array[Transform3D] = []
 var range_ring: MeshInstance3D
 var seen := {}
 var tutorial_step := -1
@@ -656,6 +658,8 @@ func _place_vignette(bounds: Rect2) -> void:
 		n.rotation.y = yaw + deg_to_rad(rot_deg)
 		n.scale = sc
 		_theme_overlay(n)
+		if model == "house":
+			_vignette_houses.append(n.transform)
 		if not Game.high_quality and model != "house" and not model.begins_with("tree"):
 			for g in n.find_children("*", "GeometryInstance3D", true, false):
 				(g as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -896,6 +900,16 @@ func _decorate(theme: String) -> void:
 		fx.ambient(amb[theme])
 	if theme in ["night", "swamp"]:
 		fx.ambient("motes")
+	# flocks over the map and smoke from the cottages
+	var b: Array = def["bounds"]
+	# the vignette's cottages first (they sit by the road, in view), then the scattered ones
+	var houses: Array = _vignette_houses.duplicate()
+	houses.append_array(terrain.decor_xf.get("house", []))
+	ambient_life = AmbientLife.make(world, theme, Rect2(b[0], b[2], b[1] - b[0], b[3] - b[2]), houses, Game.high_quality)
+
+## The flock kind of this level (AmbientLife), for the shader warm-up.
+func ambient_kind() -> String:
+	return AmbientLife.THEME_KIND.get(def.get("theme", ""), "bird")
 
 func _make_range_ring() -> void:
 	range_ring = MeshInstance3D.new()
