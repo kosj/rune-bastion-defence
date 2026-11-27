@@ -147,6 +147,14 @@ static func run(L: LevelMain) -> void:
 	if staged:
 		print("NEWTHING t=0.0 warm:unlit")
 	omni.visible = false
+	# the level's own omni lights (portal, landmarks, lanterns) go dark too: wherever the camera
+	# later looks away from them, things are drawn without an omni light, a variant of its own
+	# (it used to compile mid-battle on the Twin Fords, when the view first left the portals)
+	var level_lights: Array = []
+	for l in L.world.find_children("*", "OmniLight3D", true, false):
+		if l != omni and (l as OmniLight3D).visible:
+			level_lights.append(l)
+			(l as OmniLight3D).visible = false
 	# short effects (lightning, sparks) are gone by now: fire them again for the unlit variants
 	_effects(L, spots, dummy)
 	for c in L.fx.get_children():
@@ -154,6 +162,9 @@ static func run(L: LevelMain) -> void:
 			spawned.append(c)
 	for i in DARK_FRAMES:
 		await tree.process_frame
+	for l in level_lights:
+		if is_instance_valid(l):
+			(l as OmniLight3D).visible = true
 	if not _alive(L):
 		_finish(tree, t0, was_paused, was_muted, hits_before)
 		return
