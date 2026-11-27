@@ -831,17 +831,44 @@ func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, lab
 	var dt := clampf(t - _wb_t, 0.0, 0.1) if _wb_t >= 0.0 else 0.0
 	_wb_t = t
 	var kk := clampf(maxf(dt, 0.016) * 12.0, 0.0, 1.0)
+	# screen spots first: two portals off the same edge clamp to the same spot, so markers that
+	# would overlap are spread apart (along the edge they sit on, else sideways)
+	var spots: Array = []
 	for w in wave_btns:
-		var n: Control = w["node"]
-		n.visible = visible_flag
-		if not visible_flag:
-			continue
 		var sp := cam.unproject_position(w["pos"])
+		var at_edge := sp.x < 70.0 or sp.x > vs.x - 70.0
 		sp.x = clampf(sp.x, 70, vs.x - 70)
 		sp.y = clampf(sp.y, 130, vs.y - 140)
 		# keep clear of the hero/spell dock in the bottom-left corner
 		if sp.x < 420.0 and sp.y > vs.y - 250.0:
 			sp.y = vs.y - 250.0
+		for _k in 3:
+			var moved := false
+			for o in spots:
+				var op: Vector2 = o
+				if absf(op.x - sp.x) < 140.0 and absf(op.y - sp.y) < 172.0:
+					# beside the other marker: along the edge first (above, below), else sideways;
+					# the first spot that stays on screen and off the bottom-left dock
+					var tries: Array = [op + Vector2(0, -172), op + Vector2(0, 172), op + Vector2(150, 0), op + Vector2(-150, 0)]
+					if not at_edge:
+						tries = [tries[2], tries[3], tries[0], tries[1]]
+					for c in tries:
+						var cv: Vector2 = c
+						var bottom := vs.y - (250.0 if cv.x < 420.0 else 140.0)
+						if cv.x >= 70.0 and cv.x <= vs.x - 70.0 and cv.y >= 130.0 and cv.y <= bottom:
+							sp = cv
+							break
+					moved = true
+			if not moved:
+				break
+		spots.append(sp)
+	for wi in wave_btns.size():
+		var w: Dictionary = wave_btns[wi]
+		var n: Control = w["node"]
+		n.visible = visible_flag
+		if not visible_flag:
+			continue
+		var sp: Vector2 = spots[wi]
 		# and step aside from the selection card and notices (below a card in the upper half,
 		# above one in the lower half); the button with its label and preview spans -42..+125
 		var dy := 0.0

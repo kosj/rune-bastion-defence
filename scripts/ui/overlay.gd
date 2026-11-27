@@ -15,6 +15,18 @@ func float_text(p: Vector3, txt: String, c: Color, s := 1.0) -> void:
 	txt = tr(txt)  # drawn with draw_string, so no automatic Control translation
 	texts.append({"pos": p, "text": txt, "color": c, "t": 0.0, "life": 1.1, "scale": s})
 
+## Bounty popup: kills close together in a short moment share one "+N" that counts up (a splash
+## that clears a pack shows "+40" once instead of eight overlapping "+5"), a little larger as it grows.
+func gold_text(p: Vector3, n: int) -> void:
+	for t in texts:
+		if t.get("gold", 0) > 0 and t["t"] < 0.35 and (t["pos"] as Vector3).distance_to(p) < 3.0:
+			t["gold"] += n
+			t["text"] = "+%d" % t["gold"]
+			t["t"] = minf(t["t"], 0.08)
+			t["scale"] = minf(0.9 + 0.04 * sqrt(float(t["gold"])), 1.35)
+			return
+	texts.append({"pos": p, "text": "+%d" % n, "color": UI.GOLD, "t": 0.0, "life": 1.1, "scale": 0.9, "gold": n})
+
 func _process(delta: float) -> void:
 	var rd := delta / maxf(Engine.time_scale, 0.01)
 	for t in texts:

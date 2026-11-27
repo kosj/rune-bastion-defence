@@ -1330,7 +1330,7 @@ func add_gold(n: int, at := Vector3.ZERO, popup := true) -> void:
 	gold += n
 	hud.set_gold(gold)
 	if popup and at != Vector3.ZERO:
-		overlay.float_text(at + Vector3(0, 1.0, 0), "+%d" % n, UI.GOLD, 0.9)
+		overlay.gold_text(at + Vector3(0, 1.0, 0), n)
 
 func on_enemy_killed(e: Enemy) -> void:
 	enemies.erase(e)

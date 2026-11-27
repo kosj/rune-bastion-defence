@@ -337,6 +337,11 @@ func _process(delta: float) -> void:
 						# then the hero: its card must shrink to its own content
 						L2.get_tree().create_timer(0.6).timeout.connect(L2._select_hero)
 			"plot":
+				# the shots harness builds on every plot: clear the first one so there is a plot to pick
+				if L2.towers.size() >= L2.plots.size() and L2.towers.has(0):
+					L2.towers[0].remove()
+					L2.towers.erase(0)
+					L2.set_plot_visible(0, true)
 				for i in L2.plots.size():
 					if not L2.towers.has(i):
 						L2.cam_rig.focus(Vector3(L2.plots[i].x, 0, L2.plots[i].y), float(args.get("zoom", "18")))
@@ -438,6 +443,9 @@ func _process(delta: float) -> void:
 				var cpe := lpe.sample(offe - ahead_e * 0.6)
 				L2.cam_rig.focus(Vector3(cpe.x, 0, cpe.y), float(args.get("zoom", "12")))
 				L2.cam_rig._pos = L2.cam_rig.target
+			"boss":
+				# a wave-style spawn (enemy card, boss cinematic with cine=1): enemy=<type>
+				L2._spawn_enemy(args.get("enemy", "shade"), 0)
 			"spawn":
 				var lp: LanePath = L2.paths[0]
 				for k in int(args.get("n", "6")):

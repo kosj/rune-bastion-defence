@@ -63,6 +63,7 @@ var aura_armor := 0.0
 var _aura_cd := 0.0
 var _aura_fx := 0.0
 var _aura_ring: MeshInstance3D
+var _glow_light: OmniLight3D
 # ranged (goblin spear-thrower): stops to throw javelins at soldiers in reach, three at a time
 var _shot_cd := 0.0
 var _throw_t := 0.0
@@ -116,6 +117,19 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		add_child(staff)
 	if d.has("aura"):
 		_aura_ring = LevelMain.I.fx.ground_ring(self, float(d.get("aura_r", 3.0)), Color(0.25, 0.5, 1.0, 0.65))
+	if d.has("glow"):
+		# a boss of the dark reads against a night map: a pool of its colour underfoot and, on the
+		# high setting, a soft light of its own (gone while it hides, faded when it falls)
+		var gc: Color = d["glow"]
+		LevelMain.I.fx.ground_ring(self, sc * 0.5, Color(gc.r, gc.g, gc.b, 0.5))
+		if Game.high_quality:
+			_glow_light = OmniLight3D.new()
+			_glow_light.light_color = gc
+			_glow_light.light_energy = 1.6
+			_glow_light.omni_range = sc * 1.5
+			_glow_light.shadow_enabled = false
+			_glow_light.position = Vector3(0.0, height * 0.85, sc * 0.3)
+			add_child(_glow_light)
 	if (d.get("stealth", false) or d.get("vanish", false)) and model.body:
 		# its own copy of the (tinted) material with alpha, so each rogue fades on its own
 		_solid_mat = model.body.material_override if model.body.material_override else model.body.mesh.surface_get_material(0)
@@ -125,6 +139,8 @@ func setup(p_type: String, p_path: LanePath, hp_mult: float) -> void:
 		for g in model.find_children("*", "GeometryInstance3D", true, false):
 			if g != model.body:
 				_ghost_meshes.append(g)
+		if _glow_light:
+			_ghost_meshes.append(_glow_light)
 		set_ghost(GHOST if d.get("stealth", false) else 0.0)
 	if d["model"] == "wolf" and model.anim == null:
 		model.position.y = 0.42 * sc
@@ -677,6 +693,8 @@ func _die() -> void:
 		var clip := "death2" if model.has("death2") and randf() < 0.5 else "death"
 		model.play(clip, 1.0 if clip == "death" else 1.5, 0.1, true)
 	Audio.play("die_" + ("big" if boss or type == "warchief" or type == "orc" else "small"), -4.0, 0.12)
+	if _glow_light:
+		create_tween().tween_property(_glow_light, "light_energy", 0.0, 2.0)
 	var tw := create_tween()
 	if flying:
 		tw.tween_property(self, "position:y", LevelMain.I.terrain.height_at(position.x, position.z), 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)

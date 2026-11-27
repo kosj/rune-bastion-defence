@@ -114,7 +114,7 @@ const ENEMIES := {
 		"aura": 0.3, "aura_r": 3.0,
 		"desc": "방패 진형 - 주변 적의 방어력 +30% → 마법으로 먼저 처치"},
 	"shade": {"title": "그림자를 다스리는 자", "name": "그림자 왕 녹스", "model": "shade", "hp": 6000, "speed": 0.85, "armor": 0.3, "mr": 0.3,
-		"gold": 550, "lives": 20, "dmg": [38, 56], "atk_rate": 1.5, "scale": 3.3, "boss": true,
+		"gold": 550, "lives": 20, "dmg": [38, 56], "atk_rate": 1.5, "scale": 3.3, "boss": true, "glow": Color(0.62, 0.38, 1.0),
 		"vanish": true, "summon": "rogue", "summon_n": 3, "summon_cd": 11.0, "enrage_summon": "rogue", "enrage_n": 6,
 		"enrage_text": "그림자 도적 떼가 몰려옵니다",
 		"desc": "보스 - 12초마다 3초 동안 그림자에 숨어(마법사 탑만 공격 가능) 그림자 도적을 부르고, 체력 50%에서 도적 떼를 소환"},

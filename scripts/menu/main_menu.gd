@@ -519,6 +519,7 @@ func _open_heroes() -> void:
 		sc.add_child(box)
 		vb.add_child(sc)
 	box.add_theme_constant_override("separation", 16 if box is HBoxContainer else 12)
+	var rows: Array = []  # per card: its header and description, lined up across the cards below
 	for id in DB.HEROES:
 		var h: Dictionary = DB.HEROES[id]
 		var unlocked := Game.hero_unlocked(id)
@@ -570,6 +571,7 @@ func _open_heroes() -> void:
 		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		d.custom_minimum_size = Vector2(cw - 40, 0)
 		cv.add_child(d)
+		rows.append([top, d])
 		var sr := HFlowContainer.new()
 		sr.add_theme_constant_override("h_separation", 16)
 		sr.add_child(UI.stat("heart", "%d" % h["hp"], 17))
@@ -646,6 +648,23 @@ func _open_heroes() -> void:
 		cv.add_child(push)
 		cv.add_child(ar)
 		box.add_child(p)
+	if box is HBoxContainer:
+		_line_up(rows)
+
+## Side-by-side cards: once laid out, each row (header, description...) takes the height of its
+## tallest copy, so the stats and skills below start on one line across the cards.
+func _line_up(rows: Array) -> void:
+	await get_tree().process_frame
+	if not is_inside_tree() or Game._busy:
+		return
+	for k in (rows[0] as Array).size():
+		var mh := 0.0
+		for r in rows:
+			if is_instance_valid(r[k]):
+				mh = maxf(mh, (r[k] as Control).size.y)
+		for r in rows:
+			if is_instance_valid(r[k]):
+				(r[k] as Control).custom_minimum_size.y = mh
 
 ## Hero talents: rank points (from lifetime battle XP) bought into four 3-step talents.
 func _open_talents(id: String) -> void:
