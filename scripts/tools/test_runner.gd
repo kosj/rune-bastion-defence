@@ -342,7 +342,12 @@ func _process(delta: float) -> void:
 				var ks: Array = L2.towers.keys()
 				if not ks.is_empty():
 					var tw: Tower = L2.towers[ks[0]]
-					L2.cam_rig.focus(tw.global_position, float(args.get("zoom", "18")))
+					# cam_off=x,z: aim the camera off the tower (to put it in a corner, under a panel)
+					var co := Vector3.ZERO
+					if args.has("cam_off"):
+						var parts := (args["cam_off"] as String).split(",")
+						co = Vector3(float(parts[0]), 0, float(parts[1]))
+					L2.cam_rig.focus(tw.global_position + co, float(args.get("zoom", "18")))
 					L2._select_tower(ks[0])
 					if args.get("then", "") == "hero":
 						# then the hero: its card must shrink to its own content

@@ -1,36 +1,50 @@
 class_name TitleLife
 extends Node3D
 ## The title diorama at work, so the screen never stands still:
-##  - every so often a raiding party (goblins, now and then an orc) runs in from the right across
-##    the castle's foreground; the mage tower and the archers shoot it down (arcing arrows, magic
-##    bolts, hit sparks) and the raiders fall one by one
-##  - when the last one falls, the hero and the footmen cheer
+##  - every so often a few goblins charge in from the right. Each one runs at a defender (the hero
+##    always takes one, footmen the rest), who turns to meet it; they trade blows - the goblin
+##    swings and is blocked, the defender cuts back and the goblin reels - until it falls
+##  - the towers shoot at the goblins while they are still running in (they wound, the melee kills)
+##  - when the last one falls the defenders turn back to the camera and cheer
 ##  - flocks of birds cross the sky behind the castle
 ## Cosmetic only. Nothing spawns while the 3D view is switched off (the world map covers it).
 
-# (in front of the mage tower and behind the footmen, so every raider stays in the open)
-const START := Vector3(15.5, 0, 0.6)     # off the right edge
-const END := Vector3(-4.5, 0, -3.6)      # the castle's foreground, left of centre
-const RAID_GAP := Vector2(4.0, 7.0)     # seconds between two raids
+const START := Vector3(15.5, 0, -0.2)    # off the right edge
+const WAY := Vector3(8.6, 0, 0.8)        # between the barracks and the mage tower
+const RAID_GAP := Vector2(4.0, 7.0)      # seconds between two raids
+# Who fights, by defender index (0 the hero, 1-3 the footmen left to right): where his goblin
+# stops (from his post: in front of him and to the right, so the pair faces the camera and no
+# other pair or the title's buttons hide it) and the last turn of its run in (from the spot).
+# The middle footman stands right behind the hero, so he only cheers.
+const FIGHTS := {
+	0: [Vector3(0.75, 0, 1.1), Vector3(2.2, 0, 0.2)],
+	3: [Vector3(1.0, 0, 0.6), Vector3(2.0, 0, -1.3)],
+	1: [Vector3(0.8, 0, 0.7), Vector3(2.0, 0, -1.3)],
+}
+const RUN_SPEED := 2.6
+# the VARCO attack clip the hero, the footmen and the goblins share: 1.5 s, the blow lands at 68%
+const STRIKE := 0.68
 const BOLT_COL := Color(0.72, 0.45, 1.0)
 const BOLT_HEAD := Color(0.85, 0.7, 1.0, 0.75)
+const STEEL := Color(0.85, 0.92, 1.0)    # a blow caught on a shield or a blade
+const EMBER := Color(1.0, 0.62, 0.25)    # the hero's cuts
 # under the ground island, on the camera's side of its far rim: drawn (so compiled) but hidden
 # behind the island's top, from every pose the title camera takes
 const HIDE_AT := Vector3(1.0, -3.2, -10.0)
 
 var fx: FX
-var pool: Array[CharacterModel] = []      # raiders, built hidden by the menu
+var pool: Array[CharacterModel] = []      # goblins, built hidden by the menu
+var defenders: Array[CharacterModel] = [] # the hero first, then the footmen
 var archers: Array[CharacterModel] = []   # the archer tower's two units
 var archer_from: Array[Vector3] = []
 var mage: CharacterModel
 var mage_from := Vector3.ZERO
-var cheer: Array[CharacterModel] = []     # the hero and the footmen
 
 var armed := false        # set by the menu once the whole diorama is built
 var _next := 3.0
 var _warmed := false
 var _cheered := false
-var _raid: Array = []     # [{m, hp, d (distance along the route), side, speed, dead_t}]
+var _raid: Array = []     # one dictionary per goblin (see _start_raid)
 var _shots: Array = []    # [{node, from, raider, to, t, dur, arc, kind}]
 var _mage_cd := 0.6
 var _arch_cd := 0.0
@@ -41,9 +55,6 @@ var _bird_next := 5.0
 var _flocks: Array = []
 static var _bolt_mesh: SphereMesh
 static var _bolt_mat: StandardMaterial3D
-
-func _route_len() -> float:
-	return START.distance_to(END)
 
 ## Everything the raid draws, drawn once out of sight so its programs are compiled before the first
 ## raid (the web has no shader cache: a first arrow would otherwise stutter). Runs the first time
@@ -62,7 +73,8 @@ func _warm() -> void:
 	var bird := AmbientLife.probe("bird", HIDE_AT)
 	add_child(bird)
 	fx.magic_burst(HIDE_AT, BOLT_COL, 0.8)
-	fx.hit_spark(HIDE_AT, Color(1, 0.95, 0.8), 0.6)
+	fx.hit_spark(HIDE_AT, STEEL, 0.6)
+	fx.dust(HIDE_AT, 0.5)
 	for i in 3:
 		await get_tree().process_frame
 		if not is_inside_tree():
@@ -84,7 +96,7 @@ func _process(delta: float) -> void:
 	_next -= delta
 	if _next <= 0.0 and _raid.is_empty() and shown:
 		_start_raid()
-	_move_raid(delta)
+	_run_raid(delta)
 	_fire(delta)
 	_move_shots(delta)
 	for u in _unit_t.keys():
@@ -97,7 +109,7 @@ func _process(delta: float) -> void:
 	if _cheer_t >= 0.0:
 		_cheer_t -= delta
 		if _cheer_t < 0.0:
-			for c in cheer:
+			for c in defenders:
 				if is_instance_valid(c):
 					c.play("idle")
 	_bird_next -= delta
@@ -108,105 +120,216 @@ func _process(delta: float) -> void:
 
 # ---------------------------------------------------------------- the raid
 
+## Two or three goblins, one per defender: the hero always gets one (and the first), the footmen
+## are picked at random. Each runs its own path to the spot beside its defender.
 func _start_raid() -> void:
-	var goblins: Array = []
-	var orcs: Array = []
-	for m in pool:
-		(orcs if m.model_name == "orc" else goblins).append(m)
-	goblins.shuffle()
-	var party: Array = goblins.slice(0, randi_range(2, 3))
-	if randf() < 0.6 and not orcs.is_empty():
-		party.insert(randi_range(0, party.size()), orcs[0])
+	# the right footman's goblin first (its run is the shortest), the hero's, now and then a third
+	# for the left footman
+	var who: Array = [3, 0]
+	if randf() < 0.4:
+		who.append(1)
+	var gob := pool.duplicate()
+	gob.shuffle()
 	_cheered = false
-	var d := 0.0
-	for m: CharacterModel in party:
-		var orc := m.model_name == "orc"
-		var r := {"m": m, "hp": 6 if orc else 3, "d": d, "side": randf_range(-0.9, 0.9),
-			"speed": 1.9 if orc else 2.5, "dead_t": -1.0}
-		d -= randf_range(1.3, 1.9)
-		m.visible = true
-		m.play("run", 0.8 if orc else 1.1, 0.0)
-		_raid.append(r)
-		_place(r)
-
-func _place(r: Dictionary) -> void:
-	var m: CharacterModel = r["m"]
-	var dir := (END - START).normalized()
-	var side := Vector3(-dir.z, 0, dir.x) * float(r["side"])
-	var p := START + dir * maxf(float(r["d"]), -6.0) + side
-	m.position = p
-	m.rotation.y = atan2(dir.x, dir.z)
-
-func _aim(r: Dictionary) -> Vector3:
-	var m: CharacterModel = r["m"]
-	return m.position + Vector3(0, 1.4 if m.model_name == "orc" else 0.8, 0)
-
-func _move_raid(delta: float) -> void:
-	var L := _route_len()
-	var alive := 0
-	for r in _raid:
-		var m: CharacterModel = r["m"]
-		if float(r["dead_t"]) >= 0.0:
-			# fallen: lie still a moment, then sink into the ground
-			r["dead_t"] = float(r["dead_t"]) + delta
-			var t := float(r["dead_t"]) - m.anim_length("death") - 0.6
-			if t > 0.0:
-				m.position.y = -t * 1.6
-				if t > 0.9:
-					m.visible = false
+	for i in who.size():
+		var di: int = who[i]
+		if di >= defenders.size():
 			continue
-		alive += 1
-		r["d"] = float(r["d"]) + float(r["speed"]) * delta
-		if float(r["d"]) >= L:
-			_kill(r)  # (the towers always win on the title screen)
-		_place(r)
+		var dm: CharacterModel = defenders[di]
+		if not dm.has_meta("post"):
+			dm.set_meta("post", dm.global_position)
+			dm.set_meta("yaw0", dm.global_rotation.y)
+		var post: Vector3 = dm.get_meta("post")
+		var f: Array = FIGHTS[di]
+		var spot := post + (f[0] as Vector3)
+		var path: Array = [START + Vector3(0, 0, randf_range(-0.8, 0.8)), WAY + Vector3(0, 0, randf_range(-0.4, 0.4)), spot + (f[1] as Vector3), spot]
+		var r := {
+			"m": gob[i], "def": dm, "hero": di == 0, "path": path, "d": 0.0,
+			"state": "wait", "wait": 0.2 + i * randf_range(1.1, 1.5),
+			"hp": 3 if di == 0 else 2, "ft": 0.0, "beat": "", "bt": 0.0,
+			"dead_t": -1.0, "home_t": -1.0,
+		}
+		_raid.append(r)
+
+func _path_len(path: Array) -> float:
+	var L := 0.0
+	for i in path.size() - 1:
+		L += (path[i] as Vector3).distance_to(path[i + 1])
+	return L
+
+## The point `d` along the path, and the direction there.
+func _along(path: Array, d: float) -> Array:
+	for i in path.size() - 1:
+		var a: Vector3 = path[i]
+		var b: Vector3 = path[i + 1]
+		var seg := a.distance_to(b)
+		if d <= seg or i == path.size() - 2:
+			var k := clampf(d / maxf(seg, 0.001), 0.0, 1.0)
+			return [a.lerp(b, k), (b - a).normalized()]
+		d -= seg
+	return [path[-1], Vector3.LEFT]
+
+func _face(m: Node3D, at: Vector3) -> float:
+	var dd := at - m.global_position
+	return atan2(dd.x, dd.z)
+
+func _run_raid(delta: float) -> void:
 	if _raid.is_empty():
 		return
-	if alive == 0 and not _cheered:
-		_cheered = true
-		_do_cheer()
-	if not _raid.any(func(x): return (x["m"] as CharacterModel).visible):
+	var settled := true
+	for r in _raid:
+		var m: CharacterModel = r["m"]
+		var dm: CharacterModel = r["def"]
+		match r["state"]:
+			"wait":
+				settled = false
+				r["wait"] = float(r["wait"]) - delta
+				if float(r["wait"]) <= 0.0:
+					r["state"] = "run"
+					m.visible = true
+					m.position.y = 0.0
+					m.play("run", 1.15, 0.0, true)
+					var p0: Array = _along(r["path"], 0.0)
+					m.global_position = p0[0]
+			"run":
+				settled = false
+				r["d"] = float(r["d"]) + RUN_SPEED * delta
+				var L := _path_len(r["path"])
+				var at: Array = _along(r["path"], minf(float(r["d"]), L))
+				m.global_position = at[0]
+				m.rotation.y = atan2((at[1] as Vector3).x, (at[1] as Vector3).z)
+				# the defender sees it coming and turns to meet it
+				if m.global_position.x < 12.5:
+					_track(dm, m.global_position, delta)
+				if float(r["d"]) >= L:
+					r["state"] = "fight"
+					r["ft"] = 0.0
+					m.rotation.y = _face(m, dm.global_position)
+					_beat(r, "swing")
+			"fight":
+				settled = false
+				_track(dm, m.global_position, delta)
+				_fight(r, delta)
+			"dead":
+				# fallen: lie still a moment, then sink into the ground
+				r["dead_t"] = float(r["dead_t"]) + delta
+				var t := float(r["dead_t"]) - m.anim_length("death") - 0.6
+				if t > 0.0:
+					m.position.y = -t * 1.6
+					if t > 0.9:
+						m.visible = false
+				# the defender stands a moment over it, then turns back to his post
+				if float(r["home_t"]) >= 0.0:
+					r["home_t"] = float(r["home_t"]) - delta
+					if float(r["home_t"]) < 0.0:
+						_turn(dm, float(dm.get_meta("yaw0")), 0.4)
+						if dm.current != "idle":
+							dm.play("idle")
+				if m.visible or float(r["home_t"]) >= 0.0:
+					settled = false
+	var all_dead := _raid.all(func(x): return x["state"] == "dead")
+	if all_dead and not _cheered:
+		var home := _raid.all(func(x): return float(x["home_t"]) < 0.0)
+		if home:
+			_cheered = true
+			_do_cheer()
+	if settled and _cheered:
 		_raid.clear()
 		_next = randf_range(RAID_GAP.x, RAID_GAP.y)
 
-func _kill(r: Dictionary) -> void:
-	if float(r["dead_t"]) >= 0.0:
-		return
-	r["dead_t"] = 0.0
-	var m: CharacterModel = r["m"]
-	m.play("death2" if m.has("death2") and randf() < 0.5 else "death", 1.0, 0.05, true)
+## Turns a defender toward a point, smoothly (he keeps his eyes on the goblin as it comes).
+func _track(dm: Node3D, at: Vector3, delta: float) -> void:
+	var want := _face(dm, at)
+	var y := dm.global_rotation.y
+	dm.global_rotation = Vector3(0, lerp_angle(y, want, clampf(delta * 6.0, 0.0, 1.0)), 0)
 
-func _hit(r: Dictionary, n: int) -> void:
-	if float(r["dead_t"]) >= 0.0:
-		return
-	r["hp"] = int(r["hp"]) - n
+## One exchange, as beats: the goblin swings ("swing") and the blow is caught on the shield (or
+## the hero's blade); the defender cuts back ("cut") and the goblin reels ("reel") or falls.
+func _beat(r: Dictionary, b: String) -> void:
+	r["beat"] = b
+	r["bt"] = 0.0
+	r["struck"] = false
 	var m: CharacterModel = r["m"]
-	m.hit_flash()
-	if int(r["hp"]) <= 0:
-		_kill(r)
+	var dm: CharacterModel = r["def"]
+	match b:
+		"swing":
+			m.play("attack", 1.6, 0.06, true)
+		"cut":
+			dm.play("attack", 1.5, 0.06, true)
+		"reel":
+			m.play("hit", 2.2, 0.05, true)
+
+func _fight(r: Dictionary, delta: float) -> void:
+	r["bt"] = float(r["bt"]) + delta
+	var bt := float(r["bt"])
+	var m: CharacterModel = r["m"]
+	var dm: CharacterModel = r["def"]
+	match r["beat"]:
+		"swing":
+			var hit_at := 1.5 * STRIKE / 1.6
+			if bt >= hit_at and not r["struck"]:
+				r["struck"] = true
+				var to_m := (m.global_position - dm.global_position).normalized()
+				fx.hit_spark(dm.global_position + to_m * 0.5 + Vector3(0, 1.1, 0), STEEL, 0.45)
+			if bt >= hit_at + 0.12:
+				_beat(r, "cut")
+		"cut":
+			var hit_at2 := 1.5 * STRIKE / 1.5
+			if bt >= hit_at2 and not r["struck"]:
+				r["struck"] = true
+				var chest := m.global_position + Vector3(0, 0.75, 0)
+				m.hit_flash()
+				# (small: the camera is close, and a big flare reads as a puff of smoke)
+				if r["hero"]:
+					fx.hit_spark(chest, EMBER, 0.75)
+				else:
+					fx.hit_spark(chest, Color(1, 0.95, 0.8), 0.55)
+				r["hp"] = int(r["hp"]) - (2 if r["hero"] else 1)
+				if int(r["hp"]) <= 0:
+					_die(r)
+					return
+				_beat(r, "reel")
+				# the defender finishes his swing, then settles back into his stance
+				r["cut_end"] = 1.5 / 1.5 - hit_at2
+		"reel":
+			if r.has("cut_end"):
+				r["cut_end"] = float(r["cut_end"]) - delta
+				if float(r["cut_end"]) <= 0.0:
+					r.erase("cut_end")
+					dm.play("idle", 1.0, 0.2)
+			if bt >= 1.67 / 2.2:
+				_beat(r, "swing")
+
+func _die(r: Dictionary) -> void:
+	var m: CharacterModel = r["m"]
+	r["state"] = "dead"
+	r["dead_t"] = 0.0
+	r["home_t"] = 1.1
+	m.play("death2" if m.has("death2") and randf() < 0.5 else "death", 1.0, 0.05, true)
+	fx.dust(m.global_position, 0.32)
 
 func _do_cheer() -> void:
 	_cheer_t = 0.0
-	for c in cheer:
+	for c in defenders:
 		if is_instance_valid(c) and c.has("cheer"):
 			c.play("cheer", randf_range(0.95, 1.1), 0.15, true)
 			_cheer_t = maxf(_cheer_t, c.anim_length("cheer"))
 
-## The raider a tower shoots at: the front-most living one in its reach.
+## The goblin a tower shoots at: the front-most one still running in, inside the tower's reach.
+## The towers wound and the melee finishes: a shot never takes the last point of health.
 func _target(min_x: float, max_x: float) -> Dictionary:
 	var best := {}
 	for r in _raid:
-		if float(r["dead_t"]) >= 0.0 or float(r["d"]) < 0.5:
+		if r["state"] != "run" or float(r["d"]) < 0.5:
 			continue
-		var x := (r["m"] as CharacterModel).position.x
+		var x := (r["m"] as CharacterModel).global_position.x
 		if x < min_x or x > max_x:
 			continue
-		# shots already on their way count as hits: no overkill on a goblin with one life left
 		var incoming := 0
 		for s in _shots:
 			if s["raider"] == r:
 				incoming += 1
-		if incoming >= int(r["hp"]):
+		if incoming >= int(r["hp"]) - 1:
 			continue
 		if best.is_empty() or float(r["d"]) > float(best["d"]):
 			best = r
@@ -218,33 +341,35 @@ func _fire(delta: float) -> void:
 	_mage_cd -= delta
 	_arch_cd -= delta
 	if _mage_cd <= 0.0 and mage:
-		var r := _target(-3.0, 12.0)
+		var r := _target(5.0, 12.5)
 		if not r.is_empty():
-			_mage_cd = 1.6
+			_mage_cd = 1.8
 			_shoot("bolt", mage_from, r)
 			_unit_attack(mage, _aim(r))
 	if _arch_cd <= 0.0 and not archers.is_empty():
-		var r2 := _target(-6.0, 8.0)
+		var r2 := _target(5.0, 10.0)
 		if not r2.is_empty():
-			_arch_cd = 0.5
+			_arch_cd = 0.8
 			_arch_i = (_arch_i + 1) % archers.size()
 			_shoot("arrow", archer_from[_arch_i], r2)
 			_unit_attack(archers[_arch_i], _aim(r2))
+
+func _aim(r: Dictionary) -> Vector3:
+	return (r["m"] as CharacterModel).global_position + Vector3(0, 0.8, 0)
 
 ## A tower's crew member turns to its target and looses; back to its post (and idle) after.
 func _unit_attack(u: CharacterModel, at: Vector3) -> void:
 	if not u.has_meta("yaw0"):
 		u.set_meta("yaw0", u.global_rotation.y)
-	var d := at - u.global_position
-	_turn(u, atan2(d.x, d.z))
+	_turn(u, _face(u, at))
 	if u.has("attack"):
 		u.play("attack", 1.3, 0.05, true)
 		_unit_t[u] = u.anim_length("attack") / 1.3 + 0.5
 
-func _turn(u: Node3D, yaw: float) -> void:
+func _turn(u: Node3D, yaw: float, dur := 0.14) -> void:
 	var from := u.global_rotation.y
 	var tw := u.create_tween()
-	tw.tween_method(func(y: float): u.global_rotation = Vector3(0, y, 0), from, from + wrapf(yaw - from, -PI, PI), 0.14)
+	tw.tween_method(func(y: float): u.global_rotation = Vector3(0, y, 0), from, from + wrapf(yaw - from, -PI, PI), dur)
 
 func _shoot(kind: String, from: Vector3, r: Dictionary) -> void:
 	var to := _aim(r)
@@ -299,7 +424,7 @@ func _move_shots(delta: float) -> void:
 	for s in _shots:
 		var n: Node3D = s["node"]
 		var r: Dictionary = s["raider"]
-		if float(r["dead_t"]) < 0.0:
+		if r["state"] == "run":
 			s["to"] = _aim(r)  # (homing, like the battle's arrows)
 		s["t"] = float(s["t"]) + delta
 		var k := clampf(float(s["t"]) / float(s["dur"]), 0.0, 1.0)
@@ -308,15 +433,15 @@ func _move_shots(delta: float) -> void:
 		var prev := n.position
 		n.position = p
 		if s["kind"] == "arrow":
-			var dir := p - prev
-			_point(n, dir)
+			_point(n, p - prev)
 		if k >= 1.0:
 			if s["kind"] == "arrow":
 				fx.hit_spark(p, Color(1, 0.95, 0.8), 0.7)
-				_hit(r, 1)
 			else:
 				fx.magic_burst(p, BOLT_COL, 0.8)
-				_hit(r, 1)
+			if r["state"] == "run" or r["state"] == "fight":
+				(r["m"] as CharacterModel).hit_flash()
+				r["hp"] = maxi(int(r["hp"]) - 1, 1)
 			if s.has("trail"):
 				fx.detach_trail(s["trail"])
 			n.queue_free()

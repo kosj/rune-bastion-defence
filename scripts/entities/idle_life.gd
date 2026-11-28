@@ -16,6 +16,13 @@ extends SkeletonModifier3D
 var amount := 1.0
 ## Set by CharacterModel: true while "idle" is the current clip.
 var want := false
+## A sword in a fist (CharacterModel.GRIPS): at rest the forearm turns the hand over (degrees
+## about the forearm) so the blade hangs point-down beside the leg instead of across the thighs.
+## 0: no weapon hand. Unlike the rest, this is a pose and not motion: it follows the idle clip
+## closely (in and out with the clip's own blend) and starts at full weight, so the title's
+## pre-rendered picture and the live scene match.
+var wrist_twist := 0.0
+var _ww := -1.0
 
 var _w := 0.0
 var _t := 0.0
@@ -58,8 +65,17 @@ func _process_modification_with_delta(delta: float) -> void:
 	delta = minf(delta, 0.1)
 	# in slowly (the clip blends in from a run or a swing first), out at once
 	_w = move_toward(_w, 1.0 if want else 0.0, delta * (1.6 if want else 8.0))
+	if _ww < 0.0:
+		_ww = 1.0 if want else 0.0
+	_ww = move_toward(_ww, 1.0 if want else 0.0, delta * 7.0)
+	if wrist_twist != 0.0 and _ww > 0.0:
+		var hb := _bone("RightHand")
+		if hb >= 0:
+			var hy := sk.get_bone_global_pose(hb).basis.y.normalized()  # along the forearm
+			_rot(sk, "RightHand", hy, deg_to_rad(wrist_twist) * _ww)
 	if _w <= 0.0:
-		active = false
+		if _ww <= 0.0:
+			active = false
 		return
 	_t += delta
 	var k := _w * amount

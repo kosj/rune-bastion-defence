@@ -78,6 +78,7 @@ func build(cam: Camera3D) -> void:
 	radial = RadialMenu.new()
 	radial.cam = cam
 	world_ui.add_child(radial)
+	radial.keepout = _panel_rects
 	root = Control.new()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.theme = UI.theme()
@@ -746,6 +747,23 @@ func _layout_notes(k: float) -> void:
 	_notes = keep
 
 ## Screen rects the wave call buttons stay out of: the selection card, notices, boss bar, hint.
+## The HUD panels a map-following button must not slip under: the top bar, the corner buttons,
+## the hero and spell dock and the selection card.
+func _panel_rects() -> Array:
+	var out: Array = []
+	for c in [top_panel, top_right, info]:
+		if is_instance_valid(c) and (c as Control).is_visible_in_tree() and (c as Control).modulate.a > 0.05:
+			out.append((c as Control).get_global_rect().grow(6.0))
+	if is_instance_valid(dock) and dock.is_visible_in_tree():
+		var d := Rect2()
+		for ch in dock.get_children():
+			var cc := ch as Control
+			if cc and cc.visible:
+				d = cc.get_global_rect() if d.size == Vector2.ZERO else d.merge(cc.get_global_rect())
+		if d.size != Vector2.ZERO:
+			out.append(d.grow(6.0))
+	return out
+
 func _keepout_rects() -> Array:
 	var out: Array = []
 	for c in [info, boss_panel, hint] + _notes:
@@ -888,6 +906,8 @@ func set_wave_buttons(points: Array) -> void:
 		markers.add_child(holder)
 		wave_btns.append({"node": holder, "pos": p, "ring": ring, "label": lab, "tag": tag, "button": b})
 
+const DOCK_CLEAR := 272.0
+
 func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, label: String, t: float) -> void:
 	var vs := root.get_viewport_rect().size
 	var sr := Game.safe_rect()  # buttons stay clear of a notch and the home indicator
@@ -905,9 +925,10 @@ func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, lab
 		var at_edge := sp.x < lo.x + 70.0 or sp.x > hi.x - 70.0
 		sp.x = clampf(sp.x, lo.x + 70, hi.x - 70)
 		sp.y = clampf(sp.y, lo.y + 130, hi.y - 140)
-		# keep clear of the hero/spell dock in the bottom-left corner
-		if sp.x < lo.x + 420.0 and sp.y > hi.y - 250.0:
-			sp.y = hi.y - 250.0
+		# keep clear of the hero/spell dock in the bottom-left corner (the marker's enemy preview
+		# hangs 125 below its centre; the portrait and its level badge reach ~140 above the bottom)
+		if sp.x < lo.x + 420.0 and sp.y > hi.y - DOCK_CLEAR:
+			sp.y = hi.y - DOCK_CLEAR
 		for _k in 3:
 			var moved := false
 			for o in spots:
@@ -920,7 +941,7 @@ func update_wave_buttons(cam: Camera3D, visible_flag: bool, progress: float, lab
 						tries = [tries[2], tries[3], tries[0], tries[1]]
 					for c in tries:
 						var cv: Vector2 = c
-						var bottom := hi.y - (250.0 if cv.x < lo.x + 420.0 else 140.0)
+						var bottom := hi.y - (DOCK_CLEAR if cv.x < lo.x + 420.0 else 140.0)
 						if cv.x >= lo.x + 70.0 and cv.x <= hi.x - 70.0 and cv.y >= lo.y + 130.0 and cv.y <= bottom:
 							sp = cv
 							break

@@ -26,6 +26,7 @@ var _inst: Node3D
 var _yaw_target := 0.0
 var _blob := false  # wants a contact shadow in the shared BlobLayer (one draw call for all units)
 var _blob_size := 1.0
+var _wrist := 0.0  # IdleLife's turn of a sword hand at rest (GRIPS)
 ## Height of the contact shadow above this node's origin (models lifted off their root put it lower).
 var blob_y := 0.14
 ## Flying units (gargoyles) hover above the ground: no contact shadow under them.
@@ -37,6 +38,7 @@ func setup(p_model: String, p_scale: float, tint := Color.WHITE, weapon := "") -
 	model_name = p_model
 	var life_amount := life.amount if is_instance_valid(life) else -1.0
 	life = null  # it belongs to the previous skeleton
+	_wrist = 0.0
 	var inst := Assets.instance(p_model)
 	_inst = inst
 	add_child(inst)
@@ -172,11 +174,36 @@ func attach_weapon(weapon: String, bone := "RightHand") -> void:
 		w.scale = Vector3(s, s * 1.3, s)
 	w.rotation_degrees = WEAPON_ROT
 	w.position = WEAPON_POS
+	if bone == "RightHand" and GRIPS.has(model_name) and HANDLE.has(weapon):
+		# a hand closed into a fist: the handle through the fist, the blade out of the thumb side,
+		# its edge in line with the knuckles
+		var g: Array = GRIPS[model_name]
+		# the handle lies across the palm on a slant (index knuckle to heel of the hand), so the
+		# blade leans toward the fingers' direction (the bone's +Y) rather than straight out
+		var thumb: Vector3 = g[1]
+		var up := (thumb * cos(GRIP_SLANT) + Vector3.UP * sin(GRIP_SLANT)).normalized()
+		var edge := (Vector3.UP - up * up.dot(Vector3.UP)).normalized()
+		w.basis = Basis(edge, up, edge.cross(up)).scaled(Vector3.ONE * s)
+		w.position = (g[0] as Vector3) - up * float(HANDLE[weapon]) * s
+		_wrist = float(g[2])
+		if life:
+			life.wrist_twist = _wrist
 	if weapon == "w_shield":
 		w.scale = Vector3.ONE * 0.42
 		w.rotation_degrees = SHIELD_ROT
 		w.position = SHIELD_POS
 
+## Weapon hands that tools/pipeline/hand_pose.py closed into a fist ("grip"): where the handle
+## runs through the fist and which way its thumb side points, in the Hand bone's space (from the
+## tool's log: "grip centre (bone space)", "toward the thumb"), and how far IdleLife turns the
+## hand over at rest (degrees about the forearm: the blade hangs point-down by the leg).
+const GRIPS := {
+	"hero": [Vector3(0.0071, 0.0324, -0.0243), Vector3(-1, 0, 0), -75.0],
+	"shade": [Vector3(0.0055, 0.0179, -0.0004), Vector3(1, 0, 0), 0.0],
+}
+const GRIP_SLANT := deg_to_rad(40.0)
+## The middle of each bladed weapon's handle along its length (model units, before scaling).
+const HANDLE := {"w_sword": 0.035, "w_dagger": -0.015}
 const WEAPON_ROT := Vector3(-90, 0, 0)
 const WEAPON_POS := Vector3(0.0, 0.04, 0.0)
 ## The shield rides the left forearm, face forward, centred halfway down it and clear of the arm.
@@ -189,6 +216,7 @@ func add_idle_life(amount := 1.0) -> void:
 		return
 	life = IdleLife.new()
 	life.amount = amount
+	life.wrist_twist = _wrist
 	skel.add_child(life)
 	life.set_idle(current == "idle")
 

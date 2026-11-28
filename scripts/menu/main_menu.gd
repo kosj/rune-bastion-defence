@@ -68,9 +68,14 @@ func _menu_notice(icon: String, title: String, sub: String) -> void:
 	UI.wrap_words(sl, w - 100.0)
 	vb.add_child(sl)
 	hb.add_child(vb)
-	p.offset_left = sr.position.x + (sr.size.x - w) * 0.5
+	# in the title's column: centred upright, under the logo on the left of a wide screen
+	p.offset_left = sr.position.x + ((sr.size.x - w) * 0.5 if Game.tall else 48.0)
 	p.offset_right = p.offset_left + w
-	p.offset_top = sr.position.y + (220.0 if Game.tall else 190.0) + _notice_n * 130.0  # under the title ribbon
+	# under the title's ribbon (upright, the two-line logo pushes it lower)
+	var top := sr.position.y + (290.0 if Game.tall else 200.0)
+	if is_instance_valid(_sub) and _sub.is_inside_tree():
+		top = _sub.get_global_rect().end.y + 18.0
+	p.offset_top = top + _notice_n * 130.0
 	_notice_n += 1
 	ui.add_child(p)
 	p.modulate.a = 0.0
@@ -317,7 +322,7 @@ func _build_world() -> void:
 	_hero.rotation_degrees.y = 15
 	_hero.play("idle")
 	_hero.add_idle_life()  # fades in from the still pose, so the backdrop picture still matches
-	_life.cheer.append(_hero)
+	_life.defenders.append(_hero)
 	if not await _step(): return
 	for i in 3:
 		var fm := CharacterModel.new()
@@ -326,14 +331,14 @@ func _build_world() -> void:
 		fm.position = Vector3(-0.2 + i * 2.2, 0, 3.4 - absf(i - 1) * 0.5)
 		fm.rotation_degrees.y = 10
 		fm.play("idle", randf_range(0.8, 1.1))
-		_life.cheer.append(fm)
-	# the raiding party (hidden until a raid; TitleLife runs them)
-	for i in 4:
+		_life.defenders.append(fm)
+	# the raiding goblins (hidden until a raid; TitleLife runs them)
+	for i in 3:
 		if i < 2:
 			if not await _step(): return
 		var g := CharacterModel.new()
 		_life.add_child(g)
-		g.setup(["goblin", "orc", "goblin", "goblin"][i], [1.4, 2.4, 1.4, 1.4][i], Color.WHITE, ["w_dagger", "w_axe", "w_dagger", "w_dagger"][i])
+		g.setup("goblin", 1.4, Color.WHITE, "w_dagger")
 		g.visible = false
 		g.play("run", 0.0001)
 		_life.pool.append(g)
@@ -394,6 +399,7 @@ func _build_ui() -> void:
 	Game.layout_changed.connect(_on_layout_changed)
 
 var _title_root: Control
+var _sub: Control   # the title's ribbon (notices go under it)
 
 ## The title screen's own parts: logo, the start button with the three menu buttons under it
 ## (bottom-left on a wide screen, across the bottom on an upright one, under the thumb) and the
@@ -433,6 +439,7 @@ func _build_title(first := false) -> void:
 		sub.offset_right = 52 + rw
 	sub.offset_top = 234 if t else 140
 	_title_root.add_child(sub)
+	_sub = sub
 	var gear := UI.round_button(Assets.tex("ic_gear"), 52 if t else 60)
 	gear.anchor_left = 1.0
 	gear.anchor_right = 1.0
@@ -473,12 +480,7 @@ func _build_title(first := false) -> void:
 		b.pressed.connect(func(): fn.call())
 		if it[0] == "영웅" and DB.unspent_talents() > 0:
 			# unspent talent points: the same badge the map dock uses for unspent stars
-			var bd := UI.badge(str(DB.unspent_talents()), 28, 15)
-			bd.anchor_left = 1.0
-			bd.anchor_right = 1.0
-			bd.offset_left = -22
-			bd.offset_top = -10
-			b.add_child(bd)
+			UI.corner_badge(b, str(DB.unspent_talents()), 28, 15)
 		btns.append(b)
 	vb.add_child(UI.action_row(btns))
 	ButtonGlint.add(play, 1.6 if first else 2.5)
@@ -718,12 +720,7 @@ func _open_heroes() -> void:
 			var tb := UI.button("재능", 20, false, Vector2(0, 52), "special")
 			tb.icon = Assets.tex("ht_skill")
 			if pts > 0:
-				var bd := UI.badge(str(pts), 26, 14)
-				bd.anchor_left = 1.0
-				bd.anchor_right = 1.0
-				bd.offset_left = -20
-				bd.offset_top = -10
-				tb.add_child(bd)
+				UI.corner_badge(tb, str(pts), 26, 14, Vector2(-20, -10))
 			tb.pressed.connect(func(): _swap(shade, func(): _open_talents(id)))
 			brow.append(tb)
 		brow.append(b)

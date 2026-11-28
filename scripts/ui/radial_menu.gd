@@ -12,6 +12,8 @@ var options: Array = []
 var buttons := {}
 var selected := ""
 var radius := 96.0
+## Screen rects (canvas units) the ring keeps out from under: set by the HUD (its panels).
+var keepout: Callable
 var _ring: Control
 
 func _ready() -> void:
@@ -110,8 +112,32 @@ func _update_pos() -> void:
 		return
 	var sp := cam.unproject_position(world_pos)
 	var sr := Game.safe_rect()  # the whole ring on screen, clear of a notch
-	sp.x = clampf(sp.x, sr.position.x + radius + 40, sr.end.x - radius - 40)
-	sp.y = clampf(sp.y, sr.position.y + radius + 60, sr.end.y - radius - 50)
+	var lo := sr.position + Vector2(radius + 40, radius + 60)
+	var hi := sr.end - Vector2(radius + 40, radius + 50)
+	sp = sp.clamp(lo, hi)
+	# the ring lives under the HUD's panels (the map's layer): where it would slip under one (the
+	# hero dock, the top bar, the selection card) it steps out to the nearest free side instead,
+	# so none of its buttons is hidden
+	if keepout.is_valid():
+		var rects: Array = keepout.call()
+		for _pass in 2:
+			for r in rects:
+				var rr: Rect2 = r
+				var ring := Rect2(sp - Vector2(radius + 40, radius + 60), Vector2(radius * 2 + 80, radius * 2 + 110))
+				if not ring.intersects(rr):
+					continue
+				var best := sp
+				var best_d := INF
+				for c in [Vector2(sp.x, rr.position.y - radius - 50), Vector2(sp.x, rr.end.y + radius + 60),
+						Vector2(rr.position.x - radius - 40, sp.y), Vector2(rr.end.x + radius + 40, sp.y)]:
+					var cv: Vector2 = c
+					if cv.x < lo.x or cv.x > hi.x or cv.y < lo.y or cv.y > hi.y:
+						continue
+					var d := cv.distance_to(sp)
+					if d < best_d:
+						best_d = d
+						best = cv
+				sp = best
 	position = sp
 
 class _RingDraw extends Control:

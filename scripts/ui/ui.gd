@@ -585,6 +585,38 @@ static func badge(text: String, sz := 34, font_size := 20) -> Control:
 	c.add_child(l)
 	return c
 
+## A count badge on a button's top-right corner, sticking out past its edge. In a row the next
+## button is drawn after this one and would cover the part that sticks out, so the button that
+## carries the badge is drawn after its siblings: its draw index is raised, not its place in the
+## row, so the layout stays as it is. Godot sets the draw indices of a parent's children back to
+## their order whenever that parent's children change, so it is raised again after each change.
+## Anything added later to an ancestor (a sheet, a notice) still covers it.
+static func corner_badge(target: Control, text: String, sz := 28, font_size := 15, off := Vector2(-22, -10)) -> Control:
+	var bd := badge(text, sz, font_size)
+	bd.anchor_left = 1.0
+	bd.anchor_right = 1.0
+	bd.offset_left = off.x
+	bd.offset_right = off.x + sz
+	bd.offset_top = off.y
+	bd.offset_bottom = off.y + sz
+	target.add_child(bd)
+	var lift := func():
+		if is_instance_valid(target) and target.is_inside_tree():
+			RenderingServer.canvas_item_set_draw_index(target.get_canvas_item(), 1 << 20)
+	var hook := func():
+		if not is_instance_valid(target):
+			return
+		var p := target.get_parent()
+		if p and target.get_meta("badge_parent", null) != p:
+			target.set_meta("badge_parent", p)
+			p.child_order_changed.connect(lift, CONNECT_DEFERRED)
+		lift.call()
+	# (deferred: the viewport resets the order in a deferred call queued when the child entered)
+	target.tree_entered.connect(hook, CONNECT_DEFERRED)
+	if target.is_inside_tree():
+		hook.call_deferred()
+	return bd
+
 static func pop_in(c: Control, delay := 0.0) -> void:
 	c.pivot_offset = c.size * 0.5
 	c.scale = Vector2(0.94, 0.94)
