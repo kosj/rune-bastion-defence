@@ -74,6 +74,16 @@ func _ready() -> void:
 			if args.get("progress_all", "0") == "1":
 				Game.stars = [3, 3, 3, 2, 3, 2, 1, 0]
 				Game.hero_xp = {"kael": 3000.0, "sera": 900.0}
+			if args.get("spend_all", "0") == "1":
+				# every talent point already spent (the talent sheet with nothing left to buy)
+				for id in Game.hero_xp:
+					var n := DB.talent_points(id)
+					var cur := {}
+					for td in DB.HERO_TALENTS:
+						var k := mini(n, DB.TALENT_MAX)
+						cur[td["id"]] = k
+						n -= k
+					Game.hero_talents[id] = cur
 			if args.get("progress_max", "0") == "1":
 				Game.stars = [3, 3, 3, 3, 3, 3, 3, 3, 3, 2]
 			if args.has("stars_csv"):
@@ -103,7 +113,12 @@ func _ready() -> void:
 			(func(): get_tree().current_scene = _menu).call_deferred()
 			get_tree().create_timer(float(args["start_at"])).timeout.connect(func(): Game.start_level(0))
 		if args.has("open"):
-			get_tree().create_timer(4.0).timeout.connect(func(): _menu.call(args["open"]))
+			# open_arg=<x>: for a sheet that takes one (open=_open_talents open_arg=kael)
+			get_tree().create_timer(4.0).timeout.connect(func():
+				if args.has("open_arg"):
+					_menu.call(args["open"], args["open_arg"])
+				else:
+					_menu.call(args["open"]))
 		if args.has("map_card"):
 			# open a region briefing card on the world map (endless card for "e")
 			get_tree().create_timer(4.6).timeout.connect(func():

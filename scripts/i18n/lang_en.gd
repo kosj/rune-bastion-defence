@@ -476,6 +476,7 @@ const T := {
 	"최고 기록: 웨이브 %d": "Best: wave %d",
 	"최고 등급 달성!": "Max rank reached!",
 	"최근 판의 결과(도달 웨이브, 잃은 생명, 새어 나간 적, 지은 타워)를 코드로 묶었습니다. 복사해서 대화창에 붙여 넣으면 어디서 어려웠는지 분석해 난이도를 조정합니다. 개인 정보는 들어 있지 않습니다.": "Your recent runs (waves reached, lives lost, enemies that got through, towers built) are packed into this code. Copy it and paste it into the chat so the difficulty can be tuned where it hurt. It contains no personal data.",
+	"최대": "Max",
 	"최대 체력 +12% / 단계": "Max health +12% per rank",
 	"최종 보스 - 내려찍기로 병사 기절, 전투 함성으로 주변 적 가속, 체력 50%에서 오우거 친위대 소환": "Final boss - slams stun soldiers, war cries hasten nearby enemies, at 50% health summons the ogre royal guard",
 	"최종 보스 - 해골을 끝없이 불러내고, 체력 50%에서 해골 기사 군단을 소환": "Final boss - endlessly raises skeletons; at 50% health summons a skeleton-knight host",

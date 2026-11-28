@@ -811,6 +811,12 @@ func _open_talents(id: String) -> void:
 		var bt := UI.button("+1", 20, false, Vector2(68, 48), "primary")
 		bt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hb.add_child(bt)
+		# a talent at its last step: a tag where the button was, not a dead button
+		var mx := UI.ink("최대", 18, UI.GOLD, "ui_black")
+		mx.custom_minimum_size = Vector2(68, 0)
+		mx.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		mx.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hb.add_child(mx)
 		var tid: String = td["id"]
 		bt.pressed.connect(func():
 			if DB.talent_points(id) <= 0 or DB.talent(id, tid) >= DB.TALENT_MAX:
@@ -823,13 +829,16 @@ func _open_talents(id: String) -> void:
 			Audio.play("upgrade", -2.0)
 			UI.pop_in(cp)
 			refresh.call())
-		cells.append([tid, pips, bt])
+		cells.append([tid, pips, bt, mx])
 		rows.add_child(cp)
 	refresh = func():
 		var r := DB.hero_rank(id)
 		var prog: Array = DB.hero_rank_progress(id)
 		rank_l.text = tr("등급 %d") % r
-		pts_l.text = tr("재능 포인트 %d") % DB.talent_points(id)
+		var left := DB.talent_points(id)
+		pts_l.text = tr("재능 포인트 %d") % left
+		# gold only while there is something to spend (as on the hero cards)
+		pts_l.add_theme_color_override("font_color", UI.on_dark(UI.GOLD if left > 0 else UI.INK_SOFT))
 		bar.max_value = maxf(float(prog[1]), 1.0)
 		bar.value = float(prog[0]) if float(prog[1]) > 0.0 else bar.max_value
 		xp_l.text = tr("다음 등급까지 경험치 %d") % int(float(prog[1]) - float(prog[0])) if float(prog[1]) > 0.0 else tr("최고 등급 달성!")
@@ -840,7 +849,10 @@ func _open_talents(id: String) -> void:
 				ch.queue_free()
 			for k in DB.TALENT_MAX:
 				pp.add_child(UI.icon(Assets.tex("star" if k < lv else "star_empty"), 20))
-			(c[2] as Button).disabled = lv >= DB.TALENT_MAX or DB.talent_points(id) <= 0
+			var maxed := lv >= DB.TALENT_MAX
+			(c[2] as Button).visible = not maxed
+			(c[2] as Button).disabled = left <= 0
+			(c[3] as Label).visible = maxed
 	refresh.call()
 	var hint := UI.ink("전투에서 얻은 경험치가 쌓여 등급이 오르고, 등급마다 재능 포인트 1을 받습니다.", UI.T_SMALL, UI.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

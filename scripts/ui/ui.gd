@@ -317,9 +317,14 @@ static func _btn_styles(b: Button, kind: String) -> void:
 					top += PLATE_LIP - 1.0
 					bot -= PLATE_LIP - 1.0
 				"disabled":
-					f = Color(face.lerp(RIDGE, 0.7), 0.55)
-					lip = Color(RIDGE_LIP, 0.55)
+					# nothing to press: no colour of its role, no lip to sink onto (a tinted gold
+					# plate with its lip still read as a button waiting to be pressed)
+					f = Color(SABLE, 0.42)
+					drop = 0.0
 			s = plate(f, rad, Vector4(px, top, px, bot), drop, lip, CUT)
+			if st == "disabled":
+				s.set_border_width_all(2)
+				s.border_color = Color(1, 1, 1, 0.07)
 		b.add_theme_stylebox_override(st, s)
 	b.add_theme_stylebox_override("hover_pressed", b.get_theme_stylebox("pressed"))
 	# keyboard focus (also the default action a sheet focuses, which Enter presses): a quiet ring
@@ -338,12 +343,12 @@ static func _btn_styles(b: Button, kind: String) -> void:
 	b.add_theme_color_override("font_pressed_color", fc)
 	b.add_theme_color_override("font_hover_pressed_color", fc)
 	b.add_theme_color_override("font_focus_color", fc)
-	b.add_theme_color_override("font_disabled_color", Color(0.66, 0.7, 0.76))
+	b.add_theme_color_override("font_disabled_color", Color(VELLUM, 0.34))
 	b.add_theme_constant_override("outline_size", 0)
 	# the icons are full-colour glyphs with their own dark outline: they read on any plate untinted
 	for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
 		b.add_theme_color_override(k, Color.WHITE)
-	b.add_theme_color_override("icon_disabled_color", Color(1, 1, 1, 0.5))
+	b.add_theme_color_override("icon_disabled_color", Color(1, 1, 1, 0.32))
 
 static func button(text: String, size := 24, primary := true, min_size := Vector2(200, 64), kind := "") -> Button:
 	var b := Button.new()
@@ -607,7 +612,8 @@ static func corner_badge(target: Control, text: String, sz := 28, font_size := 1
 		if not is_instance_valid(target):
 			return
 		var p := target.get_parent()
-		if p and target.get_meta("badge_parent", null) != p:
+		# (has_meta first: get_meta with a null default reports a missing key as an error)
+		if p and (not target.has_meta("badge_parent") or target.get_meta("badge_parent") != p):
 			target.set_meta("badge_parent", p)
 			p.child_order_changed.connect(lift, CONNECT_DEFERRED)
 		lift.call()

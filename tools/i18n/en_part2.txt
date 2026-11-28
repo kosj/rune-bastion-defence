@@ -379,3 +379,4 @@ Noto Sans CJK, Black Han Sans, Dela Gothic One (SIL Open Font License)	Noto Sans
 저장 파일을 읽을 수 없어 마지막 백업에서 진행을 되살렸습니다.	The save file could not be read, so your progress was restored from the last backup.
 진행이 저장되지 않는 브라우저입니다	This browser will not keep your progress
 시크릿 창이나 사이트 데이터 차단에서는 탭을 닫으면 진행이 사라집니다. 설정 → 저장 코드 내보내기로 옮겨 둘 수 있어요.	In a private window or with site data blocked, progress is lost when the tab closes. Use Settings → Export to carry it over.
+최대	Max
