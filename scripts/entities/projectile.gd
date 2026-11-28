@@ -85,8 +85,10 @@ static func bolt(from: Vector3, tgt: Enemy, d: float, c: Color, p_slow := 0.0, p
 	mi.material_override = _bolt_mats[key]
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	p.add_child(mi)
-	p._trail = LevelMain.I.fx.trail(p, c, 0.3)
+	# (moved first: a trail made while its node still stands at the world origin leaves a puff
+	# of particles there)
 	p.global_position = from
+	p._trail = LevelMain.I.fx.trail(p, c, 0.3)
 
 static func bomb(from: Vector3, to: Vector3, d: float, p_splash: float, p_burn := 0.0, p_cluster := 0, is_small := false, p_ability := "") -> void:
 	var p := _spawn(Kind.BOMBLET if is_small else Kind.BOMB)
@@ -103,8 +105,8 @@ static func bomb(from: Vector3, to: Vector3, d: float, p_splash: float, p_burn :
 	var m := Assets.instance("p_bomb")
 	m.scale = Vector3.ONE * (1.3 if not is_small else 0.7)
 	p.add_child(m)
-	p._trail = LevelMain.I.fx.trail(p, Color(0.5, 0.45, 0.4), 0.25, true)
 	p.global_position = from
+	p._trail = LevelMain.I.fx.trail(p, Color(0.5, 0.45, 0.4), 0.25, true)
 
 static func meteor(to: Vector3, d: float, radius: float, delay: float) -> void:
 	var p := _spawn(Kind.METEOR)
@@ -135,8 +137,8 @@ static func meteor(to: Vector3, d: float, radius: float, delay: float) -> void:
 	rock.scale = Vector3.ONE * 0.95
 	p.add_child(rock)
 	# the trail starts orange (a white-hot head would bloom over the boulder) and stays behind it
-	p._trail = LevelMain.I.fx.trail(p, Color(1.0, 0.38, 0.08, 0.8), 0.75, false, Color(1.0, 0.62, 0.25, 0.55))
 	p.global_position = p.start
+	p._trail = LevelMain.I.fx.trail(p, Color(1.0, 0.38, 0.08, 0.8), 0.75, false, Color(1.0, 0.62, 0.25, 0.55))
 	p.visible = delay <= 0.0
 
 func _process(delta: float) -> void:

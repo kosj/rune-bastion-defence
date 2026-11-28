@@ -6,7 +6,10 @@ var _t := 0.0
 var ui: Control
 var _select: Control
 var _hero: CharacterModel
-var _troll: CharacterModel
+var _life: TitleLife   # the raid skirmish and the birds (scripts/menu/title_life.gd)
+var _intro := 1.0      # camera entrance 0..1 (only when the diorama shows at once, no picture)
+var _par := Vector2.ZERO
+var _mouse_seen := false
 
 func _ready() -> void:
 	Engine.time_scale = 1.0
@@ -17,6 +20,7 @@ func _ready() -> void:
 	Audio.play_music("menu")
 	if Content.has_all(_title_needs()):
 		_world_started = true
+		_intro = 0.0  # no backdrop picture to match: the camera may glide in
 		_build_world()
 		Game.mark("menu_world_built")
 	else:
@@ -260,6 +264,16 @@ func _build_world() -> void:
 			mu.setup("mage_unit", 1.35)
 			mu.position = Vector3(0, ModelMeta.top(sp[0]), 0.1)
 			mu.play("idle")
+	_life = TitleLife.new()
+	add_child(_life)
+	for t in get_children():
+		for u in t.get_children():
+			if u is CharacterModel and (u as CharacterModel).model_name == "archer_unit":
+				_life.archers.append(u)
+				_life.archer_from.append((u as Node3D).global_position + Vector3(0, 1.0, 0))
+			elif u is CharacterModel and (u as CharacterModel).model_name == "mage_unit":
+				_life.mage = u
+				_life.mage_from = (u as Node3D).global_position + Vector3(0, 1.7, 0)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
 	for i in 40:
@@ -285,6 +299,7 @@ func _build_world() -> void:
 		add_child(b2)
 	var amb := FX.new()
 	add_child(amb)
+	_life.fx = amb
 	var lv := amb.ambient("leaves")
 	lv.amount = 24
 	lv.scale_amount_min = 0.08
@@ -302,6 +317,7 @@ func _build_world() -> void:
 	_hero.rotation_degrees.y = 15
 	_hero.play("idle")
 	_hero.add_idle_life()  # fades in from the still pose, so the backdrop picture still matches
+	_life.cheer.append(_hero)
 	if not await _step(): return
 	for i in 3:
 		var fm := CharacterModel.new()
@@ -310,28 +326,21 @@ func _build_world() -> void:
 		fm.position = Vector3(-0.2 + i * 2.2, 0, 3.4 - absf(i - 1) * 0.5)
 		fm.rotation_degrees.y = 10
 		fm.play("idle", randf_range(0.8, 1.1))
-	if not await _step(): return
-	_troll = CharacterModel.new()
-	add_child(_troll)
-	_troll.setup("troll", 4.2, Color.WHITE, "w_club")
-	_troll.position = Vector3(-6.5, 0, -10.5)
-	_troll.rotation_degrees.y = 160
-	_troll.visible = false
-	_troll.play("roar", 0.8)
-	if not await _step(): return
-	for i in 5:
+		_life.cheer.append(fm)
+	# the raiding party (hidden until a raid; TitleLife runs them)
+	for i in 4:
 		if i < 2:
 			if not await _step(): return
 		var g := CharacterModel.new()
-		add_child(g)
-		g.setup(["goblin", "orc", "goblin", "goblin", "orc"][i], [1.25, 2.2, 1.25, 1.25, 2.2][i], Color.WHITE, ["w_dagger", "w_axe", "w_dagger", "w_dagger", "w_axe"][i])
-		g.position = Vector3(-3.0 + i * 1.8, 0, 11.5 + (i % 2) * 1.5)
-		g.rotation_degrees.y = 190
+		_life.add_child(g)
+		g.setup(["goblin", "orc", "goblin", "goblin"][i], [1.4, 2.4, 1.4, 1.4][i], Color.WHITE, ["w_dagger", "w_axe", "w_dagger", "w_dagger"][i])
 		g.visible = false
 		g.play("run", 0.0001)
+		_life.pool.append(g)
 	cam = Camera3D.new()
 	cam.fov = 40
 	add_child(cam)
+	_life.armed = true
 
 func _process(delta: float) -> void:
 	_t += delta
@@ -339,8 +348,26 @@ func _process(delta: float) -> void:
 		return
 	var a := sin(_t * 0.07) * 0.28
 	var r := 9.5
-	cam.position = Vector3(1.5 + sin(a) * r, 2.3 + sin(_t * 0.15) * 0.2, 5.5 + cos(a) * r)
-	cam.look_at(Vector3(1.2, 2.7, -1.0), Vector3.UP)
+	var pos := Vector3(1.5 + sin(a) * r, 2.3 + sin(_t * 0.15) * 0.2, 5.5 + cos(a) * r)
+	var look := Vector3(1.2, 2.7, -1.0)
+	# entrance: the camera glides down from a high, wide view onto its usual orbit
+	if _intro < 1.0:
+		_intro = minf(_intro + delta / 2.8, 1.0)
+		var e := pow(1.0 - _intro, 3.0)
+		pos += Vector3(-2.2, 3.4, 5.5) * e
+		look += Vector3(0, -1.2, -2.0) * e
+	# desktop: the scene leans a little with the pointer (depth between the towers and the castle)
+	if _mouse_seen:
+		var vp := get_viewport().get_visible_rect().size
+		var m := get_viewport().get_mouse_position() / vp * 2.0 - Vector2.ONE
+		_par = _par.lerp(m.clamp(-Vector2.ONE, Vector2.ONE), clampf(delta * 2.5, 0.0, 1.0))
+		pos += Vector3(_par.x * 0.45, -_par.y * 0.25, 0)
+	cam.position = pos
+	cam.look_at(look, Vector3.UP)
+
+func _input(ev: InputEvent) -> void:
+	if ev is InputEventMouseMotion and not Game.is_mobile and not _mouse_seen:
+		_mouse_seen = true
 
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
@@ -454,6 +481,7 @@ func _build_title(first := false) -> void:
 			b.add_child(bd)
 		btns.append(b)
 	vb.add_child(UI.action_row(btns))
+	ButtonGlint.add(play, 1.6 if first else 2.5)
 	_menu_items = [_title_root]
 	if _select:
 		_title_root.visible = false
@@ -465,13 +493,19 @@ func _build_title(first := false) -> void:
 	var tw := title.create_tween().set_parallel(true)
 	tw.tween_property(title, "modulate:a", 1.0, 0.8)
 	tw.tween_property(title, "position:y", title.position.y + 40, 0.9).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	sub.scale = Vector2(0.2, 1.0)
-	sub.modulate.a = 0.0
+	# the pennant wipes out from its hoist (left on a wide screen, the middle upright)
+	sub.scale = Vector2(0.0, 1.0)
 	(func():
-		sub.pivot_offset = sub.size * 0.5
-		var t2 := sub.create_tween().set_parallel(true)
-		t2.tween_property(sub, "scale", Vector2.ONE, 0.5).set_delay(0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		t2.tween_property(sub, "modulate:a", 1.0, 0.3).set_delay(0.35)).call_deferred()
+		sub.pivot_offset = Vector2(sub.size.x * 0.5 if t else 0.0, sub.size.y * 0.5)
+		var t2 := sub.create_tween()
+		t2.tween_property(sub, "scale:x", 1.0, 0.45).set_delay(0.4).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)).call_deferred()
+	# the button column slides in from the near edge (from below, upright) as the buttons fade up
+	(func():
+		var prop := "position:y" if t else "position:x"
+		var home: float = vb.position.y if t else vb.position.x
+		vb.set_indexed(prop, home + (36.0 if t else -56.0))
+		var t4 := vb.create_tween()
+		t4.tween_property(vb, prop, home, 0.6).set_delay(0.45).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)).call_deferred()
 	var k := 0
 	for c in [play, btns[0].get_parent(), gear]:
 		var cc := c as Control

@@ -114,6 +114,9 @@ func _burst(pos: Vector3, amount: int, life: float, mesh: Mesh, grad: Gradient, 
 		p.anim_speed_min = 1.0
 		p.anim_speed_max = 1.0
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# placed before it enters the tree: particles that start at the origin and are moved after
+	# show there for their first frame (a puff at the map's corner)
+	p.position = pos
 	add_child(p)
 	p.global_position = pos
 	p.emitting = true
@@ -301,6 +304,7 @@ func campfire(pos: Vector3) -> void:
 	fire.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	fire.emission_sphere_radius = 0.3
 	fire.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fire.position = pos
 	add_child(fire)
 	fire.global_position = pos
 	var sm := CPUParticles3D.new()
@@ -320,6 +324,7 @@ func campfire(pos: Vector3) -> void:
 	sm.anim_speed_min = 1.0
 	sm.anim_speed_max = 1.0
 	sm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sm.position = pos + Vector3(0, 1.0, 0)
 	add_child(sm)
 	sm.global_position = pos + Vector3(0, 1.0, 0)
 	var l := OmniLight3D.new()
@@ -566,6 +571,7 @@ func detach_trail(p: CPUParticles3D) -> void:
 		return
 	var gp := p.global_position
 	p.get_parent().remove_child(p)
+	p.position = gp
 	add_child(p)
 	p.global_position = gp
 	p.emitting = false

@@ -1124,6 +1124,9 @@ func _lod_probe() -> void:
 func _render_backdrop() -> void:
 	_menu.ui.visible = false
 	_menu._t = 0.0
+	_menu._intro = 1.0
+	if _menu._life:
+		_menu._life.queue_free()  # the picture is the still opening pose: no raid, no birds
 	for i in 4:
 		await get_tree().process_frame
 	_menu._t = 0.0
